@@ -131,7 +131,7 @@ int CALLBACK WinMain( HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdL
   }
 
 #ifdef _MSC_VER
-  HINSTANCE hGetProcIDDLL = LoadLibrary( "qgis_app.dll" );
+  HINSTANCE hGetProcIDDLL = LoadLibrary( "qgis_app.dll" ); // qgis_app.dll
 #else
 // MinGW
   HINSTANCE hGetProcIDDLL = LoadLibrary( "libqgis_app.dll" );

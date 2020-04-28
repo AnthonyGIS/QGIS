@@ -4,6 +4,8 @@ cmake_minimum_required(VERSION 3.10.0)
 # Default Test
 add_executable(Test_RTree
     Test.cpp)
+# weng for qgis test folders. 20.4.27
+set_target_properties(Test_RTree PROPERTIES FOLDER ${QGIS_QGIS_TEST_ROOT_FOLDER}/)
 add_dependencies(Test_RTree
     RTree)
 target_include_directories(Test_RTree
@@ -20,6 +22,8 @@ endif()
 # Memory Test file
 add_executable(Test_Memory_RTree
     MemoryTest.cpp)
+# weng for qgis test folders. 20.4.27
+set_target_properties(Test_Memory_RTree PROPERTIES FOLDER ${QGIS_QGIS_TEST_ROOT_FOLDER}/)
 target_include_directories(Test_Memory_RTree
     PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 target_link_libraries(Test_Memory_RTree
@@ -32,8 +36,9 @@ if(MSVC)
 endif()
 
 # Bad Data Test file
-add_executable(Test_BadData_RTree
-    TestBadData.cpp)
+add_executable(Test_BadData_RTree TestBadData.cpp)
+# weng for qgis test folders. 20.4.27
+set_target_properties(Test_BadData_RTree PROPERTIES FOLDER ${QGIS_QGIS_TEST_ROOT_FOLDER}/)
 target_include_directories(Test_BadData_RTree
     PRIVATE ${CMAKE_CURRENT_LIST_DIR})
 target_link_libraries(Test_BadData_RTree

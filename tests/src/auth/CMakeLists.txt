@@ -41,6 +41,8 @@ ENDIF (WIN32)
 
 MACRO (ADD_QGIS_TEST testname testsrc)
   ADD_EXECUTABLE(qgis_${testname} ${testsrc} ${util_SRCS})
+  # weng for qgis test folders. 20.4.27
+  set_target_properties(qgis_${testname} PROPERTIES FOLDER ${QGIS_QGIS_TEST_ROOT_FOLDER}/)
   IF(APPLE)
     TARGET_LINK_LIBRARIES(qgis_${testname} ${APP_SERVICES_LIBRARY})
   ENDIF(APPLE)

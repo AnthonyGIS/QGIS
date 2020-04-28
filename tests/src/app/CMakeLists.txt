@@ -74,7 +74,11 @@ INCLUDE_DIRECTORIES(SYSTEM
 MACRO (ADD_QGIS_TEST testname testsrc)
   SET(qgis_${testname}_SRCS ${testsrc} ${util_SRCS})
   ADD_CUSTOM_TARGET(qgis_${testname}moc ALL DEPENDS ${qgis_${testname}_MOC_SRCS})
+  # weng for qgis test folders. 20.4.27
+  set_target_properties(qgis_${testname}moc PROPERTIES FOLDER ${QGIS_QGIS_LIBS_ROOT_FOLDER}/)
   ADD_EXECUTABLE(qgis_${testname} ${qgis_${testname}_SRCS})
+  # weng for qgis test folders. 20.4.27
+  set_target_properties(qgis_${testname} PROPERTIES FOLDER ${QGIS_QGIS_TEST_ROOT_FOLDER}/)
   TARGET_LINK_LIBRARIES(qgis_${testname}
     ${Qt5Core_LIBRARIES}
     ${Qt5Xml_LIBRARIES}

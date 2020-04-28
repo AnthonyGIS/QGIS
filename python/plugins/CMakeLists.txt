@@ -21,6 +21,10 @@ MACRO (PLUGIN_INSTALL plugin subdir )
   IF(NOT TARGET zzz-${plugin}-stageinstall)
     ADD_CUSTOM_TARGET(zzz-${plugin}-stageinstall)
     ADD_CUSTOM_TARGET(zzz-${plugin}-depend)
+    # weng for qgis test folders. 20.4.27
+    set_target_properties(zzz-${plugin}-stageinstall PROPERTIES FOLDER ${QGIS_ZZZ_ROOT_FOLDER}/)
+    set_target_properties(zzz-${plugin}-depend PROPERTIES FOLDER ${QGIS_ZZZ_ROOT_FOLDER}/)
+
     ADD_DEPENDENCIES(zzz-${plugin}-stageinstall zzz-${plugin}-depend)
 
     ADD_CUSTOM_COMMAND(TARGET zzz-${plugin}-stageinstall
@@ -30,13 +34,19 @@ MACRO (PLUGIN_INSTALL plugin subdir )
     ADD_CUSTOM_TARGET(clean-staged-${plugin}
       COMMAND ${CMAKE_COMMAND} -E remove_directory ${PYTHON_OUTPUT_DIRECTORY}/plugins/${plugin}
     )
+    # weng for qgis test folders. 20.4.27
+    set_target_properties(clean-staged-${plugin} PROPERTIES FOLDER ${QGIS_ZZZ_ROOT_FOLDER}/)
 
     ADD_DEPENDENCIES(staged-plugins zzz-${plugin}-stageinstall)
     ADD_CUSTOM_TARGET(staged-${plugin} DEPENDS zzz-${plugin}-stageinstall)
+    # weng for qgis test folders. 20.4.27
+    set_target_properties(staged-${plugin} PROPERTIES FOLDER ${QGIS_ZZZ_ROOT_FOLDER}/)
     FILE(WRITE ${_cmake} "")
   ENDIF(NOT TARGET zzz-${plugin}-stageinstall)
 
   ADD_CUSTOM_TARGET(zzz-${plugin}-${n}-depend DEPENDS ${ARGN})
+  # weng for qgis test folders. 20.4.27
+  set_target_properties(zzz-${plugin}-${n}-depend PROPERTIES FOLDER ${QGIS_ZZZ_ROOT_FOLDER}/)
   ADD_DEPENDENCIES(zzz-${plugin}-depend zzz-${plugin}-${n}-depend)
 
   FILE(APPEND ${_cmake} "FILE(MAKE_DIRECTORY \"${PYTHON_OUTPUT_DIRECTORY}/plugins/${plugin}/${subdir}\")

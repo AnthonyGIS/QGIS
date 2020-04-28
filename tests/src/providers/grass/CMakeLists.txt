@@ -13,6 +13,8 @@ MACRO (ADD_QGIS_GRASS_TEST grass_build_version testname testsrc)
   SET(qgis_${testname}${grass_build_version}_SRCS ${testsrc} ${util_SRCS})
   ADD_CUSTOM_TARGET(qgis_${testname}${grass_build_version}moc ALL DEPENDS ${qgis_${testname}${grass_build_version}_MOC_SRCS})
   ADD_EXECUTABLE(qgis_${testname}${grass_build_version} ${qgis_${testname}${grass_build_version}_SRCS})
+  # weng for qgis test folders. 20.4.27
+  set_target_properties(qgis_${testname}${grass_build_version} PROPERTIES FOLDER ${QGIS_QGIS_TEST_ROOT_FOLDER}/)
 
   INCLUDE_DIRECTORIES(
     ${CMAKE_BINARY_DIR}/src/providers/grass/${grass_build_version}

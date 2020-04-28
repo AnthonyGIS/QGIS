@@ -28,6 +28,13 @@ ELSE (APPLE)
   SET(QGIS_APP_NAME "qgis")
 ENDIF (APPLE)
 
+
+# Include helper macros and commands, and allow the included file to override
+# the CMake policies in this file
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/CMakeHelper.cmake NO_POLICY_SCOPE)
+
+
+
 # Note the version no is Mmmpp for Major/minor/patch, 0-padded, thus '10100' for 1.1.0
 MATH(EXPR QGIS_VERSION_INT "${CPACK_PACKAGE_VERSION_MAJOR}*10000+${CPACK_PACKAGE_VERSION_MINOR}*100+${CPACK_PACKAGE_VERSION_PATCH}")
 MESSAGE(STATUS "QGIS version: ${COMPLETE_VERSION} ${RELEASE_NAME} (${QGIS_VERSION_INT})")
@@ -1049,3 +1056,7 @@ ENDIF (WITH_CORE)
 IF (UNIX AND NOT APPLE)
   ADD_SUBDIRECTORY(linux)
 ENDIF (UNIX AND NOT APPLE)
+
+# move vs projects to folder. weng 20.4.27
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/CMakeHelper_end.cmake NO_POLICY_SCOPE)
+

@@ -66,6 +66,8 @@ MACRO (ADD_QGIS_TEST TESTSRC)
   SET(${TESTNAME}_SRCS ${TESTSRC} ${util_SRCS})
   SET(${TESTNAME}_MOC_CPPS ${TESTSRC})
   ADD_EXECUTABLE(${TESTNAME} ${${TESTNAME}_SRCS})
+  # weng for qgis test folders. 20.4.27
+  set_target_properties(${TESTNAME} PROPERTIES FOLDER ${QGIS_QGIS_TEST_ROOT_FOLDER}/)
   TARGET_LINK_LIBRARIES(${TESTNAME}
     ${Qt5Core_LIBRARIES}
     ${Qt5Test_LIBRARIES}
@@ -88,7 +90,7 @@ SET(TESTS
  testqgsreclassifyutils.cpp
  testqgsalignraster.cpp
  testqgsnetworkanalysis.cpp
- testqgsninecellfilters.cpp 
+ testqgsninecellfilters.cpp
  testqgsmeshcalculator.cpp
  testqgsmeshcontours.cpp
 )

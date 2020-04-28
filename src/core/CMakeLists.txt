@@ -1601,6 +1601,7 @@ ENDIF (NOT ANDROID)
 # make sure to create qgsversion.h before compiling
 ADD_DEPENDENCIES(qgis_core version)
 
+
 # because of htonl
 IF (WIN32)
   FIND_LIBRARY(SETUPAPI_LIBRARY NAMES setupapi PATHS $ENV{LIB})
