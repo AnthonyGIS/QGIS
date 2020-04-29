@@ -84,8 +84,14 @@ static void _renderLegend( const QString &testName, QgsLayerTreeModel *legendMod
   img.fill( Qt::white );
 
   QPainter painter( &img );
-  painter.scale( dpmm, dpmm );
-  legendRenderer.drawLegend( &painter );
+  painter.setRenderHint( QPainter::Antialiasing, true );
+  QgsRenderContext context = QgsRenderContext::fromQPainter( &painter );
+
+  QgsScopedRenderContextScaleToMm scaleToMm( context );
+  context.setRendererScale( 1000 );
+  context.setMapToPixel( QgsMapToPixel( 1 / ( 0.1 * context.scaleFactor() ) ) );
+
+  legendRenderer.drawLegend( context );
   painter.end();
 
   img.save( _fileNameForTest( testName ) );
@@ -132,6 +138,7 @@ class TestQgsLegendRenderer : public QObject
 
     void testBasic();
     void testMultiline();
+    void testOverrideSize();
     void testSpacing();
     void testEffects();
     void testBigMarker();
@@ -333,6 +340,34 @@ void TestQgsLegendRenderer::testMultiline()
 
   QgsLayerTreeModelLegendNode *embeddedNode = legendModel.legendNodeEmbeddedInParent( layer );
   embeddedNode->setUserLabel( QString() );
+
+  QgsLegendSettings settings;
+  _setStandardTestFont( settings, QStringLiteral( "Bold" ) );
+  _renderLegend( testName, &legendModel, settings );
+  QVERIFY( _verifyImage( testName, mReport ) );
+}
+
+void TestQgsLegendRenderer::testOverrideSize()
+{
+  QString testName = QStringLiteral( "legend_override_size" );
+
+  QgsLayerTreeModel legendModel( mRoot );
+
+  legendModel.findLegendNode( mVL1->id(), QString() );
+
+  QgsLayerTreeLayer *layer = legendModel.rootGroup()->findLayer( mVL1 );
+  layer->setPatchSize( QSizeF( 30, 0 ) );
+
+  QgsLayerTreeModelLegendNode *embeddedNode = legendModel.legendNodeEmbeddedInParent( layer );
+  embeddedNode->setUserLabel( QString() );
+
+  layer = legendModel.rootGroup()->findLayer( mVL3 );
+  QgsMapLayerLegendUtils::setLegendNodeSymbolSize( layer, 1, QSizeF( 0, 30 ) );
+  legendModel.refreshLayerLegend( layer );
+
+  layer = legendModel.rootGroup()->findLayer( mRL );
+  QgsMapLayerLegendUtils::setLegendNodeSymbolSize( layer, 0, QSizeF( 50, 30 ) );
+  legendModel.refreshLayerLegend( layer );
 
   QgsLegendSettings settings;
   _setStandardTestFont( settings, QStringLiteral( "Bold" ) );
@@ -623,8 +658,13 @@ void TestQgsLegendRenderer::testMapUnits()
 
   QgsLegendSettings settings;
   _setStandardTestFont( settings );
+
+  Q_NOWARN_DEPRECATED_PUSH
+  // TODO QGIS 4.0 -- move these to parameters on _renderLegend, and set the render context to match
   settings.setMmPerMapUnit( 0.1 );
   settings.setMapScale( 1000 );
+  Q_NOWARN_DEPRECATED_POP
+
   _renderLegend( testName, &legendModel, settings );
   QVERIFY( _verifyImage( testName, mReport ) );
 }
