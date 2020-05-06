@@ -1427,6 +1427,7 @@ QgsLayoutLegendNodeWidget::QgsLayoutLegendNodeWidget( QgsLayoutItemLegend *legen
   if ( mLegendNode )
   {
     currentLabel = mLegendNode->data( Qt::EditRole ).toString();
+    mColumnBreakBeforeCheckBox->setChecked( mLegendNode->columnBreak() );
   }
   else if ( mLayer )
   {
@@ -1434,10 +1435,12 @@ QgsLayoutLegendNodeWidget::QgsLayoutLegendNodeWidget( QgsLayoutItemLegend *legen
     QVariant v = mLayer->customProperty( QStringLiteral( "legend/title-label" ) );
     if ( !v.isNull() )
       currentLabel = v.toString();
+    mColumnBreakBeforeCheckBox->setChecked( mLayer->customProperty( QStringLiteral( "legend/column-break" ) ).toInt() );
   }
   else
   {
     currentLabel = QgsLayerTree::toGroup( mNode )->name();
+    mColumnBreakBeforeCheckBox->setChecked( mNode->customProperty( QStringLiteral( "legend/column-break" ) ).toInt() );
   }
 
   mWidthSpinBox->setClearValue( 0, tr( "Default" ) );
@@ -1446,6 +1449,7 @@ QgsLayoutLegendNodeWidget::QgsLayoutLegendNodeWidget( QgsLayoutItemLegend *legen
   mHeightSpinBox->setVisible( mLegendNode || mLayer );
   mPatchWidthLabel->setVisible( mLegendNode || mLayer );
   mPatchHeightLabel->setVisible( mLegendNode || mLayer );
+  mCustomSymbolCheckBox->setVisible( mLegendNode || mLegend->model()->legendNodeEmbeddedInParent( mLayer ) );
   if ( mLegendNode )
   {
     mWidthSpinBox->setValue( mLegendNode->userPatchSize().width() );
@@ -1457,18 +1461,47 @@ QgsLayoutLegendNodeWidget::QgsLayoutLegendNodeWidget( QgsLayoutItemLegend *legen
     mHeightSpinBox->setValue( mLayer->patchSize().height() );
   }
 
+  mCustomSymbolCheckBox->setChecked( false );
+
   QgsLegendPatchShape patchShape;
   if ( QgsSymbolLegendNode *symbolLegendNode = dynamic_cast< QgsSymbolLegendNode * >( mLegendNode ) )
   {
     patchShape = symbolLegendNode->patchShape();
-    if ( symbolLegendNode->symbol() )
+
+    std::unique_ptr< QgsSymbol > customSymbol( symbolLegendNode->customSymbol() ? symbolLegendNode->customSymbol()->clone() : nullptr );
+    mCustomSymbolCheckBox->setChecked( customSymbol.get() );
+    if ( customSymbol )
+    {
+      mPatchShapeButton->setPreviewSymbol( customSymbol->clone() );
+      mCustomSymbolButton->setSymbolType( customSymbol->type() );
+      mCustomSymbolButton->setSymbol( customSymbol.release() );
+    }
+    else if ( symbolLegendNode->symbol() )
+    {
       mPatchShapeButton->setPreviewSymbol( symbolLegendNode->symbol()->clone() );
+      mCustomSymbolButton->setSymbolType( symbolLegendNode->symbol()->type() );
+      mCustomSymbolButton->setSymbol( symbolLegendNode->symbol()->clone() );
+    }
   }
   else if ( !mLegendNode && mLayer )
   {
     patchShape = mLayer->patchShape();
     if ( QgsSymbolLegendNode *symbolLegendNode = dynamic_cast< QgsSymbolLegendNode * >( mLegend->model()->legendNodeEmbeddedInParent( mLayer ) ) )
-      mPatchShapeButton->setPreviewSymbol( symbolLegendNode->symbol()->clone() );
+    {
+      if ( QgsSymbol *customSymbol = symbolLegendNode->customSymbol() )
+      {
+        mCustomSymbolCheckBox->setChecked( true );
+        mPatchShapeButton->setPreviewSymbol( customSymbol->clone() );
+        mCustomSymbolButton->setSymbolType( customSymbol->type() );
+        mCustomSymbolButton->setSymbol( customSymbol->clone() );
+      }
+      else
+      {
+        mPatchShapeButton->setPreviewSymbol( symbolLegendNode->symbol()->clone() );
+        mCustomSymbolButton->setSymbolType( symbolLegendNode->symbol()->type() );
+        mCustomSymbolButton->setSymbol( symbolLegendNode->symbol()->clone() );
+      }
+    }
   }
 
   if ( mLayer && mLayer->layer()  && mLayer->layer()->type() == QgsMapLayerType::VectorLayer )
@@ -1509,6 +1542,11 @@ QgsLayoutLegendNodeWidget::QgsLayoutLegendNodeWidget( QgsLayoutItemLegend *legen
 
   connect( mWidthSpinBox, qgis::overload<double>::of( &QgsDoubleSpinBox::valueChanged ), this, &QgsLayoutLegendNodeWidget::sizeChanged );
   connect( mHeightSpinBox, qgis::overload<double>::of( &QgsDoubleSpinBox::valueChanged ), this, &QgsLayoutLegendNodeWidget::sizeChanged );
+
+  connect( mCustomSymbolCheckBox, &QGroupBox::toggled, this, &QgsLayoutLegendNodeWidget::customSymbolChanged );
+  connect( mCustomSymbolButton, &QgsSymbolButton::changed, this, &QgsLayoutLegendNodeWidget::customSymbolChanged );
+
+  connect( mColumnBreakBeforeCheckBox, &QCheckBox::toggled, this, &QgsLayoutLegendNodeWidget::columnBreakToggled );
 }
 
 void QgsLayoutLegendNodeWidget::labelChanged()
@@ -1630,6 +1668,73 @@ void QgsLayoutLegendNodeWidget::sizeChanged( double )
       QgsMapLayerLegendUtils::setLegendNodeSymbolSize( mLayer, _originalLegendNodeIndex( node ), size );
     }
     mLegend->model()->refreshLayerLegend( mLayer );
+  }
+
+  mLegend->adjustBoxSize();
+  mLegend->updateFilterByMap();
+  mLegend->endCommand();
+}
+
+void QgsLayoutLegendNodeWidget::customSymbolChanged()
+{
+  mLegend->beginCommand( tr( "Edit Legend Item" ) );
+
+  if ( mCustomSymbolCheckBox->isChecked() )
+  {
+    if ( mLegendNode )
+    {
+      QgsMapLayerLegendUtils::setLegendNodeCustomSymbol( mLayer, mOriginalLegendNodeIndex, mCustomSymbolButton->symbol() );
+      mLegend->model()->refreshLayerLegend( mLayer );
+    }
+    else if ( mLayer )
+    {
+      const QList<QgsLayerTreeModelLegendNode *> layerLegendNodes = mLegend->model()->layerLegendNodes( mLayer, false );
+      for ( QgsLayerTreeModelLegendNode *node : layerLegendNodes )
+      {
+        QgsMapLayerLegendUtils::setLegendNodeCustomSymbol( mLayer, _originalLegendNodeIndex( node ), mCustomSymbolButton->symbol() );
+      }
+      mLegend->model()->refreshLayerLegend( mLayer );
+    }
+  }
+  else
+  {
+    if ( mLegendNode )
+    {
+      QgsMapLayerLegendUtils::setLegendNodeCustomSymbol( mLayer, mOriginalLegendNodeIndex, nullptr );
+      mLegend->model()->refreshLayerLegend( mLayer );
+    }
+    else if ( mLayer )
+    {
+      const QList<QgsLayerTreeModelLegendNode *> layerLegendNodes = mLegend->model()->layerLegendNodes( mLayer, false );
+      for ( QgsLayerTreeModelLegendNode *node : layerLegendNodes )
+      {
+        QgsMapLayerLegendUtils::setLegendNodeCustomSymbol( mLayer, _originalLegendNodeIndex( node ), nullptr );
+      }
+      mLegend->model()->refreshLayerLegend( mLayer );
+    }
+  }
+
+  mLegend->adjustBoxSize();
+  mLegend->updateFilterByMap();
+  mLegend->endCommand();
+}
+
+void QgsLayoutLegendNodeWidget::columnBreakToggled( bool checked )
+{
+  mLegend->beginCommand( tr( "Edit Legend Columns" ) );
+
+  if ( mLegendNode )
+  {
+    QgsMapLayerLegendUtils::setLegendNodeColumnBreak( mLayer, mOriginalLegendNodeIndex, checked );
+    mLegend->model()->refreshLayerLegend( mLayer );
+  }
+  else if ( mLayer )
+  {
+    mLayer->setCustomProperty( QStringLiteral( "legend/column-break" ), QString( checked ? '1' : '0' ) );
+  }
+  else if ( mNode )
+  {
+    mNode->setCustomProperty( QStringLiteral( "legend/column-break" ), QString( checked ? '1' : '0' ) );
   }
 
   mLegend->adjustBoxSize();

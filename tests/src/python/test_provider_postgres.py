@@ -441,6 +441,10 @@ class TestPyQgsPostgresProvider(unittest.TestCase, ProviderTestCase):
         bigint_with_default_idx = vl.fields().lookupField('bigint_attribute_def')
         self.assertEqual(f.attributes()[bigint_with_default_idx], 42)
 
+        # check if NULL values are correctly read
+        bigint_def_null_idx = vl.fields().lookupField('bigint_attribute')
+        self.assertEqual(f.attributes()[bigint_def_null_idx], NULL)
+
         # check if we can overwrite a default value
         vl.startEditing()
         vl.changeAttributeValue(f.id(), bigint_with_default_idx, 43)
@@ -1260,6 +1264,45 @@ class TestPyQgsPostgresProvider(unittest.TestCase, ProviderTestCase):
         self.assertEqual(namelist, [])
         self.assertEqual(desclist, [])
         self.assertEqual(errmsg, "")
+
+    def testStyleWithGeometryType(self):
+        """Test saving styles with the additional geometry type
+        Layers are created from geometries_table
+        """
+
+        myconn = 'service=\'qgis_test\''
+        if 'QGIS_PGTEST_DB' in os.environ:
+            myconn = os.environ['QGIS_PGTEST_DB']
+
+        # point layer
+        myPoint = QgsVectorLayer(myconn + ' sslmode=disable srid=4326 type=POINT table="qgis_test"."geometries_table" (geom) sql=', 'Point', 'postgres')
+        self.assertTrue(myPoint.isValid())
+        myPoint.saveStyleToDatabase('myPointStyle', '', False, '')
+
+        # polygon layer
+        myPolygon = QgsVectorLayer(myconn + ' sslmode=disable srid=4326 type=POLYGON table="qgis_test"."geometries_table" (geom) sql=', 'Poly', 'postgres')
+        self.assertTrue(myPoint.isValid())
+        myPolygon.saveStyleToDatabase('myPolygonStyle', '', False, '')
+
+        # how many
+        related_count, idlist, namelist, desclist, errmsg = myPolygon.listStylesInDatabase()
+        self.assertEqual(len(idlist), 2)
+        self.assertEqual(namelist, ['myPolygonStyle', 'myPointStyle'])
+
+        # raw psycopg2 query
+        self.assertTrue(self.con)
+        cur = self.con.cursor()
+        self.assertTrue(cur)
+        cur.execute("select stylename, type from layer_styles order by type")
+        self.assertEqual(cur.fetchall(), [('myPointStyle', 'Point'), ('myPolygonStyle', 'Polygon')])
+        cur.close()
+
+        # delete them
+        myPolygon.deleteStyleFromDatabase(idlist[1])
+        myPolygon.deleteStyleFromDatabase(idlist[0])
+        styles = myPolygon.listStylesInDatabase()
+        ids = styles[1]
+        self.assertEqual(len(ids), 0)
 
     def testHasMetadata(self):
         # views don't have metadata

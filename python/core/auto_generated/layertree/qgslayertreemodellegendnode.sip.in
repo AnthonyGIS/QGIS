@@ -96,6 +96,24 @@ symbol width or height from :py:class:`QgsLegendSettings`.
 .. versionadded:: 3.14
 %End
 
+    virtual void setColumnBreak( bool breakBeforeNode );
+%Docstring
+Sets whether a forced column break should occur before the node.
+
+.. seealso:: :py:func:`columnBreak`
+
+.. versionadded:: 3.14
+%End
+
+    virtual bool columnBreak() const;
+%Docstring
+Returns whether a forced column break should occur before the node.
+
+.. seealso:: :py:func:`setColumnBreak`
+
+.. versionadded:: 3.14
+%End
+
     virtual bool isScaleOK( double scale ) const;
 
     virtual void invalidateMapBasedData();
@@ -365,6 +383,32 @@ Returns the symbol patch shape to use when rendering the legend node symbol.
 Sets the symbol patch ``shape`` to use when rendering the legend node symbol.
 
 .. seealso:: :py:func:`patchShape`
+
+.. versionadded:: 3.14
+%End
+
+    QgsSymbol *customSymbol() const;
+%Docstring
+Returns the node's custom symbol.
+
+If a non-``None`` value is returned, then this symbol will be used for rendering
+the legend node instead of the default symbol().
+
+.. seealso:: :py:func:`setCustomSymbol`
+
+.. versionadded:: 3.14
+%End
+
+    void setCustomSymbol( QgsSymbol *symbol /Transfer/ );
+%Docstring
+Sets the node's custom ``symbol``.
+
+If a non-``None`` value is set, then this symbol will be used for rendering
+the legend node instead of the default symbol().
+
+Ownership of ``symbol`` is transferred.
+
+.. seealso:: :py:func:`customSymbol`
 
 .. versionadded:: 3.14
 %End

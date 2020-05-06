@@ -335,6 +335,9 @@ QDateTime QgsWmsSettings::findLeastClosestDateTime( QDateTime dateTime, bool dat
       break;
 
     long long resolutionSeconds = pair.resolution.interval();
+
+    if ( resolutionSeconds <= 0 )
+      continue;
     long long step = std::floor( ( seconds - startSeconds ) / resolutionSeconds );
     long long resultSeconds = startSeconds + ( step * resolutionSeconds );
 
@@ -1072,7 +1075,7 @@ void QgsWmsCapabilities::parseDimension( const QDomElement &element, QgsWmsDimen
     dimensionProperty.current = ( currentAttribute == QLatin1String( "1" ) || currentAttribute == QLatin1String( "true" ) );
   }
 
-  dimensionProperty.extent = element.text();
+  dimensionProperty.extent = element.text().simplified();
 }
 
 void QgsWmsCapabilities::parseExtent( const QDomElement &element, QVector<QgsWmsDimensionProperty> &dimensionProperties )
@@ -1083,7 +1086,7 @@ void QgsWmsCapabilities::parseExtent( const QDomElement &element, QVector<QgsWms
   {
     if ( it->name == name )
     {
-      it->extent = element.text();
+      it->extent = element.text().simplified();
 
       it->defaultValue = element.attribute( QStringLiteral( "default" ) );
 

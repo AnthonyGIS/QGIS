@@ -201,6 +201,7 @@ SET(TESTS
  testqgsprojectstorage.cpp
  testqgsprojutils.cpp
  testqgsproperty.cpp
+ testqgsprovidermetadata.cpp
  testqgis.cpp
  testqgsrasterfilewriter.cpp
  testqgsrasterfill.cpp
