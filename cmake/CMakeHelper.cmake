@@ -11,6 +11,7 @@ set(QGIS_QGIS_LIBS_ROOT_FOLDER "_qgis")
 set(QGIS_QGIS_TEST_ROOT_FOLDER "_qgis_test")
 set(QGIS_ABOUT_ROOT_FOLDER "about")
 set(QGIS_ZZZ_ROOT_FOLDER "zzz")
+set(QGIS_SERVER_ROOT_FOLDER "server")
 
 
 # Wrapper for test executables.
