@@ -99,6 +99,7 @@
 %Include auto_generated/qgslegendsettings.sip
 %Include auto_generated/qgslegendstyle.sip
 %Include auto_generated/qgslocaldefaultsettings.sip
+%Include auto_generated/qgslocalizeddatapathregistry.sip
 %Include auto_generated/qgslogger.sip
 %Include auto_generated/qgsmapdecoration.sip
 %Include auto_generated/qgsmaphittest.sip
@@ -209,7 +210,6 @@
 %Include auto_generated/qgstemporalutils.sip
 %Include auto_generated/qgstessellator.sip
 %Include auto_generated/qgstestutils.sip
-%Include auto_generated/qgstextrenderer.sip
 %Include auto_generated/qgstiles.sip
 %Include auto_generated/qgstolerance.sip
 %Include auto_generated/qgstracer.sip
@@ -236,6 +236,7 @@
 %Include auto_generated/qgsvectorlayerjoinbuffer.sip
 %Include auto_generated/qgsvectorlayerjoininfo.sip
 %Include auto_generated/qgsvectorlayerserverproperties.sip
+%Include auto_generated/qgsvectorlayertemporalproperties.sip
 %Include auto_generated/qgsvectorlayertools.sip
 %Include auto_generated/qgsvectorlayerundocommand.sip
 %Include auto_generated/qgsvectorlayerundopassthroughcommand.sip
@@ -450,8 +451,11 @@
 %Include auto_generated/processing/qgsprocessingcontext.sip
 %Include auto_generated/processing/qgsprocessingfeedback.sip
 %Include auto_generated/processing/qgsprocessingoutputs.sip
+%Include auto_generated/processing/qgsprocessingparameteraggregate.sip
+%Include auto_generated/processing/qgsprocessingparameterfieldmap.sip
 %Include auto_generated/processing/qgsprocessingparameters.sip
 %Include auto_generated/processing/qgsprocessingparametertype.sip
+%Include auto_generated/processing/qgsprocessingparametervectortilewriterlayers.sip
 %Include auto_generated/processing/qgsprocessingprovider.sip
 %Include auto_generated/processing/qgsprocessingregistry.sip
 %Include auto_generated/processing/qgsprocessingutils.sip
@@ -544,6 +548,17 @@
 %Include auto_generated/symbology/qgssymbollayerregistry.sip
 %Include auto_generated/symbology/qgssymbollayerutils.sip
 %Include auto_generated/symbology/qgsvectorfieldsymbollayer.sip
+%Include auto_generated/textrenderer/qgstextbackgroundsettings.sip
+%Include auto_generated/textrenderer/qgstextblock.sip
+%Include auto_generated/textrenderer/qgstextbuffersettings.sip
+%Include auto_generated/textrenderer/qgstextcharacterformat.sip
+%Include auto_generated/textrenderer/qgstextdocument.sip
+%Include auto_generated/textrenderer/qgstextformat.sip
+%Include auto_generated/textrenderer/qgstextfragment.sip
+%Include auto_generated/textrenderer/qgstextmasksettings.sip
+%Include auto_generated/textrenderer/qgstextrenderer.sip
+%Include auto_generated/textrenderer/qgstextrendererutils.sip
+%Include auto_generated/textrenderer/qgstextshadowsettings.sip
 %Include auto_generated/validity/qgsabstractvaliditycheck.sip
 %Include auto_generated/validity/qgsvaliditycheckcontext.sip
 %Include auto_generated/validity/qgsvaliditycheckregistry.sip

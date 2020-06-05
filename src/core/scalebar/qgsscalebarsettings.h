@@ -20,7 +20,7 @@
 #include "qgis_core.h"
 #include "qgis.h"
 #include "qgsunittypes.h"
-#include "qgstextrenderer.h"
+#include "qgstextformat.h"
 #include <QColor>
 #include <QFont>
 #include <QPen>
@@ -122,6 +122,10 @@ class CORE_EXPORT QgsScaleBarSettings
 
     /**
      * Returns the number of subdivisions for segments included in the right part of the scalebar (only used for some scalebar types).
+     *
+     * \note The number of subdivisions represents the number of subdivision segments, not the number of subdivision lines. E.g.
+     * if the number is 1 then NO subdivision lines will be shown.
+     *
      * \see setNumberOfSubdivisions()
      * \since QGIS 3.14
      */
@@ -129,6 +133,10 @@ class CORE_EXPORT QgsScaleBarSettings
 
     /**
      * Sets the number of \a subdivisions for segments included in the right part of the scalebar (only used for some scalebar types).
+     *
+     * \note The number of subdivisions represents the number of subdivision segments, not the number of subdivision lines. E.g.
+     * if the number is 1 then NO subdivision lines will be shown.
+     *
      * \see numberOfSubdivisions()
      * \since QGIS 3.14
      */
@@ -397,6 +405,8 @@ class CORE_EXPORT QgsScaleBarSettings
      * Ownership is not transferred.
      *
      * \see setLineSymbol()
+     * \see divisionLineSymbol()
+     * \see subdivisionLineSymbol()
      * \since QGIS 3.14
      */
     QgsLineSymbol *lineSymbol() const;
@@ -406,9 +416,57 @@ class CORE_EXPORT QgsScaleBarSettings
      * transferred to the scalebar.
      *
      * \see lineSymbol()
+     * \see setDivisionLineSymbol()
+     * \see setSubdivisionLineSymbol()
      * \since QGIS 3.14
      */
     void setLineSymbol( QgsLineSymbol *symbol SIP_TRANSFER );
+
+    /**
+     * Returns the line symbol used to render the scalebar divisions (only used for some scalebar types).
+     *
+     * Ownership is not transferred.
+     *
+     * \see setDivisionLineSymbol()
+     * \see lineSymbol()
+     * \see subdivisionLineSymbol()
+     * \since QGIS 3.14
+     */
+    QgsLineSymbol *divisionLineSymbol() const;
+
+    /**
+     * Sets the line \a symbol used to render the scalebar divisions (only used for some scalebar types). Ownership of \a symbol is
+     * transferred to the scalebar.
+     *
+     * \see divisionLineSymbol()
+     * \see setLineSymbol()
+     * \see setSubdivisionLineSymbol()
+     * \since QGIS 3.14
+     */
+    void setDivisionLineSymbol( QgsLineSymbol *symbol SIP_TRANSFER );
+
+    /**
+     * Returns the line symbol used to render the scalebar subdivisions (only used for some scalebar types).
+     *
+     * Ownership is not transferred.
+     *
+     * \see setSubdivisionLineSymbol()
+     * \see lineSymbol()
+     * \see divisionLineSymbol()
+     * \since QGIS 3.14
+     */
+    QgsLineSymbol *subdivisionLineSymbol() const;
+
+    /**
+     * Sets the line \a symbol used to render the scalebar subdivisions (only used for some scalebar types). Ownership of \a symbol is
+     * transferred to the scalebar.
+     *
+     * \see subdivisionLineSymbol()
+     * \see setLineSymbol()
+     * \see setDivisionLineSymbol()
+     * \since QGIS 3.14
+     */
+    void setSubdivisionLineSymbol( QgsLineSymbol *symbol SIP_TRANSFER );
 
     /**
      * Returns the primary fill symbol used to render the scalebar (only used for some scalebar types).
@@ -614,7 +672,7 @@ class CORE_EXPORT QgsScaleBarSettings
     //! Number of segments on left side
     int mNumSegmentsLeft = 0;
     //! Number of subdivisions on right side
-    int mNumSubdivisions = 0;
+    int mNumSubdivisions = 1;
     //! Height of subdivisions on right side
     double mSubdivisionsHeight = 1.5;
     //! Size of a segment (in map units)
@@ -638,6 +696,8 @@ class CORE_EXPORT QgsScaleBarSettings
     double mHeight = 3.0;
 
     std::unique_ptr< QgsLineSymbol > mLineSymbol;
+    std::unique_ptr< QgsLineSymbol > mDivisionLineSymbol;
+    std::unique_ptr< QgsLineSymbol > mSubdivisionLineSymbol;
     std::unique_ptr< QgsFillSymbol > mFillSymbol;
     std::unique_ptr< QgsFillSymbol > mAlternateFillSymbol;
 

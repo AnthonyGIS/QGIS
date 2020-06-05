@@ -434,6 +434,17 @@ static QVariant fcnRnd( const QVariantList &values, const QgsExpressionContext *
     generator.seed( seed );
   }
 
+  qint64 randomInteger = min + ( generator() % ( max - min + 1 ) );
+  if ( randomInteger  > std::numeric_limits<int>::max() || randomInteger < -std::numeric_limits<int>::max() )
+  {
+    return QVariant( randomInteger );
+  }
+  else
+  {
+    // Prevent wrong conversion of QVariant. See #36412
+    return QVariant( int( randomInteger ) );
+  }
+
   // Return a random integer in the range [min, max] (inclusive)
   return QVariant( min + ( generator() % ( max - min + 1 ) ) );
 }
@@ -1101,6 +1112,73 @@ static QVariant fcnToDateTime( const QVariantList &values, const QgsExpressionCo
     datetime = QDateTime();
   }
   return QVariant( datetime );
+}
+
+static QVariant fcnMakeDate( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
+{
+  const int year = QgsExpressionUtils::getIntValue( values.at( 0 ), parent );
+  const int month = QgsExpressionUtils::getIntValue( values.at( 1 ), parent );
+  const int day = QgsExpressionUtils::getIntValue( values.at( 2 ), parent );
+
+  const QDate date( year, month, day );
+  if ( !date.isValid() )
+  {
+    parent->setEvalErrorString( QObject::tr( "'%1-%2-%3' is not a valid date" ).arg( year ).arg( month ).arg( day ) );
+    return QVariant();
+  }
+  return QVariant( date );
+}
+
+static QVariant fcnMakeTime( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
+{
+  const int hours = QgsExpressionUtils::getIntValue( values.at( 0 ), parent );
+  const int minutes = QgsExpressionUtils::getIntValue( values.at( 1 ), parent );
+  const double seconds = QgsExpressionUtils::getDoubleValue( values.at( 2 ), parent );
+
+  const QTime time( hours, minutes, std::floor( seconds ), ( seconds - std::floor( seconds ) ) * 1000 );
+  if ( !time.isValid() )
+  {
+    parent->setEvalErrorString( QObject::tr( "'%1-%2-%3' is not a valid time" ).arg( hours ).arg( minutes ).arg( seconds ) );
+    return QVariant();
+  }
+  return QVariant( time );
+}
+
+static QVariant fcnMakeDateTime( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
+{
+  const int year = QgsExpressionUtils::getIntValue( values.at( 0 ), parent );
+  const int month = QgsExpressionUtils::getIntValue( values.at( 1 ), parent );
+  const int day = QgsExpressionUtils::getIntValue( values.at( 2 ), parent );
+  const int hours = QgsExpressionUtils::getIntValue( values.at( 3 ), parent );
+  const int minutes = QgsExpressionUtils::getIntValue( values.at( 4 ), parent );
+  const double seconds = QgsExpressionUtils::getDoubleValue( values.at( 5 ), parent );
+
+  const QDate date( year, month, day );
+  if ( !date.isValid() )
+  {
+    parent->setEvalErrorString( QObject::tr( "'%1-%2-%3' is not a valid date" ).arg( year ).arg( month ).arg( day ) );
+    return QVariant();
+  }
+  const QTime time( hours, minutes, std::floor( seconds ), ( seconds - std::floor( seconds ) ) * 1000 );
+  if ( !time.isValid() )
+  {
+    parent->setEvalErrorString( QObject::tr( "'%1-%2-%3' is not a valid time" ).arg( hours ).arg( minutes ).arg( seconds ) );
+    return QVariant();
+  }
+  return QVariant( QDateTime( date, time ) );
+}
+
+static QVariant fcnMakeInterval( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
+{
+  const double years = QgsExpressionUtils::getDoubleValue( values.at( 0 ), parent );
+  const double months = QgsExpressionUtils::getDoubleValue( values.at( 1 ), parent );
+  const double weeks = QgsExpressionUtils::getDoubleValue( values.at( 2 ), parent );
+  const double days = QgsExpressionUtils::getDoubleValue( values.at( 3 ), parent );
+  const double hours = QgsExpressionUtils::getDoubleValue( values.at( 4 ), parent );
+  const double minutes = QgsExpressionUtils::getDoubleValue( values.at( 5 ), parent );
+  const double seconds = QgsExpressionUtils::getDoubleValue( values.at( 6 ), parent );
+
+  return QVariant::fromValue( QgsInterval( years, months, weeks, days, hours, minutes, seconds ) );
 }
 
 static QVariant fcnCoalesce( const QVariantList &values, const QgsExpressionContext *, QgsExpression *, const QgsExpressionNodeFunction * )
@@ -1845,7 +1923,8 @@ static QVariant fcnConcat( const QVariantList &values, const QgsExpressionContex
   QString concat;
   for ( const QVariant &value : values )
   {
-    concat += QgsExpressionUtils::getStringValue( value, parent );
+    if ( !value.isNull() )
+      concat += QgsExpressionUtils::getStringValue( value, parent );
   }
   return concat;
 }
@@ -5545,6 +5624,20 @@ static QVariant fcnHashSha256( const QVariantList &values, const QgsExpressionCo
   return fcnHash( QgsExpressionUtils::getStringValue( values.at( 0 ), parent ), QCryptographicHash::Sha256 );
 }
 
+static QVariant fcnToBase64( const QVariantList &values, const QgsExpressionContext *, QgsExpression *, const QgsExpressionNodeFunction * )
+{
+  const QByteArray input = values.at( 0 ).toByteArray();
+  return QVariant( QString( input.toBase64() ) );
+}
+
+static QVariant fcnFromBase64( const QVariantList &values, const QgsExpressionContext *, QgsExpression *parent, const QgsExpressionNodeFunction * )
+{
+  const QString value = QgsExpressionUtils::getStringValue( values.at( 0 ), parent );
+  const QByteArray base64 = value.toLocal8Bit();
+  const QByteArray decoded = QByteArray::fromBase64( base64 );
+  return QVariant( decoded );
+}
+
 const QList<QgsExpressionFunction *> &QgsExpression::Functions()
 {
   // The construction of the list isn't thread-safe, and without the mutex,
@@ -5738,6 +5831,29 @@ const QList<QgsExpressionFunction *> &QgsExpression::Functions()
         << new QgsStaticExpressionFunction( QStringLiteral( "epoch" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "date" ) ), fcnEpoch, QStringLiteral( "Date and Time" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "datetime_from_epoch" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "long" ) ), fcnDateTimeFromEpoch, QStringLiteral( "Date and Time" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "day_of_week" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "date" ) ), fcnDayOfWeek, QStringLiteral( "Date and Time" ) )
+        << new QgsStaticExpressionFunction( QStringLiteral( "make_date" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "year" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "month" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "day" ) ),
+                                            fcnMakeDate, QStringLiteral( "Date and Time" ) )
+        << new QgsStaticExpressionFunction( QStringLiteral( "make_time" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "hour" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "minute" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "second" ) ),
+                                            fcnMakeTime, QStringLiteral( "Date and Time" ) )
+        << new QgsStaticExpressionFunction( QStringLiteral( "make_datetime" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "year" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "month" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "day" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "hour" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "minute" ) )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "second" ) ),
+                                            fcnMakeDateTime, QStringLiteral( "Date and Time" ) )
+        << new QgsStaticExpressionFunction( QStringLiteral( "make_interval" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "years" ), true, 0 )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "months" ), true, 0 )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "weeks" ), true, 0 )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "days" ), true, 0 )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "hours" ), true, 0 )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "minutes" ), true, 0 )
+                                            << QgsExpressionFunction::Parameter( QStringLiteral( "seconds" ), true, 0 ),
+                                            fcnMakeInterval, QStringLiteral( "Date and Time" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "lower" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "string" ) ), fcnLower, QStringLiteral( "String" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "upper" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "string" ) ), fcnUpper, QStringLiteral( "String" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "title" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "string" ) ), fcnTitle, QStringLiteral( "String" ) )
@@ -5850,6 +5966,12 @@ const QList<QgsExpressionFunction *> &QgsExpression::Functions()
                                             fcnHashMd5, QStringLiteral( "Conversions" ) )
         << new QgsStaticExpressionFunction( QStringLiteral( "sha256" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "string" ) ),
                                             fcnHashSha256, QStringLiteral( "Conversions" ) )
+
+        //base64
+        << new QgsStaticExpressionFunction( QStringLiteral( "to_base64" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "value" ) ),
+                                            fcnToBase64, QStringLiteral( "Conversions" ) )
+        << new QgsStaticExpressionFunction( QStringLiteral( "from_base64" ), QgsExpressionFunction::ParameterList() << QgsExpressionFunction::Parameter( QStringLiteral( "string" ) ),
+                                            fcnFromBase64, QStringLiteral( "Conversions" ) )
 
         // deprecated stuff - hidden from users
         << new QgsStaticExpressionFunction( QStringLiteral( "$scale" ), QgsExpressionFunction::ParameterList(), fcnMapScale, QStringLiteral( "deprecated" ) );

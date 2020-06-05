@@ -55,6 +55,13 @@ open within the main QGIS application.
       AvoidIntersectionsLayers,
     };
 
+    enum DataDefinedServerProperty
+    {
+      NoProperty,
+      AllProperties,
+      WMSOnlineResource,
+    };
+
     static QgsProject *instance();
 %Docstring
 Returns the QgsProject singleton instance
@@ -113,6 +120,13 @@ Returns the full user name that did the last save.
 .. versionadded:: 3.12
 %End
 
+    QDateTime lastSaveDateTime() const;
+%Docstring
+Returns the date and time when the project was last saved.
+
+.. versionadded:: 3.14
+%End
+
     bool isDirty() const;
 %Docstring
 Returns ``True`` if the project has been modified since the last write()
@@ -136,6 +150,34 @@ representation.
 .. seealso:: :py:func:`setFileName`
 
 .. seealso:: :py:func:`fileInfo`
+%End
+
+    void setOriginalPath( const QString &path );
+%Docstring
+Sets the original ``path`` associated with the project.
+
+This is intended for use with non-qgs/qgz project files (see :py:class:`QgsCustomProjectOpenHandler`) in order to allow
+custom project open handlers to specify the original file name of the project. For custom project formats,
+it is NOT appropriate to call setFileName() with the original project path, as this causes the original (non
+QGIS) project file to be overwritten when the project is next saved.
+
+.. seealso:: :py:func:`originalPath`
+
+.. versionadded:: 3.14
+%End
+
+    QString originalPath() const;
+%Docstring
+Returns the original path associated with the project.
+
+This is intended for use with non-qgs/qgz project files (see :py:class:`QgsCustomProjectOpenHandler`) in order to allow
+custom project open handlers to specify the original file name of the project. For custom project formats,
+it is NOT appropriate to call setFileName() with the original project path, as this causes the original (non
+QGIS) project file to be overwritten when the project is next saved.
+
+.. seealso:: :py:func:`setOriginalPath`
+
+.. versionadded:: 3.14
 %End
 
  QFileInfo fileInfo() const /Deprecated/;
@@ -418,7 +460,6 @@ implying a hierarchy of keys and corresponding values
     int readNumEntry( const QString &scope, const QString &key, int def = 0, bool *ok = 0 ) const;
     double readDoubleEntry( const QString &scope, const QString &key, double def = 0, bool *ok = 0 ) const;
     bool readBoolEntry( const QString &scope, const QString &key, bool def = false, bool *ok = 0 ) const;
-
 
     bool removeEntry( const QString &scope, const QString &key );
 %Docstring
@@ -1716,6 +1757,22 @@ Registers the objects that require translation into the ``translationContext``.
 So there can be created a ts file with these values.
 
 .. versionadded:: 3.4
+%End
+
+    void setDataDefinedServerProperties( const QgsPropertyCollection &properties );
+%Docstring
+Sets the data defined properties used for overrides in user defined server
+parameters to ``properties``
+
+.. versionadded:: 3.14
+%End
+
+    QgsPropertyCollection dataDefinedServerProperties() const;
+%Docstring
+Returns the data defined properties used for overrides in user defined server
+parameters
+
+.. versionadded:: 3.14
 %End
 
 };

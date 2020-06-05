@@ -90,7 +90,7 @@ class GUI_EXPORT QgsFieldMappingModel: public QAbstractTableModel
     void setDestinationEditable( bool editable );
 
     //! Returns a static map of supported data types
-    const QMap<QVariant::Type, QString> dataTypes() const;
+    static const QMap<QVariant::Type, QString> dataTypes();
 
     //! Returns a list of source fields
     QgsFields sourceFields() const;
@@ -132,6 +132,12 @@ class GUI_EXPORT QgsFieldMappingModel: public QAbstractTableModel
     QgsExpressionContextGenerator *contextGenerator() const;
 
     /**
+     * Sets the base expression context \a generator, which will generate the expression
+     * contexts for expression based widgets used by the model.
+     */
+    void setBaseExpressionContextGenerator( const QgsExpressionContextGenerator *generator );
+
+    /**
      * Set destination fields to \a destinationFields, initial values for the expressions can be
      * optionally specified through \a expressions which is a map from the original
      * field name to the corresponding expression.
@@ -158,8 +164,11 @@ class GUI_EXPORT QgsFieldMappingModel: public QAbstractTableModel
 
         // QgsExpressionContextGenerator interface
         QgsExpressionContext createExpressionContext() const override;
+        void setBaseExpressionContextGenerator( const QgsExpressionContextGenerator *generator );
 
       private:
+
+        const QgsExpressionContextGenerator *mBaseGenerator = nullptr;
 
         const QgsFields *mSourceFields;
 
@@ -183,6 +192,8 @@ class GUI_EXPORT QgsFieldMappingModel: public QAbstractTableModel
     bool mDestinationEditable = false;
     QgsFields mSourceFields;
     std::unique_ptr<ExpressionContextGenerator> mExpressionContextGenerator;
+
+    friend class QgsAggregateMappingModel;
 
 };
 

@@ -119,9 +119,11 @@
 %Include auto_generated/qgsmanageconnectionsdialog.sip
 %Include auto_generated/qgsmapcanvas.sip
 %Include auto_generated/qgsmapcanvasannotationitem.sip
+%Include auto_generated/qgsmapcanvasinteractionblocker.sip
 %Include auto_generated/qgsmapcanvasitem.sip
 %Include auto_generated/qgsmapcanvassnappingutils.sip
 %Include auto_generated/qgsmapcanvastracer.sip
+%Include auto_generated/qgsmapcanvasutils.sip
 %Include auto_generated/qgsmaplayeractionregistry.sip
 %Include auto_generated/qgsmaplayercombobox.sip
 %Include auto_generated/qgsmaplayerconfigwidget.sip
@@ -215,6 +217,7 @@
 %Include auto_generated/qgsuserinputwidget.sip
 %Include auto_generated/qgsvaliditycheckresultswidget.sip
 %Include auto_generated/qgsvariableeditorwidget.sip
+%Include auto_generated/qgsvectorlayertemporalpropertieswidget.sip
 %Include auto_generated/qgsvertexmarker.sip
 %Include auto_generated/qgsvscrollarea.sip
 %Include auto_generated/qgswindowmanagerinterface.sip
@@ -314,6 +317,7 @@
 %Include auto_generated/numericformats/qgsnumericformatselectorwidget.sip
 %Include auto_generated/numericformats/qgsnumericformatwidget.sip
 %Include auto_generated/numericformats/qgsnumericformatguiregistry.sip
+%Include auto_generated/processing/qgsprocessingaggregatewidgets.sip
 %Include auto_generated/processing/qgsprocessingalgorithmconfigurationwidget.sip
 %Include auto_generated/processing/qgsprocessingalgorithmdialogbase.sip
 %Include auto_generated/processing/qgsprocessinggui.sip

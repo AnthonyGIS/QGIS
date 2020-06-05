@@ -26,7 +26,6 @@
 #include "qgsmeshrenderersettings.h"
 #include "qgsmeshtimesettings.h"
 #include "qgsmeshsimplificationsettings.h"
-#include "qgsmeshlayertemporalproperties.h"
 
 class QgsMapLayerRenderer;
 struct QgsMeshLayerRendererCache;
@@ -35,6 +34,7 @@ class QgsTriangularMesh;
 class QgsRenderContext;
 struct QgsMesh;
 class QgsMesh3dAveragingMethod;
+class QgsMeshLayerTemporalProperties;
 
 /**
  * \ingroup core
@@ -165,12 +165,23 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
     QString decodedSource( const QString &source, const QString &provider, const QgsReadWriteContext &context ) const override;
     bool readXml( const QDomNode &layer_node, QgsReadWriteContext &context ) override;
     bool writeXml( QDomNode &layer_node, QDomDocument &doc, const QgsReadWriteContext &context ) const override;
-    QgsMeshLayerTemporalProperties *temporalProperties() override;
+    QgsMapLayerTemporalProperties *temporalProperties() override;
     void reload() override;
     QStringList subLayers() const override;
 
     //! Returns the provider type for this layer
     QString providerType() const;
+
+    /**
+     * Add datasets to the mesh from file with \a path. Use the the time \a defaultReferenceTime as reference time is not provided in the file
+     *
+     * \param path the path to the atasets file
+     * \param defaultReferenceTime reference time used if not provided in the file
+     * \return whether the dataset is added
+     *
+     * \since QGIS 3.14
+     */
+    bool addDatasets( const QString &path, const QDateTime &defaultReferenceTime = QDateTime() );
 
     /**
      * Returns native mesh (NULLPTR before rendering or calling to updateMesh)
@@ -321,6 +332,8 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
       * \param timeRange the time range
       * \returns dataset index
       *
+      * \note the returned dataset index depends on the matching method, see setTemporalMatchingMethod()
+      *
       * \since QGIS 3.14
       */
     QgsMeshDatasetIndex activeScalarDatasetAtTime( const QgsDateTimeRange &timeRange ) const;
@@ -331,6 +344,8 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
       *
       * \param timeRange the time range
       * \returns dataset index
+      *
+      * \note the returned dataset index depends on the matching method, see setTemporalMatchingMethod()
       *
       * \since QGIS 3.14
       */
@@ -378,6 +393,15 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
     void setReferenceTime( const QDateTime &referenceTime );
 
     /**
+      * Sets the method used to match the temporal dataset from a requested time, see activeVectorDatasetAtTime()
+      *
+      * \param matchingMethod the matching method
+      *
+      * \since QGIS 3.14
+      */
+    void setTemporalMatchingMethod( const QgsMeshDataProviderTemporalCapabilities::MatchingTemporalDatasetMethod &matchingMethod );
+
+    /**
       * Returns the position of the snapped point on the mesh element closest to \a point intersecting with
       * the searching area defined by \a point and \a searchRadius
       *
@@ -399,6 +423,36 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
       * \since QGIS 3.14
       */
     QgsPointXY snapOnElement( QgsMesh::ElementType elementType, const QgsPointXY &point, double searchRadius );
+
+    /**
+      * Returns the root items of the dataset group tree item
+      *
+      * \return the root item
+      *
+      * \since QGIS 3.14
+      */
+    QgsMeshDatasetGroupTreeItem *datasetGroupTreeRootItem() const;
+
+    /**
+      * Sets the root items of the dataset group tree item.
+      * Changes active dataset groups if those one are not enabled anymore :
+      * - new active scalar dataset group is the first root item enabled child
+      * - new active vector dataset group is none
+      *
+      * Doesn't take ownership of the pointed item, the root item is cloned.
+      *
+      * \param rootItem the new root item
+      *
+      * \since QGIS 3.14
+      */
+    void setDatasetGroupTreeRootItem( QgsMeshDatasetGroupTreeItem *rootItem );
+
+    /**
+     * Reset the dataset group tree item to default from provider
+     *
+     * \since QGIS 3.14
+     */
+    void resetDatasetGroupTreeItem();
 
   public slots:
 
@@ -461,6 +515,9 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
 
     QgsMeshDatasetIndex datasetIndexAtTime( const QgsDateTimeRange &timeRange, int datasetGroupIndex ) const;
 
+    //! Changes scalar settings for classified scalar value (information about is in the metadata
+    void applyClassificationOnScalarSettings( const QgsMeshDatasetGroupMetadata &meta, QgsMeshRendererScalarSettings &scalarSettings ) const;
+
   private slots:
     void onDatasetGroupsAdded( int count );
 
@@ -488,8 +545,10 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
 
     QgsMeshLayerTemporalProperties *mTemporalProperties;
 
-    QgsMeshDatasetIndex mStaticScalarDatasetIndex;
-    QgsMeshDatasetIndex mStaticVectorDatasetIndex;
+    int mStaticScalarDatasetIndex = 0;
+    int mStaticVectorDatasetIndex = 0;
+
+    std::unique_ptr<QgsMeshDatasetGroupTreeItem> mDatasetGroupTreeRootItem;
 
     int closestEdge( const QgsPointXY &point, double searchRadius, QgsPointXY &projectedPoint ) const;
 
@@ -501,6 +560,8 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
 
     //!Returns the position of the centroid point on the closest face in the search area
     QgsPointXY snapOnFace( const QgsPointXY &point, double searchRadius );
+
+    void updateActiveDatasetGroups();
 };
 
 #endif //QGSMESHLAYER_H

@@ -101,10 +101,8 @@ static QJsonObject _renderJsonLegend( QgsLayerTreeModel *legendModel, const QgsL
 {
   QgsLegendRenderer legendRenderer( legendModel, settings );
 
-  QJsonObject json;
   QgsRenderContext context;
-  legendRenderer.exportLegendToJson( context, json );
-  return json;
+  return legendRenderer.exportLegendToJson( context );
 }
 
 static bool _verifyImage( const QString &testName, QString &report, int diff = 30 )
@@ -166,6 +164,8 @@ class TestQgsLegendRenderer : public QObject
     void testColumnBreaks3();
     void testColumnBreaks4();
     void testColumnBreaks5();
+    void testLayerColumnSplittingAlwaysAllow();
+    void testLayerColumnSplittingAlwaysPrevent();
     void testRasterStroke();
     void testFilterByPolygon();
     void testFilterByExpression();
@@ -1031,6 +1031,40 @@ void TestQgsLegendRenderer::testColumnBreaks5()
   QVERIFY( _verifyImage( testName, mReport ) );
 }
 
+void TestQgsLegendRenderer::testLayerColumnSplittingAlwaysAllow()
+{
+  QString testName = QStringLiteral( "legend_layer_column_splitting_allow" );
+
+  QgsLayerTreeModel legendModel( mRoot );
+
+  QgsLayerTreeLayer *layer = legendModel.rootGroup()->findLayer( mVL3 );
+  layer->setLegendSplitBehavior( QgsLayerTreeLayer::AllowSplittingLegendNodesOverMultipleColumns );
+
+  QgsLegendSettings settings;
+  settings.setColumnCount( 4 );
+  settings.setSplitLayer( false );
+  _setStandardTestFont( settings, QStringLiteral( "Bold" ) );
+  _renderLegend( testName, &legendModel, settings );
+  QVERIFY( _verifyImage( testName, mReport ) );
+}
+
+void TestQgsLegendRenderer::testLayerColumnSplittingAlwaysPrevent()
+{
+  QString testName = QStringLiteral( "legend_layer_column_splitting_prevent" );
+
+  QgsLayerTreeModel legendModel( mRoot );
+
+  QgsLayerTreeLayer *layer = legendModel.rootGroup()->findLayer( mVL3 );
+  layer->setLegendSplitBehavior( QgsLayerTreeLayer::PreventSplittingLegendNodesOverMultipleColumns );
+
+  QgsLegendSettings settings;
+  settings.setColumnCount( 4 );
+  settings.setSplitLayer( true );
+  _setStandardTestFont( settings, QStringLiteral( "Bold" ) );
+  _renderLegend( testName, &legendModel, settings );
+  QVERIFY( _verifyImage( testName, mReport ) );
+}
+
 void TestQgsLegendRenderer::testRasterStroke()
 {
   QString testName = QStringLiteral( "legend_raster_border" );
@@ -1406,10 +1440,6 @@ void TestQgsLegendRenderer::testOpacityJson()
   const QJsonObject point_layer = root[1].toObject();
   const QJsonArray point_layer_symbols = point_layer["symbols"].toArray();
 
-#if 0
-  // these tests were totally broken -- they had a larger number of allowed pixel differences then the reference images themselves!!
-  // they've been broken since they were introduced.
-
   const QJsonObject point_layer_symbol_red = point_layer_symbols[0].toObject();
   const QImage point_layer_icon_red = _base64ToImage( point_layer_symbol_red["icon"].toString() );
   QString test_name = "point_layer_icon_red_opacity";
@@ -1427,8 +1457,6 @@ void TestQgsLegendRenderer::testOpacityJson()
   test_name = "point_layer_icon_blue_opacity";
   point_layer_icon_blue.save( _fileNameForTest( test_name ) );
   QVERIFY( _verifyImage( test_name, mReport, 5 ) );
-
-#endif
 
   mVL3->setOpacity( opacity );
 }

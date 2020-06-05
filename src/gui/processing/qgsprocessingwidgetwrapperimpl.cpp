@@ -275,6 +275,7 @@ QgsProcessingCrsWidgetWrapper::QgsProcessingCrsWidgetWrapper( const QgsProcessin
 
 QWidget *QgsProcessingCrsWidgetWrapper::createWidget()
 {
+  Q_ASSERT( mProjectionSelectionWidget == nullptr );
   mProjectionSelectionWidget = new QgsProjectionSelectionWidget();
   mProjectionSelectionWidget->setToolTip( parameterDefinition()->toolTip() );
 
@@ -5631,6 +5632,10 @@ QgsProcessingFeatureSourceParameterDefinitionWidget::QgsProcessingFeatureSourceP
     {
       mGeometryTypeComboBox->setItemCheckState( mGeometryTypeComboBox->findData( i ), Qt::Checked );
     }
+  }
+  else
+  {
+    mGeometryTypeComboBox->setItemCheckState( mGeometryTypeComboBox->findData( QgsProcessing::TypeVectorAnyGeometry ), Qt::Checked );
   }
 
   vlayout->addWidget( mGeometryTypeComboBox );

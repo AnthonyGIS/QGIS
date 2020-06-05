@@ -100,7 +100,7 @@ class CORE_EXPORT QgsLegendRenderer
      *
      * \since QGIS 3.8
      */
-    void exportLegendToJson( const QgsRenderContext &context, QJsonObject &json );
+    QJsonObject exportLegendToJson( const QgsRenderContext &context );
 
     /**
      * Sets the \a style of a \a node.
@@ -215,7 +215,7 @@ class CORE_EXPORT QgsLegendRenderer
      * Returns a list of component groups for the specified \a parentGroup, respecting the current layer's
      * splitting settings.
      */
-    QList<LegendComponentGroup> createComponentGroupList( QgsLayerTreeGroup *parentGroup, bool splitLayer, QgsRenderContext &context );
+    QList<LegendComponentGroup> createComponentGroupList( QgsLayerTreeGroup *parentGroup, QgsRenderContext &context );
 
     /**
      * Divides a list of component groups into columns, and sets the column index for each group in the list.
@@ -234,7 +234,7 @@ class CORE_EXPORT QgsLegendRenderer
      *
      * \since QGIS 3.8
      */
-    void exportLegendToJson( const QgsRenderContext &context, QgsLayerTreeGroup *nodeGroup, QJsonObject &json );
+    QJsonObject exportLegendToJson( const QgsRenderContext &context, QgsLayerTreeGroup *nodeGroup );
 
     /**
      * Draws the legend using the specified render \a context, and returns the actual size of the legend.

@@ -114,6 +114,15 @@ QgsAttributeTableDialog::QgsAttributeTableDialog( QgsVectorLayer *layer, QgsAttr
   connect( mActionExpressionSelect, &QAction::triggered, this, &QgsAttributeTableDialog::mActionExpressionSelect_triggered );
   connect( mMainView, &QgsDualView::showContextMenuExternally, this, &QgsAttributeTableDialog::showContextMenu );
 
+  mActionSelectAll->setShortcuts( QKeySequence::SelectAll );
+  mActionSelectAll->setShortcutContext( Qt::WidgetWithChildrenShortcut );
+  mActionCopySelectedRows->setShortcuts( QKeySequence::Copy );
+  mActionCopySelectedRows->setShortcutContext( Qt::WidgetWithChildrenShortcut );
+  mActionCutSelectedRows->setShortcuts( QKeySequence::Cut );
+  mActionCutSelectedRows->setShortcutContext( Qt::WidgetWithChildrenShortcut );
+  mActionPasteFeatures->setShortcuts( QKeySequence::Paste );
+  mActionPasteFeatures->setShortcutContext( Qt::WidgetWithChildrenShortcut );
+
   const QgsFields fields = mLayer->fields();
   for ( const QgsField &field : fields )
   {
@@ -864,7 +873,42 @@ void QgsAttributeTableDialog::setFilterExpression( const QString &filterString, 
 void QgsAttributeTableDialog::deleteFeature( const QgsFeatureId fid )
 {
   QgsDebugMsg( QStringLiteral( "Delete %1" ).arg( fid ) );
-  mLayer->deleteFeature( fid );
+
+  QgsVectorLayerUtils::QgsDuplicateFeatureContext infoContext;
+  if ( QgsVectorLayerUtils::impactsCascadeFeatures( mLayer, QgsFeatureIds() << fid, QgsProject::instance(), infoContext ) )
+  {
+    QString childrenInfo;
+    int childrenCount = 0;
+    const auto infoContextLayers = infoContext.layers();
+    for ( QgsVectorLayer *chl : infoContextLayers )
+    {
+      childrenCount += infoContext.duplicatedFeatures( chl ).size();
+      childrenInfo += ( tr( "%1 feature(s) on layer \"%2\", " ).arg( infoContext.duplicatedFeatures( chl ).size() ).arg( chl->name() ) );
+    }
+
+    // for extra safety to make sure we know that the delete can have impact on children and joins
+    int res = QMessageBox::question( this, tr( "Delete at least %1 feature(s) on other layer(s)" ).arg( childrenCount ),
+                                     tr( "Delete of feature on layer \"%1\", %2 as well\nand all of its other descendants.\nDelete these features?" ).arg( mLayer->name() ).arg( childrenInfo ),
+                                     QMessageBox::Yes | QMessageBox::No );
+    if ( res != QMessageBox::Yes )
+      return;
+  }
+
+  QgsVectorLayer::DeleteContext context( true, QgsProject::instance() );
+  mLayer->deleteFeature( fid, &context );
+  const auto contextLayers = context.handledLayers();
+  //if it effected more than one layer, print feedback for all descendants
+  if ( contextLayers.size() > 1 )
+  {
+    int deletedCount = 0;
+    QString feedbackMessage;
+    for ( QgsVectorLayer *contextLayer : contextLayers )
+    {
+      feedbackMessage += tr( "%1 on layer %2. " ).arg( context.handledFeatures( contextLayer ).size() ).arg( contextLayer->name() );
+      deletedCount += context.handledFeatures( contextLayer ).size();
+    }
+    QgisApp::instance()->messageBar()->pushMessage( tr( "%1 features deleted: %2" ).arg( deletedCount ).arg( feedbackMessage ), Qgis::Success );
+  }
 }
 
 void QgsAttributeTableDialog::showContextMenu( QgsActionMenu *menu, const QgsFeatureId fid )
@@ -898,12 +942,8 @@ void QgsAttributeTableDialog::toggleDockMode( bool docked )
 
     // To prevent "QAction::event: Ambiguous shortcut overload"
     QgsDebugMsgLevel( QStringLiteral( "Remove shortcuts from attribute table already defined in main window" ), 2 );
-    mActionCopySelectedRows->setShortcut( QKeySequence() );
-    mActionPasteFeatures->setShortcut( QKeySequence() );
-    mActionCutSelectedRows->setShortcut( QKeySequence() );
     mActionZoomMapToSelectedRows->setShortcut( QKeySequence() );
     mActionRemoveSelection->setShortcut( QKeySequence() );
-    mActionSelectAll->setShortcut( QKeySequence() );
     // duplicated on Main Window, with different semantics
     mActionPanMapToSelectedRows->setShortcut( QKeySequence() );
     mActionSearchForm->setShortcut( QKeySequence() );
@@ -939,12 +979,8 @@ void QgsAttributeTableDialog::toggleDockMode( bool docked )
     // restore attribute table shortcuts in window mode
     QgsDebugMsgLevel( QStringLiteral( "Restore attribute table dialog shortcuts in window mode" ), 2 );
     // duplicated on Main Window
-    mActionCopySelectedRows->setShortcut( QKeySequence( QKeySequence::Copy ) );
-    mActionPasteFeatures->setShortcut( QKeySequence( QKeySequence::Paste ) );
-    mActionCutSelectedRows->setShortcut( QKeySequence( QKeySequence::Cut ) );
     mActionZoomMapToSelectedRows->setShortcut( QStringLiteral( "Ctrl+J" ) );
     mActionRemoveSelection->setShortcut( QStringLiteral( "Ctrl+Shift+A" ) );
-    mActionSelectAll->setShortcut( QStringLiteral( "Ctrl+A" ) );
     // duplicated on Main Window, with different semantics
     mActionPanMapToSelectedRows->setShortcut( QStringLiteral( "Ctrl+P" ) );
     mActionSearchForm->setShortcut( QStringLiteral( "Ctrl+F" ) );
