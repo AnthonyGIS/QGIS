@@ -1,0 +1,6 @@
+
+（1）build/cmake_install.cmake
+change
+D:\Pros\Office\QGIS_Dev\OSGeo4W\apps\Python37\sip
+to
+D:/Pros/Office/QGIS_Dev/OSGeo4W/apps/Python37/sip
