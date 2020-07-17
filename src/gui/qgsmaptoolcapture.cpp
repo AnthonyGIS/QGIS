@@ -51,7 +51,9 @@ QgsMapToolCapture::QgsMapToolCapture( QgsMapCanvas *canvas, QgsAdvancedDigitizin
   connect( canvas, &QgsMapCanvas::currentLayerChanged,
            this, &QgsMapToolCapture::currentLayerChanged );
 
-  mExtraSnapLayer = new QgsVectorLayer( "LineString?crs=0", "extra snap", "memory" );
+  QgsVectorLayer::LayerOptions layerOptions;
+  layerOptions.skipCrsValidation = true;
+  mExtraSnapLayer = new QgsVectorLayer( QStringLiteral( "LineString?crs=" ), QStringLiteral( "extra snap" ), QStringLiteral( "memory" ), layerOptions );
   mExtraSnapLayer->startEditing();
   QgsFeature f;
   mExtraSnapLayer->addFeature( f );
@@ -316,7 +318,10 @@ bool QgsMapToolCapture::tracingAddVertex( const QgsPointXY &point )
     if ( capabilities().testFlag( QgsMapToolCapture::Capability::SupportsCurves ) && vlayer->dataProvider()->capabilities().testFlag( QgsVectorDataProvider::Capability::CircularGeometries ) )
     {
       QgsGeometry linear = QgsGeometry( mCaptureCurve.segmentize() );
-      QgsGeometry curved = linear.convertToCurves();
+      QgsGeometry curved = linear.convertToCurves(
+                             settings.value( QStringLiteral( "/qgis/digitizing/convert_to_curve_angle_tolerance" ), 1e-6 ).toDouble(),
+                             settings.value( QStringLiteral( "/qgis/digitizing/convert_to_curve_distance_tolerance" ), 1e-6 ).toDouble()
+                           );
       mCaptureCurve = *qgsgeometry_cast<QgsCompoundCurve *>( curved.constGet() );
     }
   }

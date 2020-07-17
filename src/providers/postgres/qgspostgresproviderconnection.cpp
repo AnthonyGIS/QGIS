@@ -29,6 +29,7 @@ extern "C"
 QgsPostgresProviderConnection::QgsPostgresProviderConnection( const QString &name )
   : QgsAbstractDatabaseProviderConnection( name )
 {
+  mProviderKey = QStringLiteral( "postgres" );
   // Remove the sql and table empty parts
   const QRegularExpression removePartsRe { R"raw(\s*sql=\s*|\s*table=""\s*)raw" };
   setUri( QgsPostgresConn::connUri( name ).uri().replace( removePartsRe, QString() ) );
@@ -38,6 +39,7 @@ QgsPostgresProviderConnection::QgsPostgresProviderConnection( const QString &nam
 QgsPostgresProviderConnection::QgsPostgresProviderConnection( const QString &uri, const QVariantMap &configuration ):
   QgsAbstractDatabaseProviderConnection( QgsDataSourceUri( uri ).connectionInfo( false ), configuration )
 {
+  mProviderKey = QStringLiteral( "postgres" );
   setDefaultCapabilities();
 }
 
@@ -65,7 +67,10 @@ void QgsPostgresProviderConnection::setDefaultCapabilities()
     Capability::TableExists,
     Capability::CreateSpatialIndex,
     Capability::SpatialIndexExists,
-    Capability::DeleteSpatialIndex
+    Capability::DeleteSpatialIndex,
+    Capability::DeleteField,
+    Capability::DeleteFieldCascade,
+    Capability::AddField
   };
 }
 
@@ -271,7 +276,8 @@ QList<QVariantList> QgsPostgresProviderConnection::executeSqlPrivate( const QStr
             }
             else
             {
-              QgsDebugMsg( QStringLiteral( "Unhandled PostgreSQL type %1" ).arg( typName ) );
+              // Just a warning, usually ok
+              QgsDebugMsgLevel( QStringLiteral( "Unhandled PostgreSQL type %1, assuming string" ).arg( typName ), 2 );
             }
           }
           typeMap[ rowIdx ] = vType;
@@ -539,7 +545,7 @@ void QgsPostgresProviderConnection::store( const QString &name ) const
   settings.setValue( "username", dsUri.username() );
   settings.setValue( "password", dsUri.password() );
   settings.setValue( "authcfg", dsUri.authConfigId() );
-  settings.setValue( "sslmode", dsUri.sslMode() );
+  settings.setEnumValue( "sslmode", dsUri.sslMode() );
 
   // From configuration
   static const QStringList configurationParameters

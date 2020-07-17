@@ -27,6 +27,7 @@
 #include "qgsmesh3dsymbol.h"
 #include "qgsphongmaterialsettings.h"
 #include "qgspointlightsettings.h"
+#include "qgsdirectionallightsettings.h"
 #include "qgsterraingenerator.h"
 #include "qgsvector3d.h"
 
@@ -314,6 +315,19 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject, public QgsTemporalRangeObjec
      * \since QGIS 3.4
      */
     bool showCameraViewCenter() const { return mShowCameraViewCenter; }
+
+    /**
+     * Sets whether to show light source origins as a sphere (for debugging)
+     * \since QGIS 3.16
+     */
+    void setShowLightSourceOrigins( bool enabled );
+
+    /**
+     * Returns whether to show light source origins as a sphere (for debugging)
+     * \since QGIS 3.16
+     */
+    bool showLightSourceOrigins() const { return mShowLightSources; }
+
     //! Sets whether to display labels on terrain tiles
     void setShowLabels( bool enabled );
     //! Returns whether to display labels on terrain tiles
@@ -326,10 +340,22 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject, public QgsTemporalRangeObjec
     QList<QgsPointLightSettings> pointLights() const { return mPointLights; }
 
     /**
+     * Returns list of directional lights defined in the scene
+     * \since QGIS 3.16
+     */
+    QList<QgsDirectionalLightSettings> directionalLights() const { return mDirectionalLights; }
+
+    /**
      * Sets list of point lights defined in the scene
      * \since QGIS 3.6
      */
     void setPointLights( const QList<QgsPointLightSettings> &pointLights );
+
+    /**
+     * Sets list of directional lights defined in the scene
+     * \since QGIS 3.16
+     */
+    void setDirectionalLights( const QList<QgsDirectionalLightSettings> &directionalLights );
 
     /**
      * Returns the camera lens' field of view
@@ -404,6 +430,13 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject, public QgsTemporalRangeObjec
      * \since QGIS 3.4
      */
     void showCameraViewCenterChanged();
+
+    /**
+     * Emitted when the flag whether light source origins are shown has changed.
+     * \since QGIS 3.15
+     */
+    void showLightSourceOriginsChanged();
+
     //! Emitted when the flag whether labels are displayed on terrain tiles has changed
     void showLabelsChanged();
 
@@ -412,6 +445,12 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject, public QgsTemporalRangeObjec
      * \since QGIS 3.6
      */
     void pointLightsChanged();
+
+    /**
+     * Emitted when the list of directional lights changes
+     * \since QGIS 3.16
+     */
+    void directionalLightsChanged();
 
     /**
      * Emitted when the camera lens field of view changes
@@ -441,8 +480,10 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject, public QgsTemporalRangeObjec
     bool mShowTerrainBoundingBoxes = false;  //!< Whether to show bounding boxes of entities - useful for debugging
     bool mShowTerrainTileInfo = false;  //!< Whether to draw extra information about terrain tiles to the textures - useful for debugging
     bool mShowCameraViewCenter = false;  //!< Whether to show camera view center as a sphere - useful for debugging
+    bool mShowLightSources = false; //!< Whether to show the origin of light sources
     bool mShowLabels = false; //!< Whether to display labels on terrain tiles
-    QList<QgsPointLightSettings> mPointLights;  //!< List of lights defined for the scene
+    QList<QgsPointLightSettings> mPointLights;  //!< List of point lights defined for the scene
+    QList<QgsDirectionalLightSettings> mDirectionalLights;  //!< List of directional lights defined for the scene
     float mFieldOfView = 45.0f; //<! Camera lens field of view value
     QList<QgsMapLayerRef> mLayers;   //!< Layers to be rendered
     QList<QgsAbstract3DRenderer *> mRenderers;  //!< Extra stuff to render as 3D object

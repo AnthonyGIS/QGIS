@@ -467,6 +467,16 @@ namespace qgis
     return QSet<T>( list.begin(), list.end() );
 #endif
   }
+
+  template<class T>
+  QList<T> setToList( const QSet<T> &set )
+  {
+#if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)
+    return set.toList();
+#else
+    return QList<T>( set.begin(), set.end() );
+#endif
+  }
 }
 ///@endcond
 #endif
@@ -511,6 +521,34 @@ template<class T> T qgsEnumKeyToValue( const QString &key, const T &defaultValue
   Q_ASSERT( metaEnum.isValid() );
   bool ok = false;
   T v = static_cast<T>( metaEnum.keyToValue( key.toUtf8().data(), &ok ) );
+  if ( ok )
+    return v;
+  else
+    return defaultValue;
+}
+
+/**
+ * Returns the value for the given keys of a flag.
+ * \since QGIS 3.16
+ */
+template<class T> QString qgsFlagValueToKeys( const T &value ) SIP_SKIP
+{
+  QMetaEnum metaEnum = QMetaEnum::fromType<T>();
+  Q_ASSERT( metaEnum.isValid() );
+  return QString::fromUtf8( metaEnum.valueToKeys( static_cast<int>( value ) ) );
+}
+
+/**
+ * Returns the value corresponding to the given \a keys of a flag.
+ * If the keys are invalid, it will return the \a defaultValue.
+ * \since QGIS 3.16
+ */
+template<class T> T qgsFlagKeysToValue( const QString &keys, const T &defaultValue ) SIP_SKIP
+{
+  QMetaEnum metaEnum = QMetaEnum::fromType<T>();
+  Q_ASSERT( metaEnum.isValid() );
+  bool ok = false;
+  T v = static_cast<T>( metaEnum.keysToValue( keys.toUtf8().constData(), &ok ) );
   if ( ok )
     return v;
   else

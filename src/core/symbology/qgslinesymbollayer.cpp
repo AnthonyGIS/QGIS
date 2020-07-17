@@ -177,6 +177,13 @@ QgsSymbolLayer *QgsSimpleLineSymbolLayer::create( const QgsStringMap &props )
     l->setRingFilter( static_cast< RenderRingFilter>( props[QStringLiteral( "ring_filter" )].toInt() ) );
   }
 
+  if ( props.contains( QStringLiteral( "dash_pattern_offset" ) ) )
+    l->setDashPatternOffset( props[QStringLiteral( "dash_pattern_offset" )].toDouble() );
+  if ( props.contains( QStringLiteral( "dash_pattern_offset_unit" ) ) )
+    l->setDashPatternOffsetUnit( QgsUnitTypes::decodeRenderUnit( props[QStringLiteral( "dash_pattern_offset_unit" )] ) );
+  if ( props.contains( QStringLiteral( "dash_pattern_offset_map_unit_scale" ) ) )
+    l->setDashPatternOffsetMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( props[QStringLiteral( "dash_pattern_offset_map_unit_scale" )] ) );
+
   l->restoreOldDataDefinedProperties( props );
 
   return l;
@@ -195,21 +202,16 @@ void QgsSimpleLineSymbolLayer::startRender( QgsSymbolRenderContext &context )
   mPen.setColor( penColor );
   double scaledWidth = context.renderContext().convertToPainterUnits( mWidth, mWidthUnit, mWidthMapUnitScale );
   mPen.setWidthF( scaledWidth );
+
+  //note that Qt seems to have issues with scaling dash patterns with very small pen widths.
+  //treating the pen as having no less than a 1 pixel size avoids the worst of these issues
+  const double dashWidthDiv = std::max( 1.0, scaledWidth );
   if ( mUseCustomDashPattern )
   {
     mPen.setStyle( Qt::CustomDashLine );
 
     //scale pattern vector
-    double dashWidthDiv = qgsDoubleNear( scaledWidth, 0 ) ? 1.0 : scaledWidth;
 
-    //fix dash pattern width in Qt 4.8
-    QStringList versionSplit = QString( qVersion() ).split( '.' );
-    if ( versionSplit.size() > 1
-         && versionSplit.at( 1 ).toInt() >= 8
-         && scaledWidth < 1.0 )
-    {
-      dashWidthDiv = 1.0;
-    }
     QVector<qreal> scaledVector;
     QVector<qreal>::const_iterator it = mCustomDashVector.constBegin();
     for ( ; it != mCustomDashVector.constEnd(); ++it )
@@ -223,6 +225,12 @@ void QgsSimpleLineSymbolLayer::startRender( QgsSymbolRenderContext &context )
   {
     mPen.setStyle( mPenStyle );
   }
+
+  if ( mDashPatternOffset && mPen.style() != Qt::SolidLine )
+  {
+    mPen.setDashOffset( context.renderContext().convertToPainterUnits( mDashPatternOffset, mDashPatternOffsetUnit, mDashPatternOffsetMapUnitScale ) / dashWidthDiv ) ;
+  }
+
   mPen.setJoinStyle( mPenJoinStyle );
   mPen.setCapStyle( mPenCapStyle );
 
@@ -353,6 +361,13 @@ void QgsSimpleLineSymbolLayer::renderPolyline( const QPolygonF &points, QgsSymbo
   else
   {
     double scaledOffset = context.renderContext().convertToPainterUnits( offset, mOffsetUnit, mOffsetMapUnitScale );
+    if ( mOffsetUnit == QgsUnitTypes::RenderMetersInMapUnits && context.renderContext().flags() & QgsRenderContext::RenderSymbolPreview )
+    {
+      // rendering for symbol previews -- a size in meters in map units can't be calculated, so treat the size as millimeters
+      // and clamp it to a reasonable range. It's the best we can do in this situation!
+      scaledOffset = std::min( std::max( context.renderContext().convertToPainterUnits( offset, QgsUnitTypes::RenderMillimeters ), 3.0 ), 100.0 );
+    }
+
     QList<QPolygonF> mline = ::offsetLine( points, scaledOffset, context.originalGeometryType() != QgsWkbTypes::UnknownGeometry ? context.originalGeometryType() : QgsWkbTypes::LineGeometry );
     for ( int part = 0; part < mline.count(); ++part )
     {
@@ -384,6 +399,9 @@ QgsStringMap QgsSimpleLineSymbolLayer::properties() const
   map[QStringLiteral( "customdash" )] = QgsSymbolLayerUtils::encodeRealVector( mCustomDashVector );
   map[QStringLiteral( "customdash_unit" )] = QgsUnitTypes::encodeUnit( mCustomDashPatternUnit );
   map[QStringLiteral( "customdash_map_unit_scale" )] = QgsSymbolLayerUtils::encodeMapUnitScale( mCustomDashPatternMapUnitScale );
+  map[QStringLiteral( "dash_pattern_offset" )] = QString::number( mDashPatternOffset );
+  map[QStringLiteral( "dash_pattern_offset_unit" )] = QgsUnitTypes::encodeUnit( mDashPatternOffsetUnit );
+  map[QStringLiteral( "dash_pattern_offset_map_unit_scale" )] = QgsSymbolLayerUtils::encodeMapUnitScale( mDashPatternOffsetMapUnitScale );
   map[QStringLiteral( "draw_inside_polygon" )] = ( mDrawInsidePolygon ? QStringLiteral( "1" ) : QStringLiteral( "0" ) );
   map[QStringLiteral( "ring_filter" )] = QString::number( static_cast< int >( mRingFilter ) );
   return map;
@@ -405,6 +423,9 @@ QgsSimpleLineSymbolLayer *QgsSimpleLineSymbolLayer::clone() const
   l->setCustomDashVector( mCustomDashVector );
   l->setDrawInsidePolygon( mDrawInsidePolygon );
   l->setRingFilter( mRingFilter );
+  l->setDashPatternOffset( mDashPatternOffset );
+  l->setDashPatternOffsetUnit( mDashPatternOffsetUnit );
+  l->setDashPatternOffsetMapUnitScale( mDashPatternOffsetMapUnitScale );
   copyDataDefinedProperties( l );
   copyPaintEffect( l );
   return l;
@@ -536,26 +557,13 @@ void QgsSimpleLineSymbolLayer::applyDataDefinedSymbology( QgsSymbolRenderContext
   }
 
   //dash dot vector
+
+  //note that Qt seems to have issues with scaling dash patterns with very small pen widths.
+  //treating the pen as having no less than a 1 pixel size avoids the worst of these issues
+  const double dashWidthDiv = std::max( hasStrokeWidthExpression ? pen.widthF() : mPen.widthF(), 1.0 );
+
   if ( mDataDefinedProperties.isActive( QgsSymbolLayer::PropertyCustomDash ) )
   {
-    double scaledWidth = context.renderContext().convertToPainterUnits( mWidth, mWidthUnit, mWidthMapUnitScale );
-    double dashWidthDiv = mPen.widthF();
-
-    if ( hasStrokeWidthExpression )
-    {
-      dashWidthDiv = pen.widthF();
-      scaledWidth = pen.widthF();
-    }
-
-    //fix dash pattern width in Qt 4.8
-    QStringList versionSplit = QString( qVersion() ).split( '.' );
-    if ( versionSplit.size() > 1
-         && versionSplit.at( 1 ).toInt() >= 8
-         && scaledWidth < 1.0 )
-    {
-      dashWidthDiv = 1.0;
-    }
-
     QVector<qreal> dashVector;
     QVariant exprVal = mDataDefinedProperties.value( QgsSymbolLayer::PropertyCustomDash, context.renderContext().expressionContext() );
     if ( exprVal.isValid() )
@@ -568,6 +576,15 @@ void QgsSimpleLineSymbolLayer::applyDataDefinedSymbology( QgsSymbolRenderContext
       }
       pen.setDashPattern( dashVector );
     }
+  }
+
+  // dash pattern offset
+  double patternOffset = mDashPatternOffset;
+  if ( mDataDefinedProperties.isActive( QgsSymbolLayer::PropertyDashPatternOffset ) && pen.style() != Qt::SolidLine )
+  {
+    context.setOriginalValueVariable( mDashPatternOffset );
+    patternOffset = mDataDefinedProperties.valueAsDouble( QgsSymbolLayer::PropertyDashPatternOffset, context.renderContext().expressionContext(), mDashPatternOffset );
+    pen.setDashOffset( context.renderContext().convertToPainterUnits( patternOffset, mDashPatternOffsetUnit, mDashPatternOffsetMapUnitScale ) / dashWidthDiv );
   }
 
   //line style
@@ -801,8 +818,7 @@ void QgsTemplatedLineSymbolLayerBase::renderPolyline( const QPolygonF &points, Q
     }
   }
 
-
-  context.renderContext().painter()->save();
+  QgsScopedQPainterState painterState( context.renderContext().painter() );
 
   double averageOver = mAverageAngleLength;
   if ( mDataDefinedProperties.isActive( QgsSymbolLayer::PropertyAverageAngleLength ) )
@@ -862,8 +878,6 @@ void QgsTemplatedLineSymbolLayerBase::renderPolyline( const QPolygonF &points, Q
       }
     }
   }
-
-  context.renderContext().painter()->restore();
 }
 
 void QgsTemplatedLineSymbolLayerBase::renderPolygonStroke( const QPolygonF &points, const QVector<QPolygonF> *rings, QgsSymbolRenderContext &context )
@@ -1109,12 +1123,25 @@ void QgsTemplatedLineSymbolLayerBase::renderPolylineInterval( const QPolygonF &p
     offsetAlongLine = mDataDefinedProperties.valueAsDouble( QgsSymbolLayer::PropertyOffsetAlongLine, context.renderContext().expressionContext(), mOffsetAlongLine );
   }
 
-  const double painterUnitInterval = rc.convertToPainterUnits( interval, intervalUnit(), intervalMapUnitScale() );
+  double painterUnitInterval = rc.convertToPainterUnits( interval, intervalUnit(), intervalMapUnitScale() );
+  if ( intervalUnit() == QgsUnitTypes::RenderMetersInMapUnits && rc.flags() & QgsRenderContext::RenderSymbolPreview )
+  {
+    // rendering for symbol previews -- an interval in meters in map units can't be calculated, so treat the size as millimeters
+    // and clamp it to a reasonable range. It's the best we can do in this situation!
+    painterUnitInterval = std::min( std::max( rc.convertToPainterUnits( interval, QgsUnitTypes::RenderMillimeters ), 10.0 ), 100.0 );
+  }
 
   if ( painterUnitInterval < 0 )
     return;
 
-  const double painterUnitOffsetAlongLine = rc.convertToPainterUnits( offsetAlongLine, offsetAlongLineUnit(), offsetAlongLineMapUnitScale() );
+  double painterUnitOffsetAlongLine = rc.convertToPainterUnits( offsetAlongLine, offsetAlongLineUnit(), offsetAlongLineMapUnitScale() );
+  if ( offsetAlongLineUnit() == QgsUnitTypes::RenderMetersInMapUnits && rc.flags() & QgsRenderContext::RenderSymbolPreview )
+  {
+    // rendering for symbol previews -- an offset in meters in map units can't be calculated, so treat the size as millimeters
+    // and clamp it to a reasonable range. It's the best we can do in this situation!
+    painterUnitOffsetAlongLine = std::min( std::max( rc.convertToPainterUnits( offsetAlongLine, QgsUnitTypes::RenderMillimeters ), 3.0 ), 100.0 );
+  }
+
   lengthLeft = painterUnitInterval - painterUnitOffsetAlongLine;
 
   if ( averageOver > 0 && !qgsDoubleNear( averageOver, 0.0 ) )

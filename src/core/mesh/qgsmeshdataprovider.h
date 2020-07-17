@@ -113,9 +113,10 @@ struct CORE_EXPORT QgsMesh
  * Interface for mesh data sources
  *
  * Mesh is a collection of vertices, edges and faces in 2D or 3D space
- *  - vertex - XY(Z) point (in the mesh's coordinate reference system)
- *  - edge   - two XY(Z) points (in the mesh's coordinate reference system) representing straight seqment
- *  - faces  - sets of vertices forming a closed shape - typically triangles or quadrilaterals
+ *
+ * - vertex - XY(Z) point (in the mesh's coordinate reference system)
+ * - edge   - two XY(Z) points (in the mesh's coordinate reference system) representing straight seqment
+ * - faces  - sets of vertices forming a closed shape - typically triangles or quadrilaterals
  *
  * Base on the underlying data provider/format, whole mesh is either stored in memory or
  * read on demand
@@ -181,6 +182,7 @@ class CORE_EXPORT QgsMeshDataSourceInterface SIP_ABSTRACT
 class CORE_EXPORT QgsMeshDatasetSourceInterface SIP_ABSTRACT
 {
   public:
+    QgsMeshDatasetSourceInterface();
     //! Dtor
     virtual ~QgsMeshDatasetSourceInterface() = default;
 
@@ -334,6 +336,45 @@ class CORE_EXPORT QgsMeshDatasetSourceInterface SIP_ABSTRACT
                                       const QVector<QgsMeshDataBlock> &datasetActive,
                                       const QVector<double> &times
                                     ) = 0;
+
+
+    /**
+     * Saves a an existing dataset group provided by \a source to a file with a specified driver
+     *
+     * On success, the mesh's dataset group count is changed
+     *
+     * \param outputFilePath destination path of the stored file
+     * \param outputDriver output driver name
+     * \param source source of the dataset group
+     * \param datasetGroupIndex index of the dataset group in the \a source
+     *
+     * \returns TRUE on failure, FALSE on success
+     *
+     * \since QGIS 3.16
+     */
+    virtual bool persistDatasetGroup( const QString &outputFilePath,
+                                      const QString &outputDriver,
+                                      QgsMeshDatasetSourceInterface *source,
+                                      int datasetGroupIndex
+                                    ) = 0;
+
+    /**
+     * Returns the dataset index of the dataset in a specific dataet group at \a time from the \a reference time
+     *
+     * \param referenceTime the reference time from where to find the dataset
+     * \param groupIndex the index of the dataset group
+     * \param time the relative time from reference time
+     * \param method the method used to check the time
+     *
+     * \return the dataset index
+     */
+    QgsMeshDatasetIndex datasetIndexAtTime( const QDateTime &referenceTime,
+                                            int groupIndex,
+                                            quint64 time,
+                                            QgsMeshDataProviderTemporalCapabilities::MatchingTemporalDatasetMethod method ) const;
+
+  protected:
+    std::unique_ptr<QgsMeshDataProviderTemporalCapabilities> mTemporalCapabilities;
 };
 
 
@@ -350,7 +391,6 @@ class CORE_EXPORT QgsMeshDatasetSourceInterface SIP_ABSTRACT
 class CORE_EXPORT QgsMeshDataProvider: public QgsDataProvider, public QgsMeshDataSourceInterface, public QgsMeshDatasetSourceInterface
 {
     Q_OBJECT
-
   public:
     //! Ctor
     QgsMeshDataProvider( const QString &uri, const QgsDataProvider::ProviderOptions &providerOptions );
@@ -371,8 +411,6 @@ class CORE_EXPORT QgsMeshDataProvider: public QgsDataProvider, public QgsMeshDat
     //! Emitted when some new dataset groups have been added
     void datasetGroupsAdded( int count );
 
-  private:
-    std::unique_ptr<QgsMeshDataProviderTemporalCapabilities> mTemporalCapabilities;
 };
 
 #endif // QGSMESHDATAPROVIDER_H

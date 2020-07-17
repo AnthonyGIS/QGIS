@@ -28,6 +28,7 @@
 #include "qgsvectorlayerserverproperties.h"
 #include "qgslayertree.h"
 #include "qgslayertreemodel.h"
+#include "qgslayertreefilterproxymodel.h"
 
 class QgsMapLayer;
 
@@ -227,8 +228,7 @@ class GUI_EXPORT QgsVectorLayerProperties : public QgsOptionsDialogBase, private
 
     QgsExpressionContext createExpressionContext() const override;
 
-    std::unique_ptr<QgsLayerTree> mLayersDependenciesTreeGroup;
-    std::unique_ptr<QgsLayerTreeModel> mLayersDependenciesTreeModel;
+    QgsLayerTreeFilterProxyModel *mLayersDependenciesTreeModel;
 
     void showHelp();
 

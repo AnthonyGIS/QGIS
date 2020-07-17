@@ -79,8 +79,8 @@ void QgsTextFormatWidget::initWidget()
   connect( mFontMaxPixelSpinBox, static_cast < void ( QSpinBox::* )( int ) > ( &QSpinBox::valueChanged ), this, &QgsTextFormatWidget::mFontMaxPixelSpinBox_valueChanged );
   connect( mBufferUnitWidget, &QgsUnitSelectionWidget::changed, this, &QgsTextFormatWidget::mBufferUnitWidget_changed );
   connect( mMaskBufferUnitWidget, &QgsUnitSelectionWidget::changed, this, &QgsTextFormatWidget::mMaskBufferUnitWidget_changed );
-  connect( mCoordXDDBtn, &QgsPropertyOverrideButton::activated, this, &QgsTextFormatWidget::mCoordXDDBtn_activated );
-  connect( mCoordYDDBtn, &QgsPropertyOverrideButton::activated, this, &QgsTextFormatWidget::mCoordYDDBtn_activated );
+  connect( mCoordXDDBtn, &QgsPropertyOverrideButton::changed, this, &QgsTextFormatWidget::mCoordXDDBtn_changed );
+  connect( mCoordYDDBtn, &QgsPropertyOverrideButton::changed, this, &QgsTextFormatWidget::mCoordYDDBtn_changed );
   connect( mShapeTypeCmbBx, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, &QgsTextFormatWidget::mShapeTypeCmbBx_currentIndexChanged );
   connect( mShapeRotationCmbBx, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, &QgsTextFormatWidget::mShapeRotationCmbBx_currentIndexChanged );
   connect( mShapeSVGParamsBtn, &QPushButton::clicked, this, &QgsTextFormatWidget::mShapeSVGParamsBtn_clicked );
@@ -781,19 +781,11 @@ void QgsTextFormatWidget::populateDataDefinedButtons()
   registerDataDefinedButton( mOverrunDistanceDDBtn, QgsPalLayerSettings::OverrunDistance );
 
   // data defined-only
-  QString ddPlaceInfo = tr( "In edit mode, layer's relevant labeling map tool is:<br>"
-                            "&nbsp;&nbsp;Defined attribute field -&gt; <i>enabled</i><br>"
-                            "&nbsp;&nbsp;Defined expression -&gt; <i>disabled</i>" );
   registerDataDefinedButton( mCoordXDDBtn, QgsPalLayerSettings::PositionX );
-  mCoordXDDBtn->setUsageInfo( ddPlaceInfo );
   registerDataDefinedButton( mCoordYDDBtn, QgsPalLayerSettings::PositionY );
-  mCoordYDDBtn->setUsageInfo( ddPlaceInfo );
   registerDataDefinedButton( mCoordAlignmentHDDBtn, QgsPalLayerSettings::Hali );
-  mCoordAlignmentHDDBtn->setUsageInfo( ddPlaceInfo );
   registerDataDefinedButton( mCoordAlignmentVDDBtn, QgsPalLayerSettings::Vali );
-  mCoordAlignmentVDDBtn->setUsageInfo( ddPlaceInfo );
   registerDataDefinedButton( mCoordRotationDDBtn, QgsPalLayerSettings::LabelRotation );
-  mCoordRotationDDBtn->setUsageInfo( ddPlaceInfo );
 
   // rendering
   QString ddScaleVisInfo = tr( "Value &lt; 0 represents a scale closer than 1:1, e.g. -10 = 10:1<br>"
@@ -1496,9 +1488,9 @@ void QgsTextFormatWidget::mMaskBufferUnitWidget_changed()
   updateFont( mRefFont );
 }
 
-void QgsTextFormatWidget::mCoordXDDBtn_activated( bool active )
+void QgsTextFormatWidget::mCoordXDDBtn_changed( )
 {
-  if ( !active ) //no data defined alignment without data defined position
+  if ( !mCoordXDDBtn->isActive() ) //no data defined alignment without data defined position
   {
     enableDataDefinedAlignment( false );
   }
@@ -1508,9 +1500,9 @@ void QgsTextFormatWidget::mCoordXDDBtn_activated( bool active )
   }
 }
 
-void QgsTextFormatWidget::mCoordYDDBtn_activated( bool active )
+void QgsTextFormatWidget::mCoordYDDBtn_changed( )
 {
-  if ( !active ) //no data defined alignment without data defined position
+  if ( !mCoordYDDBtn->isActive() ) //no data defined alignment without data defined position
   {
     enableDataDefinedAlignment( false );
   }

@@ -22,6 +22,7 @@
 #include "qgsrange.h"
 #include "qgsmeshdataset.h"
 
+#define  INVALID_MESHLAYER_TIME -99999
 
 /**
  * \class QgsMeshDataProviderTemporalCapabilities
@@ -132,6 +133,13 @@ class CORE_EXPORT QgsMeshDataProviderTemporalCapabilities: public QgsDataProvide
     * Clears alls stored reference times and dataset times
     */
     void clear();
+
+    /**
+    * Returns the duration of the first time step of the dataset group with index \a group
+    *
+    * The value is -1 if the dataset group is not present or if it contains only one dataset (non temporal dataset)
+    */
+    qint64 firstTimeStepDuration( int group ) const;
 
   private:
 

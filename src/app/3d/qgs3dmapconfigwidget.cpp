@@ -102,12 +102,14 @@ Qgs3DMapConfigWidget::Qgs3DMapConfigWidget( Qgs3DMapSettings *map, QgsMapCanvas 
   chkShowTileInfo->setChecked( mMap->showTerrainTilesInfo() );
   chkShowBoundingBoxes->setChecked( mMap->showTerrainBoundingBoxes() );
   chkShowCameraViewCenter->setChecked( mMap->showCameraViewCenter() );
+  chkShowLightSourceOrigins->setChecked( mMap->showLightSourceOrigins() );
 
   groupTerrainShading->setChecked( mMap->isTerrainShadingEnabled() );
   widgetTerrainMaterial->setDiffuseVisible( false );
   widgetTerrainMaterial->setMaterial( mMap->terrainShadingMaterial() );
 
   widgetLights->setPointLights( mMap->pointLights() );
+  widgetLights->setDirectionalLights( mMap->directionalLights() );
 
   connect( cboTerrainType, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, &Qgs3DMapConfigWidget::onTerrainTypeChanged );
   connect( cboTerrainLayer, static_cast<void ( QComboBox::* )( int )>( &QgsMapLayerComboBox::currentIndexChanged ), this, &Qgs3DMapConfigWidget::onTerrainLayerChanged );
@@ -221,11 +223,12 @@ void Qgs3DMapConfigWidget::apply()
   mMap->setShowTerrainTilesInfo( chkShowTileInfo->isChecked() );
   mMap->setShowTerrainBoundingBoxes( chkShowBoundingBoxes->isChecked() );
   mMap->setShowCameraViewCenter( chkShowCameraViewCenter->isChecked() );
-
+  mMap->setShowLightSourceOrigins( chkShowLightSourceOrigins->isChecked() );
   mMap->setTerrainShadingEnabled( groupTerrainShading->isChecked() );
   mMap->setTerrainShadingMaterial( widgetTerrainMaterial->material() );
 
   mMap->setPointLights( widgetLights->pointLights() );
+  mMap->setDirectionalLights( widgetLights->directionalLights() );
 }
 
 void Qgs3DMapConfigWidget::onTerrainTypeChanged()

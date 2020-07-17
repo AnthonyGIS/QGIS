@@ -33,6 +33,7 @@
 #include "qgsimageoperation.h"
 #include "qgspolygon.h"
 #include "qgslinestring.h"
+#include "qgsexpressioncontextutils.h"
 
 #include <QPainter>
 #include <QFile>
@@ -1296,7 +1297,7 @@ void QgsShapeburstFillSymbolLayer::renderPolygon( const QPolygonF &points, const
 
   //draw shapeburst image in correct place in the destination painter
 
-  p->save();
+  QgsScopedQPainterState painterState( p );
   QPointF offset;
   if ( !mOffset.isNull() )
   {
@@ -1311,8 +1312,6 @@ void QgsShapeburstFillSymbolLayer::renderPolygon( const QPolygonF &points, const
   {
     p->translate( -offset );
   }
-  p->restore();
-
 }
 
 //fast distance transform code, adapted from http://cs.brown.edu/~pff/dt/
@@ -1598,7 +1597,14 @@ void QgsImageFillSymbolLayer::renderPolygon( const QPolygonF &points, const QVec
   p->setPen( QPen( Qt::NoPen ) );
 
   QTransform bkTransform = mBrush.transform();
-  if ( context.renderContext().testFlag( QgsRenderContext::RenderMapTile ) )
+  if ( applyBrushTransformFromContext() && !context.renderContext().textureOrigin().isNull() )
+  {
+    QPointF leftCorner = context.renderContext().textureOrigin();
+    QTransform t = mBrush.transform();
+    t.translate( leftCorner.x(), leftCorner.y() );
+    mBrush.setTransform( t );
+  }
+  else if ( context.renderContext().testFlag( QgsRenderContext::RenderMapTile ) )
   {
     //transform brush to upper left corner of geometry bbox
     QPointF leftCorner = points.boundingRect().topLeft();
@@ -1743,6 +1749,11 @@ bool QgsImageFillSymbolLayer::hasDataDefinedProperties() const
   if ( mStroke && mStroke->hasDataDefinedProperties() )
     return true;
   return false;
+}
+
+bool QgsImageFillSymbolLayer::applyBrushTransformFromContext() const
+{
+  return true;
 }
 
 
@@ -3217,11 +3228,12 @@ void QgsPointPatternFillSymbolLayer::applyPattern( const QgsSymbolRenderContext 
     pointRenderContext.setRendererScale( context.renderContext().rendererScale() );
     pointRenderContext.setPainter( &p );
     pointRenderContext.setScaleFactor( context.renderContext().scaleFactor() );
+
     if ( context.renderContext().flags() & QgsRenderContext::Antialiasing )
-    {
       pointRenderContext.setFlag( QgsRenderContext::Antialiasing, true );
-      p.setRenderHint( QPainter::Antialiasing, true );
-    }
+    pointRenderContext.setFlag( QgsRenderContext::LosslessImageRendering, context.renderContext().flags() & QgsRenderContext::LosslessImageRendering );
+
+    context.renderContext().setPainterFlagsUsingContext( &p );
     QgsMapToPixel mtp( context.renderContext().mapToPixel().mapUnitsPerPixel() );
     pointRenderContext.setMapToPixel( mtp );
     pointRenderContext.setForceVectorOutput( false );
@@ -3400,11 +3412,21 @@ void QgsPointPatternFillSymbolLayer::renderPolygon( const QPolygonF &points, con
   const double right = points.boundingRect().right();
   const double bottom = points.boundingRect().bottom();
 
+  QgsExpressionContextScope *scope = new QgsExpressionContextScope();
+  QgsExpressionContextScopePopper scopePopper( context.renderContext().expressionContext(), scope );
+  int pointNum = 0;
+  const bool needsExpressionContext = hasDataDefinedProperties();
+
   bool alternateColumn = false;
+  int currentCol = -3; // because we actually render a few rows/cols outside the bounds, try to align the col/row numbers to start at 1 for the first visible row/col
   for ( double currentX = ( std::floor( left / width ) - 2 ) * width; currentX <= right + 2 * width; currentX += width, alternateColumn = !alternateColumn )
   {
+    if ( needsExpressionContext )
+      scope->addVariable( QgsExpressionContextScope::StaticVariable( QStringLiteral( "symbol_marker_column" ), ++currentCol, true ) );
+
     bool alternateRow = false;
     const double columnX = currentX + widthOffset;
+    int currentRow = -3;
     for ( double currentY = ( std::floor( top / height ) - 2 ) * height; currentY <= bottom + 2 * height; currentY += height, alternateRow = !alternateRow )
     {
       double y = currentY + heightOffset;
@@ -3414,6 +3436,12 @@ void QgsPointPatternFillSymbolLayer::renderPolygon( const QPolygonF &points, con
 
       if ( !alternateColumn )
         y -= displacementPixelY;
+
+      if ( needsExpressionContext )
+      {
+        scope->addVariable( QgsExpressionContextScope::StaticVariable( QgsExpressionContext::EXPR_GEOMETRY_POINT_NUM, ++pointNum, true ) );
+        scope->addVariable( QgsExpressionContextScope::StaticVariable( QStringLiteral( "symbol_marker_row" ), ++currentRow, true ) );
+      }
 
       mMarkerSymbol->renderPoint( QPointF( x, y ), context.feature(), context.renderContext() );
     }
@@ -4148,6 +4176,11 @@ void QgsRasterFillSymbolLayer::applyDataDefinedSettings( QgsSymbolRenderContext 
   applyPattern( mBrush, file, width, opacity, context );
 }
 
+bool QgsRasterFillSymbolLayer::applyBrushTransformFromContext() const
+{
+  return false;
+}
+
 void QgsRasterFillSymbolLayer::applyPattern( QBrush &brush, const QString &imageFilePath, const double width, const double alpha, const QgsSymbolRenderContext &context )
 {
   QSize size;
@@ -4368,8 +4401,15 @@ void QgsRandomMarkerFillSymbolLayer::render( QgsRenderContext &context, const QV
     return a.y() < b.y();
   } );
 #endif
+  QgsExpressionContextScope *scope = new QgsExpressionContextScope();
+  QgsExpressionContextScopePopper scopePopper( context.expressionContext(), scope );
+  int pointNum = 0;
+  const bool needsExpressionContext = hasDataDefinedProperties();
+
   for ( const QgsPointXY &p : qgis::as_const( randomPoints ) )
   {
+    if ( needsExpressionContext )
+      scope->addVariable( QgsExpressionContextScope::StaticVariable( QgsExpressionContext::EXPR_GEOMETRY_POINT_NUM, ++pointNum, true ) );
     mMarker->renderPoint( QPointF( p.x(), p.y() ), feature.isValid() ? &feature : nullptr, context, -1, selected );
   }
 

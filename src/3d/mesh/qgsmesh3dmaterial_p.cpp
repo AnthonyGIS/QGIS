@@ -316,7 +316,7 @@ void QgsMesh3dMaterial::configure()
 
 void QgsMesh3dMaterial::configureArrows( QgsMeshLayer *layer, const QgsDateTimeRange &timeRange )
 {
-  if ( !layer || !layer->dataProvider() )
+  if ( !layer )
     return;
 
   QgsMeshDatasetIndex datasetIndex = layer->activeVectorDatasetAtTime( timeRange );
@@ -325,12 +325,12 @@ void QgsMesh3dMaterial::configureArrows( QgsMeshLayer *layer, const QgsDateTimeR
   QColor arrowsColor = layer->rendererSettings().vectorSettings( datasetIndex.group() ).color();
   mTechnique->addParameter( new Qt3DRender::QParameter( "arrowsColor", QVector4D( arrowsColor.redF(), arrowsColor.greenF(), arrowsColor.blueF(), 1.0f ) ) ) ;
 
-  QgsMeshDatasetGroupMetadata meta = layer->dataProvider()->datasetGroupMetadata( datasetIndex );
+  QgsMeshDatasetGroupMetadata meta = layer->datasetGroupMetadata( datasetIndex );
 
   QVector<QgsVector> vectors;
   QSize gridSize;
   QgsPointXY minCorner;
-  Qt3DRender::QParameter *arrowsEnabledParameter = new Qt3DRender::QParameter( "arrowsEnabled", nullptr );
+  std::unique_ptr< Qt3DRender::QParameter > arrowsEnabledParameter = qgis::make_unique< Qt3DRender::QParameter >( "arrowsEnabled", nullptr );
   if ( mMagnitudeType != MagnitudeType::ScalarDataSet || !mSymbol.arrowsEnabled() || meta.isScalar() || !datasetIndex.isValid() )
     arrowsEnabledParameter->setValue( false );
   else
@@ -366,9 +366,12 @@ void QgsMesh3dMaterial::configureArrows( QgsMeshLayer *layer, const QgsDateTimeR
                 ySpacing,
                 gridSize,
                 minCorner );
+
+    if ( vectors.isEmpty() )
+      return;
   }
 
-  mTechnique->addParameter( arrowsEnabledParameter )  ;
+  mTechnique->addParameter( arrowsEnabledParameter.release() )  ;
 
   Qt3DRender::QTexture2D *arrowsGridTexture = new Qt3DRender::QTexture2D( this );
   arrowsGridTexture->addTextureImage( new ArrowsGridTexture( vectors, gridSize, mSymbol.arrowsFixedSize(), meta.maximum() ) );

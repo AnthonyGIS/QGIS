@@ -102,6 +102,7 @@ static QJsonObject _renderJsonLegend( QgsLayerTreeModel *legendModel, const QgsL
   QgsLegendRenderer legendRenderer( legendModel, settings );
 
   QgsRenderContext context;
+  context.setFlag( QgsRenderContext::Antialiasing, true );
   return legendRenderer.exportLegendToJson( context );
 }
 
@@ -140,6 +141,7 @@ class TestQgsLegendRenderer : public QObject
     void testSpacing();
     void testEffects();
     void testBigMarker();
+    void testBigMarkerMaxSize();
     void testOverrideSymbol();
 
     void testRightAlignText();
@@ -490,6 +492,24 @@ void TestQgsLegendRenderer::testBigMarker()
   QgsLayerTreeModel legendModel( mRoot );
 
   QgsLegendSettings settings;
+  _setStandardTestFont( settings, QStringLiteral( "Bold" ) );
+  _renderLegend( testName, &legendModel, settings );
+  QVERIFY( _verifyImage( testName, mReport ) );
+}
+
+void TestQgsLegendRenderer::testBigMarkerMaxSize()
+{
+  QString testName = QStringLiteral( "legend_big_marker_max_size" );
+  QgsMarkerSymbol *sym = new QgsMarkerSymbol();
+  sym->setColor( Qt::red );
+  sym->setSize( sym->size() * 6 );
+  QgsCategorizedSymbolRenderer *catRenderer = dynamic_cast<QgsCategorizedSymbolRenderer *>( mVL3->renderer() );
+  QVERIFY( catRenderer );
+  catRenderer->updateCategorySymbol( 0, sym );
+
+  QgsLayerTreeModel legendModel( mRoot );
+  QgsLegendSettings settings;
+  settings.setMaximumSymbolSize( 5 ); //restrict maximum size to 5 mm
   _setStandardTestFont( settings, QStringLiteral( "Bold" ) );
   _renderLegend( testName, &legendModel, settings );
   QVERIFY( _verifyImage( testName, mReport ) );

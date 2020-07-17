@@ -68,10 +68,10 @@ class QgsFeatureExpressionValuesGatherer: public QThread
         , feature( _feature )
       {}
 
-      Entry( const QgsFeatureId &_featureId, const QString &_value )
+      Entry( const QgsFeatureId &_featureId, const QString &_value, const QgsVectorLayer *layer )
         : featureId( _featureId )
         , value( _value )
-        , feature( QgsFeature() )
+        , feature( QgsFeature( layer->fields() ) )
       {}
 
       QVariantList identifierFields;
@@ -82,16 +82,16 @@ class QgsFeatureExpressionValuesGatherer: public QThread
       bool operator()( const Entry &lhs, const Entry &rhs ) const;
     };
 
-    static Entry nullEntry()
+    static Entry nullEntry( QgsVectorLayer *layer )
     {
-      return Entry( QVariantList(), QgsApplication::nullRepresentation(), QgsFeature() );
+      return Entry( QVariantList(), QgsApplication::nullRepresentation(), QgsFeature( layer->fields() ) );
     }
 
     void run() override
     {
       mWasCanceled = false;
 
-      mIterator = mSource->getFeatures( mRequest );
+      QgsFeatureIterator iterator = mSource->getFeatures( mRequest );
 
       mDisplayExpression.prepare( &mExpressionContext );
 
@@ -100,7 +100,7 @@ class QgsFeatureExpressionValuesGatherer: public QThread
       for ( const QString &fieldName : qgis::as_const( mIdentifierFields ) )
         attributeIndexes << mSource->fields().indexOf( fieldName );
 
-      while ( mIterator.nextFeature( feature ) )
+      while ( iterator.nextFeature( feature ) )
       {
         mExpressionContext.setFeature( feature );
         QVariantList attributes;
@@ -165,7 +165,6 @@ class QgsFeatureExpressionValuesGatherer: public QThread
     QgsExpression mDisplayExpression;
     QgsExpressionContext mExpressionContext;
     QgsFeatureRequest mRequest;
-    QgsFeatureIterator mIterator;
     bool mWasCanceled = false;
     mutable QMutex mCancelMutex;
     QStringList mIdentifierFields;

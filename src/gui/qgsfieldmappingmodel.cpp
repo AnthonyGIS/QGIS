@@ -24,7 +24,7 @@ QgsFieldMappingModel::QgsFieldMappingModel( const QgsFields &sourceFields,
     QObject *parent )
   : QAbstractTableModel( parent )
   , mSourceFields( sourceFields )
-  , mExpressionContextGenerator( new ExpressionContextGenerator( &mSourceFields ) )
+  , mExpressionContextGenerator( new ExpressionContextGenerator( mSourceFields ) )
 {
   setDestinationFields( destinationFields, expressions );
 }
@@ -359,9 +359,9 @@ void QgsFieldMappingModel::setDestinationFields( const QgsFields &destinationFie
       const QgsExpression exp { f.expression };
       // if it's source field
       if ( exp.isField() &&
-           mSourceFields.names().contains( exp.referencedColumns().toList().first() ) )
+           mSourceFields.names().contains( qgis::setToList( exp.referencedColumns() ).first() ) )
       {
-        usedFields.push_back( exp.referencedColumns().toList().first() );
+        usedFields.push_back( qgis::setToList( exp.referencedColumns() ).first() );
       }
     }
     else
@@ -494,7 +494,7 @@ bool QgsFieldMappingModel::moveDown( const QModelIndex &index )
   return moveUpOrDown( index, false );
 }
 
-QgsFieldMappingModel::ExpressionContextGenerator::ExpressionContextGenerator( const QgsFields *sourceFields )
+QgsFieldMappingModel::ExpressionContextGenerator::ExpressionContextGenerator( const QgsFields &sourceFields )
   : mSourceFields( sourceFields )
 {
 }
@@ -505,7 +505,7 @@ QgsExpressionContext QgsFieldMappingModel::ExpressionContextGenerator::createExp
   {
     QgsExpressionContext ctx = mBaseGenerator->createExpressionContext();
     std::unique_ptr< QgsExpressionContextScope > fieldMappingScope = qgis::make_unique< QgsExpressionContextScope >( tr( "Field Mapping" ) );
-    fieldMappingScope->setFields( *mSourceFields );
+    fieldMappingScope->setFields( mSourceFields );
     ctx.appendScope( fieldMappingScope.release() );
     return ctx;
   }
@@ -513,8 +513,8 @@ QgsExpressionContext QgsFieldMappingModel::ExpressionContextGenerator::createExp
   {
     QgsExpressionContext ctx;
     ctx.appendScope( QgsExpressionContextUtils::globalScope() );
-    ctx.setFields( *mSourceFields );
-    QgsFeature feature { *mSourceFields };
+    ctx.setFields( mSourceFields );
+    QgsFeature feature { mSourceFields };
     feature.setValid( true );
     ctx.setFeature( feature );
     return ctx;

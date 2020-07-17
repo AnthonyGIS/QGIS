@@ -120,8 +120,9 @@ void QgsDecorationLayoutExtent::render( const QgsMapSettings &mapSettings, QgsRe
   if ( !mSymbol )
     return;
 
-  context.painter()->save();
-  context.painter()->setRenderHint( QPainter::Antialiasing, true );
+  QgsScopedQPainterState painterState( context.painter() );
+  context.setPainterFlagsUsingContext();
+
   mSymbol->startRender( context );
 
   const QgsMapToPixel &m2p = mapSettings.mapToPixel();
@@ -171,7 +172,6 @@ void QgsDecorationLayoutExtent::render( const QgsMapSettings &mapSettings, QgsRe
     }
   }
   mSymbol->stopRender( context );
-  context.painter()->restore();
 }
 
 bool QgsDecorationLayoutExtent::labelExtents() const

@@ -82,6 +82,8 @@ class CORE_EXPORT QgsDataItem : public QObject
       Favorites, //!< Represents a favorite item
       Project, //!< Represents a QGIS project
       Custom, //!< Custom item type
+      Fields, //!< Collection of fields
+      Field, //!< Vector layer field
     };
 
     Q_ENUM( Type )
@@ -426,11 +428,12 @@ class CORE_EXPORT QgsDataItem : public QObject
 
     /**
      * Safely delete the item:
-     *   - disconnects parent
-     *   - unsets parent (but does not remove itself)
-     *   - deletes all its descendants recursively
-     *   - waits until Populating state (createChildren() in thread) finished without blocking main thread
-     *   - calls QObject::deleteLater()
+     *
+     * - disconnects parent
+     * - unsets parent (but does not remove itself)
+     * - deletes all its descendants recursively
+     * - waits until Populating state (createChildren() in thread) finished without blocking main thread
+     * - calls QObject::deleteLater()
      */
     virtual void deleteLater();
 
@@ -443,8 +446,13 @@ class CORE_EXPORT QgsDataItem : public QObject
 
     virtual void refresh();
 
-    //! Refresh connections: update GUI and emit signal
-    virtual void refreshConnections();
+    /**
+     * Causes a data item provider to refresh all registered connections.
+     *
+     * If \a providerKey is specified then only the matching provider will be refreshed. Otherwise,
+     * all providers will be refreshed (which is potentially very expensive!).
+     */
+    virtual void refreshConnections( const QString &providerKey = QString() );
 
     virtual void childrenCreated();
 
@@ -457,12 +465,13 @@ class CORE_EXPORT QgsDataItem : public QObject
     void stateChanged( QgsDataItem *item, QgsDataItem::State oldState );
 
     /**
-     * Emitted when the provider's connections of the child items have changed
+     * Emitted when the connections of the provider with the specified \a providerKey have changed.
+     *
      * This signal is normally forwarded to the app in order to refresh the connection
      * item in the provider dialogs and to refresh the connection items in the other
-     * open browsers
+     * open browsers.
      */
-    void connectionsChanged();
+    void connectionsChanged( const QString &providerKey = QString() );
 
   protected slots:
 
@@ -771,11 +780,13 @@ class CORE_EXPORT QgsErrorItem : public QgsDataItem
 
 // ---------
 
+// TODO: move to qgis_gui for QGIS 4
+
 /**
  * \ingroup core
  * \class QgsDirectoryParamWidget
  *
- * TODO: move to qgis_gui for QGIS 4
+ * Browser parameter widget implementation for directory items.
  */
 class CORE_EXPORT QgsDirectoryParamWidget : public QTreeWidget
 {
@@ -884,6 +895,102 @@ class CORE_EXPORT QgsZipItem : public QgsDataCollectionItem
   private:
     void init();
 };
+
+
+/**
+ * \ingroup core
+ * A collection of field items with some internal logic to retrieve
+ * the fields and a the vector layer instance from a connection URI,
+ * the schema and the table name.
+ * \since QGIS 3.16
+*/
+class CORE_EXPORT QgsFieldsItem : public QgsDataItem
+{
+    Q_OBJECT
+
+  public:
+
+    /**
+     * Constructor for QgsFieldsItem, with the specified \a parent item.
+     *
+     * The \a path argument gives the item path in the browser tree. The \a path string can take any form,
+     * but QgsDataItem items pointing to different logical locations should always use a different item \a path.
+     * The \connectionUri argument is the connection part of the layer URI that it is used internally to create
+     * a connection and retrieve fields information.
+     * The \a providerKey string can be used to specify the key for the QgsDataItemProvider that created this item.
+     * The \a schema and \a tableName are used to retrieve the layer and field information from the \a connectionUri.
+     */
+    QgsFieldsItem( QgsDataItem *parent SIP_TRANSFERTHIS,
+                   const QString &path,
+                   const QString &connectionUri,
+                   const QString &providerKey,
+                   const QString &schema,
+                   const QString &tableName );
+
+    ~QgsFieldsItem() override;
+
+    QVector<QgsDataItem *> createChildren() override;
+
+    QIcon icon() override;
+
+    /**
+     * Returns the schema name
+     */
+    QString schema() const;
+
+    /**
+     * Returns the table name
+     */
+    QString tableName() const;
+
+    /**
+     * Returns the connection URI
+     */
+    QString connectionUri() const;
+
+    /**
+     * Creates and returns a (possibly NULL) layer from the connection URI and schema/table information
+     */
+    QgsVectorLayer *layer() SIP_FACTORY;
+
+
+  private:
+
+    QString mSchema;
+    QString mTableName;
+    QString mConnectionUri;
+};
+
+
+/**
+ * \ingroup core
+ * A layer field item, information about the connection URI, the schema and the
+ * table as well as the layer instance the field belongs to can be retrieved
+ * from the parent QgsFieldsItem object.
+ * \since QGIS 3.16
+*/
+class CORE_EXPORT QgsFieldItem : public QgsDataItem
+{
+    Q_OBJECT
+  public:
+
+    /**
+     * Constructor for QgsFieldItem, with the specified \a parent item and \a field.
+     * \note parent item must be a QgsFieldsItem
+     */
+    QgsFieldItem( QgsDataItem *parent SIP_TRANSFERTHIS,
+                  const QgsField &field );
+
+    ~QgsFieldItem() override;
+
+    QIcon icon() override;
+
+  private:
+
+    const QgsField mField;
+
+};
+
 
 
 ///@cond PRIVATE

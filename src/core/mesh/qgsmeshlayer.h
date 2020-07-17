@@ -21,6 +21,7 @@
 #include <memory>
 
 #include "qgis_core.h"
+#include "qgsinterval.h"
 #include "qgsmaplayer.h"
 #include "qgsmeshdataprovider.h"
 #include "qgsmeshrenderersettings.h"
@@ -35,6 +36,7 @@ class QgsRenderContext;
 struct QgsMesh;
 class QgsMesh3dAveragingMethod;
 class QgsMeshLayerTemporalProperties;
+class QgsMeshDatasetGroupStore;
 
 /**
  * \ingroup core
@@ -168,12 +170,13 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
     QgsMapLayerTemporalProperties *temporalProperties() override;
     void reload() override;
     QStringList subLayers() const override;
+    bool isTemporary() const override;
 
     //! Returns the provider type for this layer
     QString providerType() const;
 
     /**
-     * Add datasets to the mesh from file with \a path. Use the the time \a defaultReferenceTime as reference time is not provided in the file
+     * Adds datasets to the mesh from file with \a path. Use the the time \a defaultReferenceTime as reference time is not provided in the file
      *
      * \param path the path to the atasets file
      * \param defaultReferenceTime reference time used if not provided in the file
@@ -182,6 +185,28 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
      * \since QGIS 3.14
      */
     bool addDatasets( const QString &path, const QDateTime &defaultReferenceTime = QDateTime() );
+
+    /**
+     * Adds extra datasets to the mesh. Take ownership.
+     *
+     * \param datasetGroup the extra dataset group
+     * \return whether the dataset is effectively added
+     *
+     * \since QGIS 3.16
+     */
+    bool addDatasets( QgsMeshDatasetGroup *datasetGroup )SIP_SKIP;
+
+    /**
+     * Saves datasets group on file with the specified \a driver
+     *
+     * \param path the path of the file
+     * \param datasetGroupIndex the index of the dataset group
+     * \param driver the driver to used for saving
+     * \return false if succeeds
+     *
+     * \since QGIS 3.16
+     */
+    bool saveDataset( const QString &path, int datasetGroupIndex, QString driver );
 
     /**
      * Returns native mesh (NULLPTR before rendering or calling to updateMesh)
@@ -269,6 +294,144 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
     QString formatTime( double hours );
 
     /**
+     * Returns the dataset groups count handle by the layer
+     *
+     * \since QGIS 3.16
+     */
+    int datasetGroupCount() const;
+
+    /**
+     * Returns the extra dataset groups count handle by the layer
+     *
+     * \since QGIS 3.16
+     */
+    int extraDatasetGroupCount() const;
+
+    /**
+     * Returns the list of indexes of dataset groups count handled by the layer
+     *
+     * \note indexes are used to distinguish all the dataset groups handled by the layer (from dataprovider, extra dataset group,...)
+     * In the layer scope, those indexes can be different from the data provider indexes.
+     *
+     * \since QGIS 3.16
+     */
+    QList<int> datasetGroupsIndexes() const;
+
+    /**
+     * Returns the dataset groups metadata
+     *
+     * \note indexes are used to distinguish all the dataset groups handled by the layer (from dataprovider, extra dataset group,...)
+     * In the layer scope, those indexes can be different from the data provider indexes.
+     *
+     * \since QGIS 3.16
+     */
+    QgsMeshDatasetGroupMetadata datasetGroupMetadata( const QgsMeshDatasetIndex &index ) const;
+
+    /**
+     * Returns the dataset count in the dataset groups
+     *
+     * \param index index of the dataset in the group
+     *
+     * \note indexes are used to distinguish all the dataset groups handled by the layer (from dataprovider, extra dataset group,...)
+     * In the layer scope, those indexes can be different from the data provider indexes.
+     *
+     * \since QGIS 3.16
+     */
+    int datasetCount( const QgsMeshDatasetIndex &index ) const;
+
+    /**
+     * Returns the dataset metadata
+     *
+     * \param index index of the dataset
+     *
+     * \note indexes are used to distinguish all the dataset groups handled by the layer (from dataprovider, extra dataset group,...)
+     * In the layer scope, those indexes can be different from the data provider indexes.
+     *
+     * \since QGIS 3.16
+     */
+    QgsMeshDatasetMetadata datasetMetadata( const QgsMeshDatasetIndex &index ) const;
+
+    /**
+     * Returns  vector/scalar value associated with the index from the dataset
+     * To read multiple continuous values, use datasetValues()
+     *
+     * See QgsMeshDatasetMetadata::isVector() or QgsMeshDataBlock::type()
+     * to check if the returned value is vector or scalar
+     *
+     * Returns invalid value for DataOnVolumes
+     *
+     * \param index index of the dataset
+     * \param valueIndex index of the value
+     *
+     * \note indexes are used to distinguish all the dataset groups handled by the layer (from dataprovider, extra dataset group,...)
+     * In the layer scope, those indexes can be different from the data provider indexes.
+     *
+     * \since QGIS 3.16
+     */
+    QgsMeshDatasetValue datasetValue( const QgsMeshDatasetIndex &index, int valueIndex ) const;
+
+    /**
+     * Returns N vector/scalar values from the index from the dataset
+     *
+     * See QgsMeshDatasetMetadata::isVector() or QgsMeshDataBlock::type()
+     * to check if the returned value is vector or scalar
+     *
+     * Returns invalid block for DataOnVolumes. Use QgsMeshLayerUtils::datasetValues() if you
+     * need block for any type of data type
+     *
+     * \param index index of the dataset
+     * \param valueIndex index of the value
+     * \param count number of values to return
+     *
+     * \note indexes are used to distinguish all the dataset groups handled by the layer (from dataprovider, extra dataset group,...)
+     * In the layer scope, those indexes can be different from the data provider indexes.
+     *
+     * \since QGIS 3.16
+     */
+    QgsMeshDataBlock datasetValues( const QgsMeshDatasetIndex &index, int valueIndex, int count ) const;
+
+    /**
+     * Returns N vector/scalar values from the face index from the dataset for 3d stacked meshes
+     *
+     * See QgsMeshDatasetMetadata::isVector() to check if the returned value is vector or scalar
+     *
+     * returns invalid block for DataOnFaces and DataOnVertices.
+     *
+     * \param index index of the dataset
+     * \param valueIndex index of the value
+     * \param count number of values to return
+     *
+     * \note indexes are used to distinguish all the dataset groups handled by the layer (from dataprovider, extra dataset group,...)
+     * In the layer scope, those indexes can be different from the data provider indexes.
+     *
+     * \since QGIS 3.16
+     */
+    QgsMesh3dDataBlock dataset3dValues( const QgsMeshDatasetIndex &index, int faceIndex, int count ) const;
+
+    /**
+     * Returns N vector/scalar values from the face index from the dataset for 3d stacked meshes
+     *
+     * See QgsMeshDatasetMetadata::isVector() to check if the returned value is vector or scalar
+     *
+     * returns invalid block for DataOnFaces and DataOnVertices.
+     */
+    bool isFaceActive( const QgsMeshDatasetIndex &index, int faceIndex ) const;
+
+    /**
+     * Returns whether the faces are active for particular dataset
+     *
+     * \param index index of the dataset
+     * \param valueIndex index of the value
+     * \param count number of values to return
+     *
+     * \note indexes are used to distinguish all the dataset groups handled by the layer (from dataprovider, extra dataset group,...)
+     * In the layer scope, those indexes are different from the data provider indexes.
+     *
+     * \since QGIS 3.16
+     */
+    QgsMeshDataBlock areFacesActive( const QgsMeshDatasetIndex &index, int faceIndex, int count ) const;
+
+    /**
       * Interpolates the value on the given point from given dataset.
       * For 3D datasets, it uses dataset3dValue(), \n
       * For 1D datasets, it uses dataset1dValue() with \a searchRadius
@@ -284,6 +447,9 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
       * \returns interpolated value at the point. Returns NaN values for values
       * outside the mesh layer, nodata values and in case triangular mesh was not
       * previously used for rendering
+      *
+      * \note indexes are used to distinguish all the dataset groups handled by the layer (from dataprovider, extra dataset group,...)
+      * In the layer scope, those indexes are different from the data provider indexes.
       *
       * \since QGIS 3.4
       */
@@ -303,6 +469,9 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
       * for point outside the mesh layer or in case triangular mesh was not
       * previously used for rendering or for datasets that do not have type DataOnVolumes
       *
+      * \note indexes are used to distinguish all the dataset groups handled by the layer (from dataprovider, extra dataset group,...)
+      * In the layer scope, those indexes are different from the data provider indexes.
+      *
       * \since QGIS 3.12
       */
     QgsMesh3dDataBlock dataset3dValue( const QgsMeshDatasetIndex &index, const QgsPointXY &point ) const;
@@ -321,9 +490,29 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
       * \returns interpolated value at the projected point. Returns NaN values for values
       * outside the mesh layer and in case triangular mesh was not previously used for rendering
       *
+      * \note indexes are used to distinguish all the dataset groups handled by the layer (from dataprovider, extra dataset group,...)
+      * In the layer scope, those indexes are different from the data provider indexes.
+      *
       * \since QGIS 3.14
       */
     QgsMeshDatasetValue dataset1dValue( const QgsMeshDatasetIndex &index, const QgsPointXY &point, double searchRadius ) const;
+
+
+    /**
+      * Returns dataset index from datasets group depending on the time range.
+      * If the temporal properties is not active, returns invalid dataset index
+      *
+      * \param timeRange the time range
+      * \returns dataset index
+      *
+      * \note the returned dataset index depends on the matching method, see setTemporalMatchingMethod()
+      *
+      * \note indexes are used to distinguish all the dataset groups handled by the layer (from dataprovider, extra dataset group,...)
+      * In the layer scope, those indexes are different from the data provider indexes.
+      *
+      * \since QGIS 3.14
+      */
+    QgsMeshDatasetIndex datasetIndexAtTime( const QgsDateTimeRange &timeRange, int datasetGroupIndex ) const;
 
     /**
       * Returns dataset index from active scalar group depending on the time range.
@@ -436,6 +625,7 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
     /**
       * Sets the root items of the dataset group tree item.
       * Changes active dataset groups if those one are not enabled anymore :
+      *
       * - new active scalar dataset group is the first root item enabled child
       * - new active vector dataset group is none
       *
@@ -453,6 +643,20 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
      * \since QGIS 3.14
      */
     void resetDatasetGroupTreeItem();
+
+    /**
+     * Returns the first valid time step of the dataset groups, invalid QgInterval if no time step is present
+     *
+     * \since QGIS 3.14
+     */
+    QgsInterval firstValidTimeStep() const;
+
+    /**
+     * Returns the relative time (in milliseconds) of the dataset from the reference time of its group
+     *
+     * \since QGIS 3.16
+     */
+    QgsInterval datasetRelativeTime( const QgsMeshDatasetIndex &index );
 
   public slots:
 
@@ -504,26 +708,25 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
     QgsMeshLayer( const QgsMeshLayer &rhs );
 #endif
 
-  private:
     void fillNativeMesh();
     void assignDefaultStyleToDatasetGroup( int groupIndex );
-    void setDefaultRendererSettings();
+    void setDefaultRendererSettings( const QList<int> &groupIndexes );
     void createSimplifiedMeshes();
     int levelsOfDetailsIndex( double partOfMeshInView ) const;
 
     bool hasSimplifiedMeshes() const;
 
-    QgsMeshDatasetIndex datasetIndexAtTime( const QgsDateTimeRange &timeRange, int datasetGroupIndex ) const;
-
     //! Changes scalar settings for classified scalar value (information about is in the metadata
     void applyClassificationOnScalarSettings( const QgsMeshDatasetGroupMetadata &meta, QgsMeshRendererScalarSettings &scalarSettings ) const;
 
   private slots:
-    void onDatasetGroupsAdded( int count );
+    void onDatasetGroupsAdded( const QList<int> &datasetGroupIndexes );
 
   private:
     //! Pointer to data provider derived from the abastract base class QgsMeshDataProvider
     QgsMeshDataProvider *mDataProvider = nullptr;
+
+    std::unique_ptr<QgsMeshDatasetGroupStore> mDatasetGroupStore;
 
     //! Pointer to native mesh structure, used as cache for rendering
     std::unique_ptr<QgsMesh> mNativeMesh;
@@ -547,8 +750,6 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
 
     int mStaticScalarDatasetIndex = 0;
     int mStaticVectorDatasetIndex = 0;
-
-    std::unique_ptr<QgsMeshDatasetGroupTreeItem> mDatasetGroupTreeRootItem;
 
     int closestEdge( const QgsPointXY &point, double searchRadius, QgsPointXY &projectedPoint ) const;
 

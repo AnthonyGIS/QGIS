@@ -25,6 +25,7 @@
 
 #include <cmath>
 #include <QPainter>
+#include <QPainterPath>
 #include <QRegularExpression>
 #include <QJsonObject>
 #include <QJsonArray>
@@ -209,7 +210,7 @@ bool QgsPoint::fromWkt( const QString &wkt )
  * See details in QEP #17
  ****************************************************************************/
 
-QByteArray QgsPoint::asWkb() const
+QByteArray QgsPoint::asWkb( WkbFlags ) const
 {
   int binarySize = sizeof( char ) + sizeof( quint32 );
   binarySize += ( 2 + is3D() + isMeasure() ) * sizeof( double );
@@ -319,6 +320,11 @@ QString QgsPoint::asKml( int precision ) const
 void QgsPoint::draw( QPainter &p ) const
 {
   p.drawRect( QRectF( mX - 2, mY - 2, 4, 4 ) );
+}
+
+QPainterPath QgsPoint::asQPainterPath() const
+{
+  return QPainterPath();
 }
 
 void QgsPoint::clear()

@@ -84,7 +84,7 @@ Qt3DRender::QGeometry *QgsLineVertexData::createGeometry( Qt3DCore::QNode *paren
 #endif
   indexBuffer->setData( createIndexBuffer() );
 
-  QgsDebugMsg( QString( "vertex buffer %1 MB  index buffer %2 MB " ).arg( vertexBuffer->data().count() / 1024. / 1024. ).arg( indexBuffer->data().count() / 1024. / 1024. ) );
+  QgsDebugMsgLevel( QString( "vertex buffer %1 MB  index buffer %2 MB " ).arg( vertexBuffer->data().count() / 1024. / 1024. ).arg( indexBuffer->data().count() / 1024. / 1024. ), 2 );
 
   Qt3DRender::QAttribute *positionAttribute = new Qt3DRender::QAttribute( parent );
   positionAttribute->setAttributeType( Qt3DRender::QAttribute::VertexAttribute );
@@ -129,7 +129,7 @@ void QgsLineVertexData::addLineString( const QgsLineString &lineString, float ex
 }
 
 
-void QgsLineVertexData::addVerticalLines( const QgsLineString &lineString, float verticalLength )
+void QgsLineVertexData::addVerticalLines( const QgsLineString &lineString, float verticalLength, float extraHeightOffset )
 {
   QgsPoint centroid;
   if ( altBinding == Qgs3DTypes::AltBindCentroid )
@@ -138,7 +138,7 @@ void QgsLineVertexData::addVerticalLines( const QgsLineString &lineString, float
   for ( int i = 0; i < lineString.vertexCount(); ++i )
   {
     QgsPoint p = lineString.pointN( i );
-    float z = Qgs3DUtils::clampAltitude( p, altClamping, altBinding, baseHeight, centroid, *mapSettings );
+    float z = Qgs3DUtils::clampAltitude( p, altClamping, altBinding, baseHeight + extraHeightOffset, centroid, *mapSettings );
     float z2 = z + verticalLength;
 
     if ( withAdjacency )

@@ -285,20 +285,20 @@ QgsRectangle QgsCurvePolygon::calculateBoundingBox() const
   return QgsRectangle();
 }
 
-QByteArray QgsCurvePolygon::asWkb() const
+QByteArray QgsCurvePolygon::asWkb( WkbFlags flags ) const
 {
   int binarySize = sizeof( char ) + sizeof( quint32 ) + sizeof( quint32 );
   QVector<QByteArray> wkbForRings;
   wkbForRings.reserve( 1 + mInteriorRings.size() );
   if ( mExteriorRing )
   {
-    QByteArray wkb( mExteriorRing->asWkb() );
+    QByteArray wkb( mExteriorRing->asWkb( flags ) );
     binarySize += wkb.length();
     wkbForRings << wkb;
   }
   for ( const QgsCurve *curve : mInteriorRings )
   {
-    QByteArray wkb( curve->asWkb() );
+    QByteArray wkb( curve->asWkb( flags ) );
     binarySize += wkb.length();
     wkbForRings << wkb;
   }
@@ -766,6 +766,26 @@ void QgsCurvePolygon::forceRHR()
     }
   }
   mInteriorRings = validRings;
+}
+
+QPainterPath QgsCurvePolygon::asQPainterPath() const
+{
+  QPainterPath p;
+  if ( mExteriorRing )
+  {
+    QPainterPath ring = mExteriorRing->asQPainterPath();
+    ring.closeSubpath();
+    p.addPath( ring );
+  }
+
+  for ( const QgsCurve *ring : mInteriorRings )
+  {
+    QPainterPath ringPath = ring->asQPainterPath();
+    ringPath.closeSubpath();
+    p.addPath( ringPath );
+  }
+
+  return p;
 }
 
 void QgsCurvePolygon::draw( QPainter &p ) const

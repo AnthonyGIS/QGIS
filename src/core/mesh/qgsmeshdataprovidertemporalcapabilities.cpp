@@ -159,13 +159,13 @@ QgsUnitTypes::TemporalUnit QgsMeshDataProviderTemporalCapabilities::temporalUnit
 qint64 QgsMeshDataProviderTemporalCapabilities::datasetTime( const QgsMeshDatasetIndex &index ) const
 {
   if ( !index.isValid() )
-    return -999999;
+    return INVALID_MESHLAYER_TIME;
 
   const QList<qint64> &timesList = mDatasetTimeSinceGroupReference[index.group()];
   if ( index.dataset() < timesList.count() )
     return timesList.at( index.dataset() );
   else
-    return -999999;
+    return INVALID_MESHLAYER_TIME;
 }
 
 void QgsMeshDataProviderTemporalCapabilities::clear()
@@ -173,4 +173,16 @@ void QgsMeshDataProviderTemporalCapabilities::clear()
   mGlobalReferenceDateTime = QDateTime();
   mGroupsReferenceDateTime.clear();
   mDatasetTimeSinceGroupReference.clear();
+}
+
+qint64 QgsMeshDataProviderTemporalCapabilities::firstTimeStepDuration( int group ) const
+{
+  qint64 ret = -1;
+  if ( mDatasetTimeSinceGroupReference.contains( group ) )
+  {
+    const QList<qint64> times = mDatasetTimeSinceGroupReference[group];
+    if ( times.count() > 1 )
+      ret = times.at( 1 ) - times.at( 0 );
+  }
+  return ret;
 }

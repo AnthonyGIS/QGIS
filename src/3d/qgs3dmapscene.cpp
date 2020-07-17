@@ -22,6 +22,7 @@
 #include <Qt3DRender/QPickingSettings>
 #include <Qt3DRender/QPickTriangleEvent>
 #include <Qt3DRender/QPointLight>
+#include <Qt3DRender/QDirectionalLight>
 #include <Qt3DRender/QRenderSettings>
 #include <Qt3DRender/QSceneLoader>
 #include <Qt3DExtras/QForwardRenderer>
@@ -92,6 +93,7 @@ Qgs3DMapScene::Qgs3DMapScene( const Qgs3DMapSettings &map, QgsAbstract3DEngine *
   mCameraController->resetView( 1000 );
 
   addCameraViewCenterEntity( mEngine->camera() );
+  updateLights();
 
   // create terrain entity
 
@@ -103,6 +105,8 @@ Qgs3DMapScene::Qgs3DMapScene( const Qgs3DMapSettings &map, QgsAbstract3DEngine *
   connect( &map, &Qgs3DMapSettings::maxTerrainGroundErrorChanged, this, &Qgs3DMapScene::createTerrain );
   connect( &map, &Qgs3DMapSettings::terrainShadingChanged, this, &Qgs3DMapScene::createTerrain );
   connect( &map, &Qgs3DMapSettings::pointLightsChanged, this, &Qgs3DMapScene::updateLights );
+  connect( &map, &Qgs3DMapSettings::directionalLightsChanged, this, &Qgs3DMapScene::updateLights );
+  connect( &map, &Qgs3DMapSettings::showLightSourceOriginsChanged, this, &Qgs3DMapScene::updateLights );
   connect( &map, &Qgs3DMapSettings::fieldOfViewChanged, this, &Qgs3DMapScene::updateCameraLens );
   connect( &map, &Qgs3DMapSettings::renderersChanged, this, &Qgs3DMapScene::onRenderersChanged );
 
@@ -113,7 +117,6 @@ Qgs3DMapScene::Qgs3DMapScene( const Qgs3DMapSettings &map, QgsAbstract3DEngine *
   // listen to changes of layers in order to add/remove 3D renderer entities
   connect( &map, &Qgs3DMapSettings::layersChanged, this, &Qgs3DMapScene::onLayersChanged );
 
-  updateLights();
 
 #if 0
   ChunkedEntity *testChunkEntity = new ChunkedEntity( AABB( -500, 0, -500, 500, 100, 500 ), 2.f, 3.f, 7, new TestChunkLoaderFactory );
@@ -162,6 +165,9 @@ Qgs3DMapScene::Qgs3DMapScene( const Qgs3DMapSettings &map, QgsAbstract3DEngine *
     // it _somehow_ works even when frustum culling is enabled with some camera positions,
     // but then when zoomed in more it would disappear - so let's keep frustum culling disabled
     mEngine->setFrustumCullingEnabled( false );
+
+    // cppcheck wrongly believes skyBox will leak
+    // cppcheck-suppress memleak
   }
 
   // force initial update of chunked entities
@@ -372,7 +378,7 @@ void Qgs3DMapScene::onFrameTriggered( float dt )
   {
     if ( entity->isEnabled() && entity->needsUpdate() )
     {
-      qDebug() << "need for update";
+      QgsDebugMsgLevel( QStringLiteral( "need for update" ), 2 );
       entity->update( _sceneState( mCameraController ) );
     }
   }
@@ -448,6 +454,31 @@ void Qgs3DMapScene::updateLights()
   for ( Qt3DCore::QEntity *entity : qgis::as_const( mLightEntities ) )
     entity->deleteLater();
   mLightEntities.clear();
+  for ( Qt3DCore::QEntity *entity : qgis::as_const( mLightOriginEntities ) )
+    entity->deleteLater();
+  mLightOriginEntities.clear();
+
+  auto createLightOriginEntity = [ = ]( QVector3D translation, const QColor & color )->Qt3DCore::QEntity *
+  {
+    Qt3DCore::QEntity *originEntity = new Qt3DCore::QEntity;
+
+    Qt3DCore::QTransform *trLightOriginCenter = new Qt3DCore::QTransform;
+    trLightOriginCenter->setTranslation( translation );
+    originEntity->addComponent( trLightOriginCenter );
+
+    Qt3DExtras::QPhongMaterial *materialLightOriginCenter = new Qt3DExtras::QPhongMaterial;
+    materialLightOriginCenter->setAmbient( color );
+    originEntity->addComponent( materialLightOriginCenter );
+
+    Qt3DExtras::QSphereMesh *rendererLightOriginCenter = new Qt3DExtras::QSphereMesh;
+    rendererLightOriginCenter->setRadius( 20 );
+    originEntity->addComponent( rendererLightOriginCenter );
+
+    originEntity->setEnabled( true );
+    originEntity->setParent( this );
+
+    return originEntity;
+  };
 
   const auto newPointLights = mMap.pointLights();
   for ( const QgsPointLightSettings &pointLightSettings : newPointLights )
@@ -465,6 +496,27 @@ void Qgs3DMapScene::updateLights()
     light->setConstantAttenuation( pointLightSettings.constantAttenuation() );
     light->setLinearAttenuation( pointLightSettings.linearAttenuation() );
     light->setQuadraticAttenuation( pointLightSettings.quadraticAttenuation() );
+
+    lightEntity->addComponent( light );
+    lightEntity->addComponent( lightTransform );
+    lightEntity->setParent( this );
+    mLightEntities << lightEntity;
+
+    if ( mMap.showLightSourceOrigins() )
+      mLightOriginEntities << createLightOriginEntity( lightTransform->translation(), pointLightSettings.color() );
+  }
+
+  const auto newDirectionalLights = mMap.directionalLights();
+  for ( const QgsDirectionalLightSettings &directionalLightSettings : newDirectionalLights )
+  {
+    Qt3DCore::QEntity *lightEntity = new Qt3DCore::QEntity;
+    Qt3DCore::QTransform *lightTransform = new Qt3DCore::QTransform;
+
+    Qt3DRender::QDirectionalLight *light = new Qt3DRender::QDirectionalLight;
+    light->setColor( directionalLightSettings.color() );
+    light->setIntensity( directionalLightSettings.intensity() );
+    QgsVector3D direction = directionalLightSettings.direction();
+    light->setWorldDirection( QVector3D( direction.x(), direction.y(), direction.z() ) );
 
     lightEntity->addComponent( light );
     lightEntity->addComponent( lightTransform );
@@ -513,7 +565,7 @@ void Qgs3DMapScene::onLayerRenderer3DChanged()
 
 void Qgs3DMapScene::onLayersChanged()
 {
-  QSet<QgsMapLayer *> layersBefore = QSet<QgsMapLayer *>::fromList( mLayerEntities.keys() );
+  QSet<QgsMapLayer *> layersBefore = qgis::listToSet( mLayerEntities.keys() );
   QList<QgsMapLayer *> layersAdded;
   Q_FOREACH ( QgsMapLayer *layer, mMap.layers() )
   {

@@ -81,7 +81,8 @@ class CORE_EXPORT QgsMeshDriverMetadata
      */
     QgsMeshDriverMetadata( const QString &name,
                            const QString &description,
-                           const MeshDriverCapabilities &capabilities );
+                           const MeshDriverCapabilities &capabilities,
+                           const QString &writeDatasetOnFileSuffix );
 
     /**
      * Returns the capabilities for this driver.
@@ -98,10 +99,16 @@ class CORE_EXPORT QgsMeshDriverMetadata
      */
     QString description() const;
 
+    /**
+     * Returns the suffix used to write datasets on file
+     */
+    QString writeDatasetOnFileSuffix() const;
+
   private:
     QString mName;
     QString mDescription;
     MeshDriverCapabilities mCapabilities;
+    QString mWriteDatasetOnFileSuffix;
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS( QgsMeshDriverMetadata::MeshDriverCapabilities )
@@ -291,6 +298,7 @@ class CORE_EXPORT QgsProviderMetadata : public QObject
      * Breaks a provider data source URI into its component paths (e.g. file path, layer name).
      * \param uri uri string
      * \returns map containing components. Standard components may include:
+     *
      * - "path": file path
      * - "layerName"
      * - "url": base URL, for online services
@@ -299,6 +307,7 @@ class CORE_EXPORT QgsProviderMetadata : public QObject
      * - "bounds": hardcoded layer bounds (as a QgsRectangle)
      * - "crs": CRS definition
      * - "authcfg": authentication configuration ID
+     *
      * \note this function may not be supported by all providers, an empty map will be returned in such case
      * \since QGIS 3.10
      */

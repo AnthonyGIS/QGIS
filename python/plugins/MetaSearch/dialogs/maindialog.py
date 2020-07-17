@@ -52,6 +52,11 @@ with warnings.catch_warnings():
 from owslib.fes import BBox, PropertyIsLike
 from owslib.ows import ExceptionReport
 
+try:
+    from owslib.util import Authentication
+except ImportError:
+    pass
+
 from MetaSearch import link_types
 from MetaSearch.dialogs.manageconnectionsdialog import ManageConnectionsDialog
 from MetaSearch.dialogs.newconnectiondialog import NewConnectionDialog
@@ -96,6 +101,7 @@ class MetaSearchDialog(QDialog, BASE_CLASS):
         self.startfrom = 0
         self.maxrecords = 10
         self.timeout = 10
+        self.disable_ssl_verification = False
         self.constraints = []
 
         # Servers tab
@@ -278,6 +284,9 @@ class MetaSearchDialog(QDialog, BASE_CLASS):
             self.textMetadata.clear()
             self.textMetadata.document().setDefaultStyleSheet(style)
             self.textMetadata.setHtml(metadata)
+
+            # clear results in Search tab
+            self.clear_results()
 
     def add_connection(self):
         """add new service"""
@@ -534,6 +543,11 @@ class MetaSearchDialog(QDialog, BASE_CLASS):
         self.btnPrev.setEnabled(disabled)
         self.btnNext.setEnabled(disabled)
         self.btnLast.setEnabled(disabled)
+
+    def clear_results(self):
+        """clear search results"""
+
+        self.treeRecords.clear()
 
     def record_clicked(self):
         """record clicked signal"""
@@ -826,11 +840,21 @@ class MetaSearchDialog(QDialog, BASE_CLASS):
 
         identifier = get_item_data(item, 'identifier')
 
+        self.disable_ssl_verification = self.disableSSLVerification.isChecked()
+        auth = None
+
+        if self.disable_ssl_verification:
+            try:
+                auth = Authentication(verify=False)
+            except NameError:
+                pass
+
         try:
             with OverrideCursor(Qt.WaitCursor):
                 cat = CatalogueServiceWeb(self.catalog_url, timeout=self.timeout,  # spellok
                                           username=self.catalog_username,
-                                          password=self.catalog_password)
+                                          password=self.catalog_password,
+                                          auth=auth)
                 cat.getrecordbyid(
                     [self.catalog.records[identifier].identifier])
         except ExceptionReport as err:
@@ -905,13 +929,23 @@ class MetaSearchDialog(QDialog, BASE_CLASS):
     def _get_csw(self):
         """convenience function to init owslib.csw.CatalogueServiceWeb"""  # spellok
 
+        self.disable_ssl_verification = self.disableSSLVerification.isChecked()
+        auth = None
+
+        if self.disable_ssl_verification:
+            try:
+                auth = Authentication(verify=False)
+            except NameError:
+                pass
+
         # connect to the server
         with OverrideCursor(Qt.WaitCursor):
             try:
                 self.catalog = CatalogueServiceWeb(self.catalog_url,  # spellok
                                                    timeout=self.timeout,
                                                    username=self.catalog_username,
-                                                   password=self.catalog_password)
+                                                   password=self.catalog_password,
+                                                   auth=auth)
                 return True
             except ExceptionReport as err:
                 msg = self.tr('Error connecting to service: {0}').format(err)

@@ -101,6 +101,8 @@
 %Include auto_generated/qgslocaldefaultsettings.sip
 %Include auto_generated/qgslocalizeddatapathregistry.sip
 %Include auto_generated/qgslogger.sip
+%Include auto_generated/qgsmapclippingregion.sip
+%Include auto_generated/qgsmapclippingutils.sip
 %Include auto_generated/qgsmapdecoration.sip
 %Include auto_generated/qgsmaphittest.sip
 %Include auto_generated/qgsmaplayer.sip
@@ -348,6 +350,7 @@
 %Include auto_generated/layertree/qgslayertreemodellegendnode.sip
 %Include auto_generated/layertree/qgslayertreenode.sip
 %Include auto_generated/layertree/qgslayertreeregistrybridge.sip
+%Include auto_generated/layertree/qgslayertreefilterproxymodel.sip
 %Include auto_generated/layertree/qgslayertreeutils.sip
 %Include auto_generated/layertree/qgslegendpatchshape.sip
 %Include auto_generated/layout/qgsabstractlayoutiterator.sip
