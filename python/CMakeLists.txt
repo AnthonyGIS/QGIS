@@ -18,6 +18,7 @@ add_custom_target(staged-plugins)
 # Plugins can also be staged with CMake option at build time
 if(WITH_STAGED_PLUGINS)
   add_custom_target(staged-plugins-on-build ALL DEPENDS staged-plugins)
+  set_target_properties(staged-plugins-on-build PROPERTIES FOLDER ${QGIS_PYTHON_APP_ROOT_FOLDER}/)
 endif()
 
 # Non-default/non-option-controlled target to stage and compile plugins and extras
@@ -26,11 +27,14 @@ add_custom_target(staged-plugins-pyc DEPENDS staged-plugins
   WORKING_DIRECTORY "${CMAKE_BINARY_DIR}"
   COMMENT "Byte-compiling build output/python directory..."
 )
+# weng for qgis test folders. 20.4.27
+set_target_properties(staged-plugins-pyc PROPERTIES FOLDER ${QGIS_PYTHON_APP_ROOT_FOLDER}/)
 
 # Other custom commands will be added, per staged resource
 add_custom_target(clean-staged-plugins
   COMMAND ${CMAKE_COMMAND} -E remove_directory "${PYTHON_OUTPUT_DIRECTORY}/plugins"
 )
+set_target_properties(clean-staged-plugins PROPERTIES FOLDER ${QGIS_PYTHON_APP_ROOT_FOLDER}/)
 
 # Macro to byte-compile a target's staged Python resource(s)
 macro(PY_COMPILE TARGET_NAME RESOURCE_PATHS)
@@ -279,6 +283,7 @@ if(WITH_QSCIAPI)
 
   add_custom_target(qsci-api ALL
     DEPENDS python_module_qgis__gui python_module_qgis__core python_module_qgis__analysis)
+  set_target_properties(qsci-api PROPERTIES FOLDER ${QGIS_PYTHON_APP_ROOT_FOLDER}/)
 
   # run update/concatenate command
   add_custom_command(TARGET qsci-api
@@ -297,6 +302,7 @@ if(WITH_QSCIAPI)
   # generate a .pap file to be immediately installed in QGIS source tree (the default .pap)
   add_custom_target(qsci-pap-src
     DEPENDS qsci-api ${QGIS_PYTHON_API_FILE})
+  set_target_properties(qsci-pap-src PROPERTIES FOLDER ${QGIS_PYTHON_APP_ROOT_FOLDER}/)
 
   set(PAP_NAME "pyqgis.pap")
   add_custom_command(TARGET qsci-pap-src
@@ -319,6 +325,8 @@ set(PY_FILES
 
 add_custom_target(pyutils ALL)
 install(FILES ${PY_FILES} DESTINATION "${QGIS_PYTHON_DIR}")
+# weng for qgis test folders. 20.4.27
+set_target_properties(pyutils PROPERTIES FOLDER ${QGIS_PYTHON_APP_ROOT_FOLDER}/)
 
 # stage to output to make available when QGIS is run from build directory
 foreach(pyfile ${PY_FILES})
@@ -335,6 +343,10 @@ endforeach(pyfile)
 foreach(module ${PY_MODULES})
   add_custom_target(py${module} ALL)
   add_dependencies(py${module} python_module_qgis__${module})
+
+  # weng for qgis test folders. 20.4.27
+  set_target_properties(py${module} PROPERTIES FOLDER ${QGIS_PYTHON_APP_ROOT_FOLDER}/)
+  set_target_properties(python_module_qgis__${module} PROPERTIES FOLDER ${QGIS_PYTHON_APP_ROOT_FOLDER}/)
 
   # concat auto_additions/*.py in _module_/__init__.py
   file(GLOB PY_FILES_AUTO_ADDITIONS RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} ${module}/auto_additions/*.py)

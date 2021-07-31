@@ -25,6 +25,8 @@ if (ENABLE_TESTS)
     if (DEFINED ARG_QGIS_TEST_LABELS)
       set_tests_properties(${TESTNAME} PROPERTIES LABELS ${ARG_QGIS_TEST_LABELS})
     endif()
+
+    set_target_properties(${TESTNAME} PROPERTIES FOLDER ${QGIS_QGIS_TEST_ROOT_FOLDER}/)
   endmacro()
 
 

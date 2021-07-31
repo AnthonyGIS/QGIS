@@ -2,9 +2,6 @@
 # weng for qgis test folders. 20.4.27
 # set_target_properties(clean-staged-${plugin} PROPERTIES FOLDER ${QGIS_ZZZ_ROOT_FOLDER}/)
 set_target_properties(libdxfrw PROPERTIES FOLDER ${QGIS_CORE_ROOT_FOLDER}/)
-set_target_properties(mdalprovider PROPERTIES FOLDER ${QGIS_CORE_ROOT_FOLDER}/)
-set_target_properties(owsprovider PROPERTIES FOLDER ${QGIS_CORE_ROOT_FOLDER}/)
-set_target_properties(postgresprovider PROPERTIES FOLDER ${QGIS_CORE_ROOT_FOLDER}/)
 set_target_properties(qgis PROPERTIES FOLDER ${QGIS_CORE_ROOT_FOLDER}/)
 set_target_properties(qgis_3d PROPERTIES FOLDER ${QGIS_CORE_ROOT_FOLDER}/)
 set_target_properties(qgis_analysis PROPERTIES FOLDER ${QGIS_CORE_ROOT_FOLDER}/)
@@ -34,4 +31,3 @@ set_target_properties(wmts PROPERTIES FOLDER ${QGIS_SERVER_ROOT_FOLDER}/)
 set_target_properties(qgis_server PROPERTIES FOLDER ${QGIS_SERVER_ROOT_FOLDER}/)
 
 set_target_properties(qgis_mapserv.fcgi PROPERTIES FOLDER ${QGIS_SERVER_ROOT_FOLDER}/)
-set_target_properties(qgis_serverquerystringparametertest PROPERTIES FOLDER ${QGIS_SERVER_ROOT_FOLDER}/)

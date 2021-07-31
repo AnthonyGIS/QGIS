@@ -23,6 +23,11 @@ macro (PLUGIN_INSTALL plugin subdir )
     add_custom_target(zzz-${plugin}-depend)
     add_dependencies(zzz-${plugin}-stageinstall zzz-${plugin}-depend)
 
+    # weng for qgis test folders. 20.4.27
+    set_target_properties(zzz-${plugin}-stageinstall PROPERTIES FOLDER ${QGIS_ZZZ_ROOT_FOLDER}/)
+    set_target_properties(zzz-${plugin}-depend PROPERTIES FOLDER ${QGIS_ZZZ_ROOT_FOLDER}/)
+
+
     add_custom_command(TARGET zzz-${plugin}-stageinstall
       COMMAND ${CMAKE_COMMAND} -P ${_cmake}
     )
@@ -30,14 +35,17 @@ macro (PLUGIN_INSTALL plugin subdir )
     add_custom_target(clean-staged-${plugin}
       COMMAND ${CMAKE_COMMAND} -E remove_directory ${PYTHON_OUTPUT_DIRECTORY}/plugins/${plugin}
     )
+    set_target_properties(clean-staged-${plugin} PROPERTIES FOLDER ${QGIS_ZZZ_ROOT_FOLDER}/)
 
     add_dependencies(staged-plugins zzz-${plugin}-stageinstall)
     add_custom_target(staged-${plugin} DEPENDS zzz-${plugin}-stageinstall)
+    set_target_properties(staged-${plugin} PROPERTIES FOLDER ${QGIS_ZZZ_ROOT_FOLDER}/)
     file(WRITE ${_cmake} "")
   endif()
 
   add_custom_target(zzz-${plugin}-${n}-depend DEPENDS ${ARGN})
   add_dependencies(zzz-${plugin}-depend zzz-${plugin}-${n}-depend)
+  set_target_properties(zzz-${plugin}-${n}-depend PROPERTIES FOLDER ${QGIS_ZZZ_ROOT_FOLDER}/)
 
   file(APPEND ${_cmake} "file(MAKE_DIRECTORY \"${PYTHON_OUTPUT_DIRECTORY}/plugins/${plugin}/${subdir}\")
 ")
