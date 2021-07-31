@@ -27,6 +27,7 @@ email                : marco.hugentobler at sourcepole dot com
 #include "qgsmultipolygon.h"
 #include "qgswkbptr.h"
 #include "qgsgeos.h"
+#include "qgsfeedback.h"
 
 #include <nlohmann/json.hpp>
 #include <memory>
@@ -110,7 +111,7 @@ bool QgsGeometryCollection::operator!=( const QgsAbstractGeometry &other ) const
 
 QgsGeometryCollection *QgsGeometryCollection::createEmptyWithSameType() const
 {
-  auto result = qgis::make_unique< QgsGeometryCollection >();
+  auto result = std::make_unique< QgsGeometryCollection >();
   result->mWkbType = mWkbType;
   return result.release();
 }
@@ -149,7 +150,7 @@ QgsGeometryCollection *QgsGeometryCollection::snappedToGrid( double hSpacing, do
 bool QgsGeometryCollection::removeDuplicateNodes( double epsilon, bool useZValues )
 {
   bool result = false;
-  for ( QgsAbstractGeometry *geom : qgis::as_const( mGeometries ) )
+  for ( QgsAbstractGeometry *geom : std::as_const( mGeometries ) )
   {
     if ( geom->removeDuplicateNodes( epsilon, useZValues ) ) result = true;
   }
@@ -199,6 +200,35 @@ int QgsGeometryCollection::vertexNumberFromVertexId( QgsVertexId id ) const
   return -1; // should not happen
 }
 
+bool QgsGeometryCollection::boundingBoxIntersects( const QgsRectangle &rectangle ) const
+{
+  if ( mGeometries.empty() )
+    return false;
+
+  // if we already have the bounding box calculated, then this check is trivial!
+  if ( !mBoundingBox.isNull() )
+  {
+    return mBoundingBox.intersects( rectangle );
+  }
+
+  // otherwise loop through each member geometry and test the bounding box intersection.
+  // This gives us a chance to use optimisations which may be present on the individual
+  // geometry subclasses, and at worst it will cause a calculation of the bounding box
+  // of each individual member geometry which we would have to do anyway... (and these
+  // bounding boxes are cached, so would be reused without additional expense)
+  for ( const QgsAbstractGeometry *geometry : mGeometries )
+  {
+    if ( geometry->boundingBoxIntersects( rectangle ) )
+      return true;
+  }
+
+  // even if we don't intersect the bounding box of any member geometries, we may still intersect the
+  // bounding box of the overall collection.
+  // so here we fall back to the non-optimised base class check which has to first calculate
+  // the overall bounding box of the collection..
+  return QgsAbstractGeometry::boundingBoxIntersects( rectangle );
+}
+
 void QgsGeometryCollection::reserve( int size )
 {
   mGeometries.reserve( size );
@@ -242,7 +272,7 @@ bool QgsGeometryCollection::insertGeometry( QgsAbstractGeometry *g, int index )
     return false;
   }
 
-  index = std::min( mGeometries.count(), index );
+  index = std::min( static_cast<int>( mGeometries.count() ), index );
 
   mGeometries.insert( index, g );
   clearCache(); //set bounding box invalid
@@ -259,6 +289,18 @@ bool QgsGeometryCollection::removeGeometry( int nr )
   mGeometries.remove( nr );
   clearCache(); //set bounding box invalid
   return true;
+}
+
+void QgsGeometryCollection::normalize()
+{
+  for ( QgsAbstractGeometry *geometry : std::as_const( mGeometries ) )
+  {
+    geometry->normalize();
+  }
+  std::sort( mGeometries.begin(), mGeometries.end(), []( const QgsAbstractGeometry * a, const QgsAbstractGeometry * b )
+  {
+    return a->compareTo( b ) > 0;
+  } );
 }
 
 int QgsGeometryCollection::dimension() const
@@ -283,7 +325,7 @@ QString QgsGeometryCollection::geometryType() const
 
 void QgsGeometryCollection::transform( const QgsCoordinateTransform &ct, QgsCoordinateTransform::TransformDirection d, bool transformZ )
 {
-  for ( QgsAbstractGeometry *g : qgis::as_const( mGeometries ) )
+  for ( QgsAbstractGeometry *g : std::as_const( mGeometries ) )
   {
     g->transform( ct, d, transformZ );
   }
@@ -292,7 +334,7 @@ void QgsGeometryCollection::transform( const QgsCoordinateTransform &ct, QgsCoor
 
 void QgsGeometryCollection::transform( const QTransform &t, double zTranslate, double zScale, double mTranslate, double mScale )
 {
-  for ( QgsAbstractGeometry *g : qgis::as_const( mGeometries ) )
+  for ( QgsAbstractGeometry *g : std::as_const( mGeometries ) )
   {
     g->transform( t, zTranslate, zScale, mTranslate, mScale );
   }
@@ -369,29 +411,43 @@ bool QgsGeometryCollection::fromWkt( const QString &wkt )
                             << new QgsMultiCurve << new QgsMultiSurface, QStringLiteral( "GeometryCollection" ) );
 }
 
-QByteArray QgsGeometryCollection::asWkb( WkbFlags flags ) const
+int QgsGeometryCollection::wkbSize( QgsAbstractGeometry::WkbFlags flags ) const
 {
   int binarySize = sizeof( char ) + sizeof( quint32 ) + sizeof( quint32 );
-  QVector<QByteArray> wkbForGeometries;
   for ( const QgsAbstractGeometry *geom : mGeometries )
   {
     if ( geom )
     {
-      QByteArray wkb( geom->asWkb( flags ) );
-      binarySize += wkb.length();
-      wkbForGeometries << wkb;
+      binarySize += geom->wkbSize( flags );
+    }
+  }
+
+  return binarySize;
+}
+
+QByteArray QgsGeometryCollection::asWkb( WkbFlags flags ) const
+{
+  int countNonNull = 0;
+  for ( const QgsAbstractGeometry *geom : mGeometries )
+  {
+    if ( geom )
+    {
+      countNonNull ++;
     }
   }
 
   QByteArray wkbArray;
-  wkbArray.resize( binarySize );
+  wkbArray.resize( QgsGeometryCollection::wkbSize( flags ) );
   QgsWkbPtr wkb( wkbArray );
   wkb << static_cast<char>( QgsApplication::endian() );
   wkb << static_cast<quint32>( wkbType() );
-  wkb << static_cast<quint32>( wkbForGeometries.count() );
-  for ( const QByteArray &wkbForGeometry : qgis::as_const( wkbForGeometries ) )
+  wkb << static_cast<quint32>( countNonNull );
+  for ( const QgsAbstractGeometry *geom : mGeometries )
   {
-    wkb << wkbForGeometry;
+    if ( geom )
+    {
+      wkb << geom->asWkb( flags );
+    }
   }
   return wkbArray;
 }
@@ -401,7 +457,7 @@ QString QgsGeometryCollection::asWkt( int precision ) const
   QString wkt = wktTypeStr();
 
   if ( isEmpty() )
-    wkt += QStringLiteral( " EMPTY" );
+    wkt += QLatin1String( " EMPTY" );
   else
   {
     wkt += QLatin1String( " (" );
@@ -450,7 +506,7 @@ QDomElement QgsGeometryCollection::asGml3( QDomDocument &doc, int precision, con
 json QgsGeometryCollection::asJsonObject( int precision ) const
 {
   json coordinates( json::array( ) );
-  for ( const QgsAbstractGeometry *geom : qgis::as_const( mGeometries ) )
+  for ( const QgsAbstractGeometry *geom : std::as_const( mGeometries ) )
   {
     coordinates.push_back( geom->asJsonObject( precision ) );
   }
@@ -698,7 +754,10 @@ bool QgsGeometryCollection::fromCollectionWkt( const QString &wkt, const QVector
   }
   mWkbType = parts.first;
 
-  if ( parts.second.compare( QLatin1String( "EMPTY" ), Qt::CaseInsensitive ) == 0 )
+  QString secondWithoutParentheses = parts.second;
+  secondWithoutParentheses = secondWithoutParentheses.remove( '(' ).remove( ')' ).simplified().remove( ' ' );
+  if ( ( parts.second.compare( QLatin1String( "EMPTY" ), Qt::CaseInsensitive ) == 0 ) ||
+       secondWithoutParentheses.isEmpty() )
     return true;
 
   QString defChildWkbType = QStringLiteral( "%1%2%3 " ).arg( defaultChildWkbType, is3D() ? QStringLiteral( "Z" ) : QString(), isMeasure() ? QStringLiteral( "M" ) : QString() );
@@ -734,7 +793,7 @@ bool QgsGeometryCollection::fromCollectionWkt( const QString &wkt, const QVector
   //if so, update the type dimensionality of the collection to match
   bool hasZ = false;
   bool hasM = false;
-  for ( QgsAbstractGeometry *geom : qgis::as_const( mGeometries ) )
+  for ( QgsAbstractGeometry *geom : std::as_const( mGeometries ) )
   {
     hasZ = hasZ || geom->is3D();
     hasM = hasM || geom->isMeasure();
@@ -868,7 +927,7 @@ bool QgsGeometryCollection::addZValue( double zValue )
 
   mWkbType = QgsWkbTypes::addZ( mWkbType );
 
-  for ( QgsAbstractGeometry *geom : qgis::as_const( mGeometries ) )
+  for ( QgsAbstractGeometry *geom : std::as_const( mGeometries ) )
   {
     geom->addZValue( zValue );
   }
@@ -883,7 +942,7 @@ bool QgsGeometryCollection::addMValue( double mValue )
 
   mWkbType = QgsWkbTypes::addM( mWkbType );
 
-  for ( QgsAbstractGeometry *geom : qgis::as_const( mGeometries ) )
+  for ( QgsAbstractGeometry *geom : std::as_const( mGeometries ) )
   {
     geom->addMValue( mValue );
   }
@@ -898,7 +957,7 @@ bool QgsGeometryCollection::dropZValue()
     return false;
 
   mWkbType = QgsWkbTypes::dropZ( mWkbType );
-  for ( QgsAbstractGeometry *geom : qgis::as_const( mGeometries ) )
+  for ( QgsAbstractGeometry *geom : std::as_const( mGeometries ) )
   {
     geom->dropZValue();
   }
@@ -912,7 +971,7 @@ bool QgsGeometryCollection::dropMValue()
     return false;
 
   mWkbType = QgsWkbTypes::dropM( mWkbType );
-  for ( QgsAbstractGeometry *geom : qgis::as_const( mGeometries ) )
+  for ( QgsAbstractGeometry *geom : std::as_const( mGeometries ) )
   {
     geom->dropMValue();
   }
@@ -922,7 +981,7 @@ bool QgsGeometryCollection::dropMValue()
 
 void QgsGeometryCollection::filterVertices( const std::function<bool ( const QgsPoint & )> &filter )
 {
-  for ( QgsAbstractGeometry *geom : qgis::as_const( mGeometries ) )
+  for ( QgsAbstractGeometry *geom : std::as_const( mGeometries ) )
   {
     if ( geom )
       geom->filterVertices( filter );
@@ -932,7 +991,7 @@ void QgsGeometryCollection::filterVertices( const std::function<bool ( const Qgs
 
 void QgsGeometryCollection::transformVertices( const std::function<QgsPoint( const QgsPoint & )> &transform )
 {
-  for ( QgsAbstractGeometry *geom : qgis::as_const( mGeometries ) )
+  for ( QgsAbstractGeometry *geom : std::as_const( mGeometries ) )
   {
     if ( geom )
       geom->transformVertices( transform );
@@ -942,7 +1001,7 @@ void QgsGeometryCollection::transformVertices( const std::function<QgsPoint( con
 
 void QgsGeometryCollection::swapXy()
 {
-  for ( QgsAbstractGeometry *geom : qgis::as_const( mGeometries ) )
+  for ( QgsAbstractGeometry *geom : std::as_const( mGeometries ) )
   {
     if ( geom )
       geom->swapXy();
@@ -961,6 +1020,35 @@ QgsGeometryCollection *QgsGeometryCollection::toCurveType() const
   return newCollection.release();
 }
 
+const QgsAbstractGeometry *QgsGeometryCollection::simplifiedTypeRef() const
+{
+  if ( mGeometries.size() == 1 )
+    return mGeometries.at( 0 )->simplifiedTypeRef();
+  else
+    return this;
+}
+
+bool QgsGeometryCollection::transform( QgsAbstractGeometryTransformer *transformer, QgsFeedback *feedback )
+{
+  if ( !transformer )
+    return false;
+
+  bool res = true;
+  for ( QgsAbstractGeometry *geom : std::as_const( mGeometries ) )
+  {
+    if ( geom )
+      res = geom->transform( transformer, feedback );
+
+    if ( feedback && feedback->isCanceled() )
+      res = false;
+
+    if ( !res )
+      break;
+  }
+  clearCache();
+  return res;
+}
+
 bool QgsGeometryCollection::wktOmitChildType() const
 {
   return false;
@@ -976,4 +1064,35 @@ QgsAbstractGeometry *QgsGeometryCollection::childGeometry( int index ) const
   if ( index < 0 || index > mGeometries.count() )
     return nullptr;
   return mGeometries.at( index );
+}
+
+int QgsGeometryCollection::compareToSameClass( const QgsAbstractGeometry *other ) const
+{
+  const QgsGeometryCollection *otherCollection = qgsgeometry_cast<const QgsGeometryCollection *>( other );
+  if ( !otherCollection )
+    return -1;
+
+  int i = 0;
+  int j = 0;
+  while ( i < mGeometries.size() && j < otherCollection->mGeometries.size() )
+  {
+    const QgsAbstractGeometry *aGeom = mGeometries[i];
+    const QgsAbstractGeometry *bGeom = otherCollection->mGeometries[j];
+    const int comparison = aGeom->compareTo( bGeom );
+    if ( comparison != 0 )
+    {
+      return comparison;
+    }
+    i++;
+    j++;
+  }
+  if ( i < mGeometries.size() )
+  {
+    return 1;
+  }
+  if ( j < otherCollection->mGeometries.size() )
+  {
+    return -1;
+  }
+  return 0;
 }

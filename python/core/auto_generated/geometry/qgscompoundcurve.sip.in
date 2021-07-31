@@ -11,7 +11,7 @@
 
 class QgsCompoundCurve: QgsCurve
 {
-%Docstring
+%Docstring(signature="appended")
 Compound curve geometry type
 
 .. versionadded:: 2.10
@@ -28,9 +28,9 @@ Compound curve geometry type
     virtual bool equals( const QgsCurve &other ) const;
 
 
-    virtual QString geometryType() const;
+    virtual QString geometryType() const /HoldGIL/;
 
-    virtual int dimension() const;
+    virtual int dimension() const /HoldGIL/;
 
     virtual QgsCompoundCurve *clone() const /Factory/;
 
@@ -42,6 +42,8 @@ Compound curve geometry type
     virtual bool fromWkt( const QString &wkt );
 
 
+    virtual int wkbSize( QgsAbstractGeometry::WkbFlags flags = QgsAbstractGeometry::WkbFlags() ) const;
+
     virtual QByteArray asWkb( QgsAbstractGeometry::WkbFlags flags = QgsAbstractGeometry::WkbFlags() ) const;
 
     virtual QString asWkt( int precision = 17 ) const;
@@ -51,18 +53,21 @@ Compound curve geometry type
     virtual QDomElement asGml3( QDomDocument &doc, int precision = 17, const QString &ns = "gml", QgsAbstractGeometry::AxisOrder axisOrder = QgsAbstractGeometry::AxisOrder::XY ) const;
 
 
-    virtual double length() const;
+    virtual double length() const /HoldGIL/;
 
-    virtual QgsPoint startPoint() const;
+    virtual QgsPoint startPoint() const /HoldGIL/;
 
-    virtual QgsPoint endPoint() const;
+    virtual QgsPoint endPoint() const /HoldGIL/;
 
     virtual void points( QgsPointSequence &pts /Out/ ) const;
 
-    virtual int numPoints() const;
+    virtual int numPoints() const /HoldGIL/;
 
-    virtual bool isEmpty() const;
+    virtual bool isEmpty() const /HoldGIL/;
 
+    virtual bool isValid( QString &error /Out/, int flags = 0 ) const;
+
+    int indexOf( const QgsPoint &point ) const final;
 
     virtual QgsLineString *curveToLine( double tolerance = M_PI_2 / 90, SegmentationToleranceType toleranceType = MaximumAngle ) const /Factory/;
 
@@ -71,27 +76,37 @@ Returns a new line string geometry corresponding to a segmentized approximation
 of the curve.
 
 :param tolerance: segmentation tolerance
-:param toleranceType: maximum segmentation angle or maximum difference between approximation and curve*
+:param toleranceType: maximum segmentation angle or maximum difference between approximation and curve
 %End
 
     virtual QgsCompoundCurve *snappedToGrid( double hSpacing, double vSpacing, double dSpacing = 0, double mSpacing = 0 ) const /Factory/;
 
     virtual bool removeDuplicateNodes( double epsilon = 4 * DBL_EPSILON, bool useZValues = false );
 
+    virtual bool boundingBoxIntersects( const QgsRectangle &rectangle ) const /HoldGIL/;
 
-    int nCurves() const;
+    virtual const QgsAbstractGeometry *simplifiedTypeRef() const /HoldGIL/;
+
+
+    int nCurves() const /HoldGIL/;
 %Docstring
 Returns the number of curves in the geometry.
 %End
 
-    const QgsCurve *curveAt( int i ) const;
+    const QgsCurve *curveAt( int i ) const /HoldGIL/;
 %Docstring
 Returns the curve at the specified index.
 %End
 
-    void addCurve( QgsCurve *c /Transfer/ );
+    void addCurve( QgsCurve *c /Transfer/, bool extendPrevious = false );
 %Docstring
-Adds a curve to the geometry (takes ownership)
+Adds a curve to the geometry (takes ownership).
+
+Since QGIS 3.20, if ``extendPrevious`` is ``True``, then adding a LineString when the last existing curve
+in the compound curve is also a LineString will cause the existing linestring to be
+extended with the newly added LineString vertices instead of appending a whole new
+LineString curve to the compound curve. This can result in simplified compound curves with lesser number
+of component curves while still being topologically identical to the desired result.
 %End
 
     void removeCurve( int i );
@@ -104,6 +119,25 @@ Removes a curve from the geometry.
     void addVertex( const QgsPoint &pt );
 %Docstring
 Adds a vertex to the end of the geometry.
+%End
+
+    void condenseCurves();
+%Docstring
+Condenses the curves in this geometry by combining adjacent linestrings a to a single continuous linestring,
+and combining adjacent circularstrings to a single continuous circularstring.
+
+.. versionadded:: 3.20
+%End
+
+    bool toggleCircularAtVertex( QgsVertexId position );
+%Docstring
+Converts the vertex at the given position from/to circular
+
+:return: ``False`` if atVertex does not correspond to a valid vertex
+         on this geometry (including if this geometry is a Point),
+         or if the specified vertex can't be converted (e.g. start/end points).
+
+.. versionadded:: 3.20
 %End
 
     virtual void draw( QPainter &p ) const;
@@ -159,10 +193,14 @@ Appends first point if not already closed.
     virtual void swapXy();
 
 
-    virtual double xAt( int index ) const;
+    virtual double xAt( int index ) const /HoldGIL/;
 
-    virtual double yAt( int index ) const;
+    virtual double yAt( int index ) const /HoldGIL/;
 
+
+    virtual bool transform( QgsAbstractGeometryTransformer *transformer, QgsFeedback *feedback = 0 );
+
+    void scroll( int firstVertexIndex ) final;
 
 
     virtual QgsCompoundCurve *createEmptyWithSameType() const /Factory/;
@@ -179,6 +217,7 @@ Appends first point if not already closed.
 
   protected:
 
+    int compareToSameClass( const QgsAbstractGeometry *other ) const final;
     virtual QgsRectangle calculateBoundingBox() const;
 
 

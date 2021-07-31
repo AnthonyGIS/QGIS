@@ -19,7 +19,6 @@
 #include "ui_widget_symbolslist.h"
 
 #include "qgssymbolwidgetcontext.h"
-#include "qgssymbollayer.h"
 #include "qgsstylemodel.h"
 #include <QWidget>
 #include "qgis_gui.h"
@@ -95,10 +94,15 @@ class GUI_EXPORT QgsSymbolsListWidget : public QWidget, private Ui::SymbolsListW
     void updateAssistantSymbol();
     void opacityChanged( double value );
     void createAuxiliaryField();
+    void createSymbolAuxiliaryField();
     void forceRHRToggled( bool checked );
     void saveSymbol();
+    void updateSymbolDataDefinedProperty();
 
   private:
+
+    void registerSymbolDataDefinedButton( QgsPropertyOverrideButton *button, QgsSymbol::Property key );
+
     QgsSymbol *mSymbol = nullptr;
     std::shared_ptr< QgsSymbol > mAssistantSymbol;
     QgsStyle *mStyle = nullptr;
@@ -107,6 +111,10 @@ class GUI_EXPORT QgsSymbolsListWidget : public QWidget, private Ui::SymbolsListW
     QAction *mStandardizeRingsAction = nullptr;
     QgsVectorLayer *mLayer = nullptr;
     QgsMapCanvas *mMapCanvas = nullptr;
+
+    QgsColorButton *mSymbolColorButton = nullptr;
+    QgsOpacityWidget *mSymbolOpacityWidget = nullptr;
+    QgsUnitSelectionWidget *mSymbolUnitWidget = nullptr;
 
     void updateSymbolColor();
     void updateSymbolInfo();

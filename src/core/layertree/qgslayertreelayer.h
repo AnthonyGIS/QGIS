@@ -27,7 +27,7 @@ class QgsMapLayer;
 
 /**
  * \ingroup core
- * Layer tree node points to a map layer.
+ * \brief Layer tree node points to a map layer.
  *
  * The node can exist also without a valid instance of a layer (just ID). That
  * means the referenced layer does not need to be loaded in order to use it
@@ -92,8 +92,8 @@ class CORE_EXPORT QgsLayerTreeLayer : public QgsLayerTreeNode
     void setName( const QString &n ) override;
 
     /**
-     * Uses the layer's name if \a use is true, or the name manually set if
-     * false.
+     * Uses the layer's name if \a use is TRUE, or the name manually set if
+     * FALSE.
      * \since QGIS 3.8
      */
     void setUseLayerName( bool use = true );

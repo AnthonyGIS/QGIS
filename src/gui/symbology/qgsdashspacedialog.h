@@ -27,7 +27,7 @@
 
 /**
  * \ingroup gui
- * A widget to enter a custom dash space pattern for lines
+ * \brief A widget to enter a custom dash space pattern for lines
  * \since QGIS 3.8
 */
 class GUI_EXPORT QgsDashSpaceWidget: public QgsPanelWidget, private Ui::QgsDashSpaceWidgetBase
@@ -55,7 +55,7 @@ class GUI_EXPORT QgsDashSpaceWidget: public QgsPanelWidget, private Ui::QgsDashS
 
 /**
  * \ingroup gui
- * A dialog to enter a custom dash space pattern for lines
+ * \brief A dialog to enter a custom dash space pattern for lines
 */
 class GUI_EXPORT QgsDashSpaceDialog : public QDialog
 {
@@ -63,7 +63,7 @@ class GUI_EXPORT QgsDashSpaceDialog : public QDialog
   public:
 
     //! Constructor for QgsDashSpaceDialog
-    QgsDashSpaceDialog( const QVector<qreal> &v, QWidget *parent SIP_TRANSFERTHIS = nullptr, Qt::WindowFlags f = nullptr );
+    QgsDashSpaceDialog( const QVector<qreal> &v, QWidget *parent SIP_TRANSFERTHIS = nullptr, Qt::WindowFlags f = Qt::WindowFlags() );
 
     //! Returns the dash pattern as a list of numbers
     QVector<qreal> dashDotVector() const;

@@ -31,7 +31,7 @@ class QgsField;
 
 /**
  * \ingroup gui
- * Manages an editor widget
+ * \brief Manages an editor widget
  * Widget and wrapper share the same parent
  *
  * A wrapper controls one attribute editor widget and is able to create a default
@@ -186,7 +186,7 @@ class GUI_EXPORT QgsEditorWidgetWrapper : public QgsWidgetWrapper
     bool isValidConstraint() const;
 
     /**
-     * Returns true if the widget is preventing the feature from being committed. This may be TRUE as a result
+     * Returns TRUE if the widget is preventing the feature from being committed. This may be TRUE as a result
      * of attribute values failing enforced field constraints.
      * \see isValidConstraint()
      * \since QGIS 3.0
@@ -283,19 +283,20 @@ class GUI_EXPORT QgsEditorWidgetWrapper : public QgsWidgetWrapper
      */
     void setFeature( const QgsFeature &feature ) override;
 
+    // TODO Q_DECL_DEPRECATED
+
     /**
-     * Is called, when the value of the widget needs to be changed. Update the widget representation
+     * Is called when the value of the widget needs to be changed. Updates the widget representation
      * to reflect the new value.
      *
      * \param value The new value of the attribute
      * \deprecated since QGIS 3.10
      */
-    // TODO Q_DECL_DEPRECATED
     virtual void setValue( const QVariant &value ) SIP_DEPRECATED;
 
     /**
-     * Is called, when the value of the widget or additional field values
-     * needs to be changed. Update the widget representation
+     * Is called when the value of the widget or additional field values
+     * needs to be changed. Updates the widget representation
      * to reflect the new values.
      * \since QGIS 3.10
      */
@@ -363,7 +364,7 @@ class GUI_EXPORT QgsEditorWidgetWrapper : public QgsWidgetWrapper
   private:
 
     /**
-    * Is called, when the value of the widget needs to be changed. Update the widget representation
+    * Is called when the value of the widget needs to be changed. Updates the widget representation
     * to reflect the new value.
     *
     * \param value The new value of the attribute

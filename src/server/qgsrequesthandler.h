@@ -32,7 +32,7 @@ class QgsServerResponse;
 
 /**
  * \ingroup server
- * This class is an interface hiding the details of reading input and writing
+ * \brief This class is an interface hiding the details of reading input and writing
  * output from/to a wms request mechanism.
  */
 class SERVER_EXPORT QgsRequestHandler
@@ -101,6 +101,12 @@ class SERVER_EXPORT QgsRequestHandler
 
     //! Returns the request url
     QString url() const;
+
+    /**
+     * Returns the path component of the request URL
+     * \since QGIS 3.16
+     */
+    QString path() const;
 
     //! Sets response http status code
     void setStatusCode( int code );

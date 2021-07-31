@@ -54,7 +54,12 @@ class RestrictedAccessControl(QgsAccessControlFilter):
         if not self._active:
             return super(RestrictedAccessControl, self).layerFilterExpression(layer)
 
-        return "$id = 1" if layer.name() == "Hello" else None
+        if layer.name() == "Hello":
+            return "$id = 1"
+        elif layer.name() == "Hello_Filter":
+            return "pkuid = 6 or pkuid = 7"
+        else:
+            return None
 
     def layerFilterSubsetString(self, layer):
         """ Return an additional subset string (typically SQL) filter """
@@ -133,7 +138,6 @@ class TestQgsServerAccessControl(QgsServerTestBase):
     @classmethod
     def setUpClass(cls):
         """Run before all tests"""
-        cls._app = QgsApplication([], False)
         cls._server = QgsServer()
         cls._execute_request("")
         cls._server_iface = cls._server.serverInterface()
@@ -144,7 +148,6 @@ class TestQgsServerAccessControl(QgsServerTestBase):
     def tearDownClass(cls):
         """Run after all tests"""
         del cls._server
-        cls._app.exitQgis()
 
     def setUp(self):
         super().setUp()

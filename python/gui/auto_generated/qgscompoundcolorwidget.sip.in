@@ -11,7 +11,7 @@
 
 class QgsCompoundColorWidget : QgsPanelWidget
 {
-%Docstring
+%Docstring(signature="appended")
 A custom QGIS widget for selecting a color, including options for selecting colors via
 hue wheel, color swatches, and a color sampler.
 
@@ -132,6 +132,9 @@ Sets the color to show in an optional "previous color" section
 %End
 
   protected:
+
+    virtual void hideEvent( QHideEvent *e );
+
 
     virtual void mousePressEvent( QMouseEvent *e );
 

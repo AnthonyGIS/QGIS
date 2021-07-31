@@ -2,66 +2,56 @@
 ########################################################
 # Files
 
-SET (DTEXT_SRCS
+set (DTEXT_SRCS
   qgsdelimitedtextfeatureiterator.cpp
   qgsdelimitedtextprovider.cpp
   qgsdelimitedtextfile.cpp
 )
 
-IF (WITH_GUI)
-  SET(DTEXT_SRCS ${DTEXT_SRCS}
+if (WITH_GUI)
+  set(DTEXT_SRCS ${DTEXT_SRCS}
     qgsdelimitedtextprovidergui.cpp
     qgsdelimitedtextsourceselect.cpp
   )
-ENDIF ()
+endif()
 
 ########################################################
 # Build
 
-INCLUDE_DIRECTORIES(
-  ${CMAKE_SOURCE_DIR}/src/core
-  ${CMAKE_SOURCE_DIR}/src/core/expression
-  ${CMAKE_SOURCE_DIR}/src/core/geometry
-  ${CMAKE_SOURCE_DIR}/src/core/layertree
-  ${CMAKE_SOURCE_DIR}/src/core/metadata
-  ${CMAKE_SOURCE_DIR}/src/core/symbology
-  ${CMAKE_SOURCE_DIR}/src/gui
-  ${CMAKE_SOURCE_DIR}/external
-  ${CMAKE_SOURCE_DIR}/external/nlohmann
+include_directories(
 
-  ${CMAKE_BINARY_DIR}/src/core
-  ${CMAKE_BINARY_DIR}/src/gui
   ${CMAKE_BINARY_DIR}/src/ui
 )
-INCLUDE_DIRECTORIES (SYSTEM
-)
 
-ADD_LIBRARY(delimitedtextprovider MODULE ${DTEXT_SRCS})
+add_library(provider_delimitedtext MODULE ${DTEXT_SRCS})
 
-TARGET_LINK_LIBRARIES(delimitedtextprovider
+# require c++17
+target_compile_features(provider_delimitedtext PRIVATE cxx_std_17)
+
+target_link_libraries(provider_delimitedtext
   qgis_core
 )
 
-IF (WITH_GUI)
-  TARGET_LINK_LIBRARIES (delimitedtextprovider
+if (WITH_GUI)
+  target_link_libraries (provider_delimitedtext
     qgis_gui
   )
-  ADD_DEPENDENCIES(delimitedtextprovider ui)
-ENDIF ()
+  add_dependencies(provider_delimitedtext ui)
+endif()
 
-TARGET_COMPILE_DEFINITIONS(delimitedtextprovider PRIVATE "-DQT_NO_FOREACH")
+target_compile_definitions(provider_delimitedtext PRIVATE "-DQT_NO_FOREACH")
 
 # clang-tidy
-IF(CLANG_TIDY_EXE)
-  SET_TARGET_PROPERTIES(
-    delimitedtextprovider PROPERTIES
+if(CLANG_TIDY_EXE)
+  set_target_properties(
+    provider_delimitedtext PROPERTIES
     CXX_CLANG_TIDY "${DO_CLANG_TIDY}"
   )
-ENDIF(CLANG_TIDY_EXE)
+endif()
 
 ########################################################
 # Install
 
-INSTALL (TARGETS delimitedtextprovider
+install (TARGETS provider_delimitedtext
   RUNTIME DESTINATION ${QGIS_PLUGIN_DIR}
   LIBRARY DESTINATION ${QGIS_PLUGIN_DIR})

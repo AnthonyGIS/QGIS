@@ -17,7 +17,9 @@
 #define QGSWINDOW3DENGINE_H
 
 #include "qgsabstract3dengine.h"
-
+#include "qgsshadowrenderingframegraph.h"
+#include "qgspostprocessingentity.h"
+#include "qgspreviewquad.h"
 
 namespace Qt3DRender
 {
@@ -27,6 +29,7 @@ namespace Qt3DRender
 namespace Qt3DExtras
 {
   class Qt3DWindow;
+  class QForwardRenderer;
 }
 
 class QWindow;
@@ -36,7 +39,7 @@ class QWindow;
 
 /**
  * \ingroup 3d
- * On-screen 3D engine: it creates OpenGL window (QWindow) and displays rendered 3D scene there.
+ * \brief On-screen 3D engine: it creates OpenGL window (QWindow) and displays rendered 3D scene there.
  * The window can be embedded into a QWidget-based application with QWidget::createWindowContainer().
  *
  * \note Not available in Python bindings
@@ -47,12 +50,19 @@ class _3D_EXPORT QgsWindow3DEngine : public QgsAbstract3DEngine
 {
     Q_OBJECT
   public:
-    QgsWindow3DEngine();
+
+    /**
+     * Constructor for QgsWindow3DEngine with the specified \a parent object.
+     */
+    QgsWindow3DEngine( QObject *parent = nullptr );
 
     //! Returns the internal 3D window where all the rendered output is displayed
     QWindow *window();
 
-    void requestCaptureImage() override;
+    //! Sets whether shadow rendering is enabled
+    void setShadowRenderingEnabled( bool enabled );
+    //! Returns whether shadow rendering is enabled
+    bool shadowRenderingEnabled() { return mShadowRenderingEnabled; }
 
     void setClearColor( const QColor &color ) override;
     void setFrustumCullingEnabled( bool enabled ) override;
@@ -63,12 +73,17 @@ class _3D_EXPORT QgsWindow3DEngine : public QgsAbstract3DEngine
     QSize size() const override;
     QSurface *surface() const override;
 
+    void setSize( QSize s ) override;
   private:
     //! 3D window with all the 3D magic inside
     Qt3DExtras::Qt3DWindow *mWindow3D = nullptr;
     //! Frame graph node for render capture
-    Qt3DRender::QRenderCapture *mCapture = nullptr;
-};
+    bool mShadowRenderingEnabled = false;
+    Qt3DCore::QEntity *mRoot = nullptr;
+    Qt3DCore::QEntity *mSceneRoot = nullptr;
 
+    QgsPreviewQuad *mPreviewQuad = nullptr;
+    QSize mSize = QSize( 1024, 768 );
+};
 
 #endif // QGSWINDOW3DENGINE_H

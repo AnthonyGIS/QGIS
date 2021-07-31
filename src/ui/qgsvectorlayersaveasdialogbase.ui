@@ -31,7 +31,7 @@
        </widget>
       </item>
       <item row="1" column="2">
-       <widget class="QgsFileWidget" name="mFilename">
+       <widget class="QgsFileWidget" name="mFilename" native="true">
         <property name="enabled">
          <bool>false</bool>
         </property>
@@ -96,9 +96,9 @@
       <property name="geometry">
        <rect>
         <x>0</x>
-        <y>-303</y>
+        <y>0</y>
         <width>557</width>
-        <height>1004</height>
+        <height>987</height>
        </rect>
       </property>
       <layout class="QVBoxLayout" name="verticalLayout">
@@ -189,6 +189,19 @@
            </widget>
           </item>
          </layout>
+        </widget>
+       </item>
+       <item>
+        <widget class="QCheckBox" name="mCheckPersistMetadata">
+         <property name="toolTip">
+          <string>If checked, any metadata present in the source layer will be copied to the output layer.</string>
+         </property>
+         <property name="text">
+          <string>Persist layer metadata</string>
+         </property>
+         <property name="checked">
+          <bool>true</bool>
+         </property>
         </widget>
        </item>
        <item>
@@ -475,6 +488,12 @@
    <container>1</container>
   </customwidget>
   <customwidget>
+   <class>QgsFileWidget</class>
+   <extends>QWidget</extends>
+   <header>qgsfilewidget.h</header>
+   <container>1</container>
+  </customwidget>
+  <customwidget>
    <class>QgsExtentGroupBox</class>
    <extends>QgsCollapsibleGroupBox</extends>
    <header>qgsextentgroupbox.h</header>
@@ -485,67 +504,28 @@
    <extends>QWidget</extends>
    <header>qgsscalewidget.h</header>
   </customwidget>
-  <customwidget>
-   <class>QgsFileWidget</class>
-   <extends>QWidget</extends>
-   <header>qgsfilewidget.h</header>
-   <container>1</container>
-  </customwidget>
  </customwidgets>
  <tabstops>
   <tabstop>mFormatComboBox</tabstop>
-  <tabstop>mFilename</tabstop>
   <tabstop>leLayername</tabstop>
   <tabstop>mCrsSelector</tabstop>
   <tabstop>scrollArea</tabstop>
   <tabstop>mEncodingComboBox</tabstop>
   <tabstop>mSelectedOnly</tabstop>
+  <tabstop>mAttributeTable</tabstop>
   <tabstop>mSelectAllAttributes</tabstop>
   <tabstop>mDeselectAllAttributes</tabstop>
+  <tabstop>mReplaceRawFieldValues</tabstop>
+  <tabstop>mCheckPersistMetadata</tabstop>
   <tabstop>mSymbologyExportComboBox</tabstop>
   <tabstop>mScaleWidget</tabstop>
   <tabstop>mGeometryTypeComboBox</tabstop>
   <tabstop>mForceMultiCheckBox</tabstop>
   <tabstop>mIncludeZCheckBox</tabstop>
-  <tabstop>mAttributeTable</tabstop>
-  <tabstop>mReplaceRawFieldValues</tabstop>
   <tabstop>mOgrDatasourceOptions</tabstop>
   <tabstop>mOgrLayerOptions</tabstop>
   <tabstop>mAddToCanvas</tabstop>
  </tabstops>
  <resources/>
- <connections>
-  <connection>
-   <sender>buttonBox</sender>
-   <signal>accepted()</signal>
-   <receiver>QgsVectorLayerSaveAsDialogBase</receiver>
-   <slot>accept()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>266</x>
-     <y>268</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>157</x>
-     <y>274</y>
-    </hint>
-   </hints>
-  </connection>
-  <connection>
-   <sender>buttonBox</sender>
-   <signal>rejected()</signal>
-   <receiver>QgsVectorLayerSaveAsDialogBase</receiver>
-   <slot>reject()</slot>
-   <hints>
-    <hint type="sourcelabel">
-     <x>334</x>
-     <y>268</y>
-    </hint>
-    <hint type="destinationlabel">
-     <x>286</x>
-     <y>274</y>
-    </hint>
-   </hints>
-  </connection>
- </connections>
+ <connections/>
 </ui>

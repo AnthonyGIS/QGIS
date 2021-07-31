@@ -174,7 +174,7 @@ QgsOracleFeatureIterator::QgsOracleFeatureIterator( QgsOracleFeatureSource *sour
   if ( mSource->mRequestedGeomType != QgsWkbTypes::Unknown && mSource->mRequestedGeomType != mSource->mDetectedGeomType )
   {
     if ( !whereClause.isEmpty() )
-      whereClause += QStringLiteral( " AND " );
+      whereClause += QLatin1String( " AND " );
 
     whereClause += '(';
 
@@ -188,7 +188,7 @@ QgsOracleFeatureIterator::QgsOracleFeatureIterator( QgsOracleFeatureSource *sour
   if ( !mSource->mSqlWhereClause.isEmpty() )
   {
     if ( !whereClause.isEmpty() )
-      whereClause += QStringLiteral( " AND " );
+      whereClause += QLatin1String( " AND " );
     whereClause += '(' + mSource->mSqlWhereClause + ')';
   }
 
@@ -199,25 +199,18 @@ QgsOracleFeatureIterator::QgsOracleFeatureIterator( QgsOracleFeatureSource *sour
   bool useFallback = false;
   if ( request.filterType() == QgsFeatureRequest::FilterExpression )
   {
-    if ( QgsSettings().value( QStringLiteral( "qgis/compileExpressions" ), true ).toBool() )
+    QgsOracleExpressionCompiler compiler( mSource, request.flags() & QgsFeatureRequest::IgnoreStaticNodesDuringExpressionCompilation );
+    QgsSqlExpressionCompiler::Result result = compiler.compile( mRequest.filterExpression() );
+    if ( result == QgsSqlExpressionCompiler::Complete || result == QgsSqlExpressionCompiler::Partial )
     {
-      QgsOracleExpressionCompiler compiler( mSource );
-      QgsSqlExpressionCompiler::Result result = compiler.compile( mRequest.filterExpression() );
-      if ( result == QgsSqlExpressionCompiler::Complete || result == QgsSqlExpressionCompiler::Partial )
-      {
-        fallbackStatement = whereClause;
-        useFallback = true;
-        whereClause = QgsOracleUtils::andWhereClauses( whereClause, compiler.result() );
+      fallbackStatement = whereClause;
+      useFallback = true;
+      whereClause = QgsOracleUtils::andWhereClauses( whereClause, compiler.result() );
 
-        //if only partial success when compiling expression, we need to double-check results using QGIS' expressions
-        mExpressionCompiled = ( result == QgsSqlExpressionCompiler::Complete );
-        mCompileStatus = ( mExpressionCompiled ? Compiled : PartiallyCompiled );
-        limitAtProvider = mExpressionCompiled;
-      }
-      else
-      {
-        limitAtProvider = false;
-      }
+      //if only partial success when compiling expression, we need to double-check results using QGIS' expressions
+      mExpressionCompiled = ( result == QgsSqlExpressionCompiler::Complete );
+      mCompileStatus = ( mExpressionCompiled ? Compiled : PartiallyCompiled );
+      limitAtProvider = mExpressionCompiled;
     }
     else
     {
@@ -233,10 +226,10 @@ QgsOracleFeatureIterator::QgsOracleFeatureIterator( QgsOracleFeatureSource *sour
   if ( mRequest.limit() >= 0 && limitAtProvider )
   {
     if ( !whereClause.isEmpty() )
-      whereClause += QStringLiteral( " AND " );
+      whereClause += QLatin1String( " AND " );
 
-    whereClause += QStringLiteral( "rownum<=?" );
-    fallbackStatement += QStringLiteral( "rownum<=?" );
+    whereClause += QLatin1String( "rownum<=?" );
+    fallbackStatement += QLatin1String( "rownum<=?" );
     args << QVariant::fromValue( mRequest.limit() );
   }
 
@@ -363,7 +356,7 @@ bool QgsOracleFeatureIterator::fetchFeature( QgsFeature &feature )
         QVariantList primaryKeyVals;
         if ( mSource->mPrimaryKeyType == PktFidMap )
         {
-          Q_FOREACH ( int idx, mSource->mPrimaryKeyAttrs )
+          for ( int idx : std::as_const( mSource->mPrimaryKeyAttrs ) )
           {
             QgsField fld = mSource->mFields.at( idx );
 
@@ -405,7 +398,7 @@ bool QgsOracleFeatureIterator::fetchFeature( QgsFeature &feature )
       QgsField fld = mSource->mFields.at( idx );
 
       QVariant v = mQry.value( col );
-      if ( fld.type() == QVariant::ByteArray && fld.typeName().endsWith( QStringLiteral( ".SDO_GEOMETRY" ) ) )
+      if ( fld.type() == QVariant::ByteArray && fld.typeName().endsWith( QLatin1String( ".SDO_GEOMETRY" ) ) )
       {
         QByteArray ba( v.toByteArray() );
         if ( ba.size() > 0 )
@@ -485,7 +478,7 @@ bool QgsOracleFeatureIterator::openQuery( const QString &whereClause, const QVar
         break;
 
       case PktFidMap:
-        Q_FOREACH ( int idx, mSource->mPrimaryKeyAttrs )
+        for ( int idx : std::as_const( mSource->mPrimaryKeyAttrs ) )
         {
           query += delim + mConnection->fieldExpression( mSource->mFields.at( idx ) );
           delim = ',';

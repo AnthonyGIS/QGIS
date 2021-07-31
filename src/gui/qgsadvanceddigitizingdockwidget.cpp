@@ -38,12 +38,14 @@
 #include "qgsmapmouseevent.h"
 #include "qgsmessagelog.h"
 
+#include <QActionGroup>
+
 
 QgsAdvancedDigitizingDockWidget::QgsAdvancedDigitizingDockWidget( QgsMapCanvas *canvas, QWidget *parent )
   : QgsDockWidget( parent )
   , mMapCanvas( canvas )
-  , mSnapIndicator( qgis::make_unique< QgsSnapIndicator>( canvas ) )
-  , mCommonAngleConstraint( QgsSettings().value( QStringLiteral( "/Cad/CommonAngle" ), 90 ).toDouble() )
+  , mSnapIndicator( std::make_unique< QgsSnapIndicator>( canvas ) )
+  , mCommonAngleConstraint( QgsSettings().value( QStringLiteral( "/Cad/CommonAngle" ), 0.0 ).toDouble() )
 {
   setupUi( this );
 
@@ -123,6 +125,9 @@ QgsAdvancedDigitizingDockWidget::QgsAdvancedDigitizingDockWidget( QgsMapCanvas *
 
   qobject_cast< QToolButton *>( mToolbar->widgetForAction( mSettingsAction ) )->setPopupMode( QToolButton::InstantPopup );
   mSettingsAction->setMenu( menu );
+  mSettingsAction->setCheckable( true );
+  mSettingsAction->setToolTip( tr( "Snap to common angles" ) );
+  mSettingsAction->setChecked( mCommonAngleConstraint != 0 );
   connect( menu, &QMenu::triggered, this, &QgsAdvancedDigitizingDockWidget::settingsButtonTriggered );
 
   // set tooltips
@@ -270,7 +275,7 @@ void QgsAdvancedDigitizingDockWidget::additionalConstraintClicked( bool activate
   {
     lockAdditionalConstraint( AdditionalConstraint::NoConstraint );
   }
-  if ( sender() == mParallelAction )
+  else if ( sender() == mParallelAction )
   {
     lockAdditionalConstraint( AdditionalConstraint::Parallel );
   }
@@ -334,6 +339,7 @@ void QgsAdvancedDigitizingDockWidget::settingsButtonTriggered( QAction *action )
     ica.key()->setChecked( true );
     mCommonAngleConstraint = ica.value();
     QgsSettings().setValue( QStringLiteral( "/Cad/CommonAngle" ), ica.value() );
+    mSettingsAction->setChecked( mCommonAngleConstraint != 0 );
     return;
   }
 }
@@ -364,6 +370,19 @@ void QgsAdvancedDigitizingDockWidget::releaseLocks( bool releaseRepeatingLocks )
     mYConstraint->setLockMode( CadConstraint::NoLock );
     emit lockYChanged( false );
   }
+
+  if ( !mCadPointList.empty() )
+  {
+    if ( !mXConstraint->isLocked() && !mXConstraint->relative() )
+    {
+      mXConstraint->setValue( mCadPointList.constLast().x(), true );
+    }
+    if ( !mYConstraint->isLocked() && !mYConstraint->relative() )
+    {
+      mYConstraint->setValue( mCadPointList.constLast().y(), true );
+    }
+  }
+
 }
 
 #if 0
@@ -536,7 +555,7 @@ void QgsAdvancedDigitizingDockWidget::lockAdditionalConstraint( AdditionalConstr
 
 void QgsAdvancedDigitizingDockWidget::updateCapacity( bool updateUIwithoutChange )
 {
-  CadCapacities newCapacities = nullptr;
+  CadCapacities newCapacities = CadCapacities();
   // first point is the mouse point (it doesn't count)
   if ( mCadPointList.count() > 1 )
   {
@@ -687,7 +706,7 @@ bool QgsAdvancedDigitizingDockWidget::applyConstraints( QgsMapMouseEvent *e )
    */
   e->setMapPoint( point );
   mSnapMatch = context.snappingUtils->snapToMap( point, nullptr, true );
-  if ( ( mSnapMatch.hasVertex() && ( point == mSnapMatch.point() ) ) || ( mSnapMatch.hasEdge() && QgsProject::instance()->topologicalEditing() ) )
+  if ( ( ( mSnapMatch.hasVertex() || mSnapMatch.hasLineEndpoint() ) && ( point == mSnapMatch.point() ) ) || ( mSnapMatch.hasEdge() && QgsProject::instance()->topologicalEditing() ) )
   {
     e->snapPoint();
   }
@@ -1090,6 +1109,9 @@ bool QgsAdvancedDigitizingDockWidget::filterKeyPress( QKeyEvent *e )
           lockAdditionalConstraint( AdditionalConstraint::NoConstraint );
         }
         e->accept();
+
+        // run a fake map mouse event to update the paint item
+        emit pointChanged( mCadPointList.value( 0 ) );
       }
       break;
     }

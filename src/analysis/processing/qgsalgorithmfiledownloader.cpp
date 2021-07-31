@@ -77,10 +77,13 @@ QVariantMap QgsFileDownloaderAlgorithm::processAlgorithm( const QVariantMap &par
 
   QEventLoop loop;
   QTimer timer;
+  QUrl downloadedUrl;
+  QStringList errors;
   QgsFileDownloader *downloader = new QgsFileDownloader( QUrl( url ), outputFile, QString(), true );
   connect( mFeedback, &QgsFeedback::canceled, downloader, &QgsFileDownloader::cancelDownload );
-  connect( downloader, &QgsFileDownloader::downloadError, this, &QgsFileDownloaderAlgorithm::reportErrors );
+  connect( downloader, &QgsFileDownloader::downloadError, this, [&errors, &loop]( const QStringList & e ) { errors = e; loop.exit(); } );
   connect( downloader, &QgsFileDownloader::downloadProgress, this, &QgsFileDownloaderAlgorithm::receiveProgressFromDownloader );
+  connect( downloader, &QgsFileDownloader::downloadCompleted, this, [&downloadedUrl]( const QUrl url ) { downloadedUrl = url; } );
   connect( downloader, &QgsFileDownloader::downloadExited, &loop, &QEventLoop::quit );
   connect( &timer, &QTimer::timeout, this, &QgsFileDownloaderAlgorithm::sendProgressFeedback );
   downloader->startDownload();
@@ -89,18 +92,33 @@ QVariantMap QgsFileDownloaderAlgorithm::processAlgorithm( const QVariantMap &par
   loop.exec();
 
   timer.stop();
+  if ( errors.size() > 0 )
+    throw QgsProcessingException( errors.join( '\n' ) );
+
   bool exists = QFileInfo::exists( outputFile );
   if ( !feedback->isCanceled() && !exists )
     throw QgsProcessingException( tr( "Output file doesn't exist." ) );
 
+  url = downloadedUrl.toDisplayString();
+  feedback->pushInfo( QObject::tr( "Successfully downloaded %1" ).arg( url ) );
+
+  if ( outputFile.startsWith( QgsProcessingUtils::tempFolder() ) )
+  {
+    // the output is temporary and its file name automatically generated, try to add a file extension
+    const int length = url.size();
+    const int lastDotIndex = url.lastIndexOf( "." );
+    const int lastSlashIndex = url.lastIndexOf( "/" );
+    if ( lastDotIndex > -1 && lastDotIndex > lastSlashIndex && length - lastDotIndex <= 6 )
+    {
+      QFile tmpFile( outputFile );
+      tmpFile.rename( tmpFile.fileName() + url.mid( lastDotIndex ) );
+      outputFile += url.mid( lastDotIndex );
+    }
+  }
+
   QVariantMap outputs;
   outputs.insert( QStringLiteral( "OUTPUT" ), exists ? outputFile : QString() );
   return outputs;
-}
-
-void QgsFileDownloaderAlgorithm::reportErrors( const QStringList &errors )
-{
-  throw QgsProcessingException( errors.join( '\n' ) );
 }
 
 void QgsFileDownloaderAlgorithm::sendProgressFeedback()

@@ -17,8 +17,11 @@
 
 #include "qgslayoututils.h"
 #include "qgslayout.h"
-#include "qgsrendercontext.h"
 #include "qgslayoutitemmap.h"
+#include "qgsprojectviewsettings.h"
+#include "qgsrendercontext.h"
+#include "qgssettings.h"
+
 #include <QStyleOptionGraphicsItem>
 #include <QPainter>
 #include <cmath>
@@ -220,9 +223,17 @@ double QgsLayoutUtils::textWidthMM( const QFont &font, const QString &text )
 {
   //upscale using FONT_WORKAROUND_SCALE
   //ref: http://osgeo-org.1560.x6.nabble.com/Multi-line-labels-and-font-bug-td4157152.html
+
+  const QStringList multiLineSplit = text.split( '\n' );
   QFont metricsFont = scaledFontPixelSize( font );
   QFontMetricsF fontMetrics( metricsFont );
-  return ( fontMetrics.width( text ) / FONT_WORKAROUND_SCALE );
+
+  double maxWidth = 0;
+  for ( const QString &line : multiLineSplit )
+  {
+    maxWidth = std::max( maxWidth, ( fontMetrics.horizontalAdvance( line ) / FONT_WORKAROUND_SCALE ) );
+  }
+  return maxWidth;
 }
 
 double QgsLayoutUtils::textHeightMM( const QFont &font, const QString &text, double multiLineHeight )
@@ -387,6 +398,7 @@ QgsLayoutItemPage::Orientation QgsLayoutUtils::decodePaperOrientation( const QSt
 
 double QgsLayoutUtils::scaleFactorFromItemStyle( const QStyleOptionGraphicsItem *style )
 {
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
   // workaround Qt bug 66185
 
   // Refs #18027 - if a QGraphicsItem is rotated by 90 or 270 degrees, then the item
@@ -396,6 +408,15 @@ double QgsLayoutUtils::scaleFactorFromItemStyle( const QStyleOptionGraphicsItem 
 
   // TODO - ifdef this out if Qt fixes upstream
   return !qgsDoubleNear( style->matrix.m11(), 0.0 ) ? style->matrix.m11() : style->matrix.m12();
+#else
+  Q_UNUSED( style )
+  return 1;
+#endif
+}
+
+double QgsLayoutUtils::scaleFactorFromItemStyle( const QStyleOptionGraphicsItem *style, QPainter *painter )
+{
+  return style->levelOfDetailFromTransform( painter->worldTransform() );
 }
 
 QgsMapLayer *QgsLayoutUtils::mapLayerFromString( const QString &string, QgsProject *project )
@@ -461,6 +482,22 @@ double QgsLayoutUtils::calculatePrettySize( const double minimumSize, const doub
   }
 }
 
+bool QgsLayoutUtils::itemIsAClippingSource( const QgsLayoutItem *item )
+{
+  if ( !( item->itemFlags() & QgsLayoutItem::FlagProvidesClipPath ) )
+    return false; // not a clipping provider, so shortcut out
+
+  // current only maps can be clipped
+  QList< QgsLayoutItemMap * > maps;
+  item->layout()->layoutItems( maps );
+  for ( QgsLayoutItemMap *map : std::as_const( maps ) )
+  {
+    if ( map->itemClippingSettings()->isActive() && map->itemClippingSettings()->sourceItem() == item )
+      return true;
+  }
+  return false;
+}
+
 double QgsLayoutUtils::pointsToMM( const double pointSize )
 {
   //conversion to mm based on 1 point = 1/72 inch
@@ -471,4 +508,31 @@ double QgsLayoutUtils::mmToPoints( const double mmSize )
 {
   //conversion to points based on 1 point = 1/72 inch
   return ( mmSize / 0.3527 );
+}
+
+QVector< double > QgsLayoutUtils::predefinedScales( const QgsLayout *layout )
+{
+  QgsProject *lProject = layout->project();
+  QVector< double > mapScales;
+  if ( lProject )
+    mapScales = lProject->viewSettings()->mapScales();
+
+  bool hasProjectScales( lProject ? lProject->viewSettings()->useProjectScales() : false );
+  if ( !hasProjectScales || mapScales.isEmpty() )
+  {
+    // default to global map tool scales
+    QgsSettings settings;
+    QString scalesStr( settings.value( QStringLiteral( "Map/scales" ), Qgis::defaultProjectScales() ).toString() );
+    const QStringList scales = scalesStr.split( ',' );
+    for ( const QString &scale : scales )
+    {
+      QStringList parts( scale.split( ':' ) );
+      if ( parts.size() == 2 )
+      {
+        mapScales.push_back( parts[1].toDouble() );
+      }
+    }
+  }
+
+  return mapScales;
 }

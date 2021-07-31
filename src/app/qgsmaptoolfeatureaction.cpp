@@ -59,7 +59,7 @@ void QgsMapToolFeatureAction::canvasReleaseEvent( QgsMapMouseEvent *e )
 
   if ( !layer || layer->type() != QgsMapLayerType::VectorLayer )
   {
-    emit messageEmitted( tr( "To run an action, you must choose an active vector layer." ), Qgis::Info );
+    emit messageEmitted( tr( "To run an action, you must choose an active vector layer." ), Qgis::MessageLevel::Info );
     return;
   }
 
@@ -72,12 +72,12 @@ void QgsMapToolFeatureAction::canvasReleaseEvent( QgsMapMouseEvent *e )
   QgsVectorLayer *vlayer = qobject_cast<QgsVectorLayer *>( layer );
   if ( vlayer->actions()->actions( QStringLiteral( "Canvas" ) ).isEmpty() && QgsGui::mapLayerActionRegistry()->mapLayerActions( vlayer ).isEmpty() )
   {
-    emit messageEmitted( tr( "The active vector layer has no defined actions" ), Qgis::Info );
+    emit messageEmitted( tr( "The active vector layer has no defined actions" ), Qgis::MessageLevel::Info );
     return;
   }
 
   if ( !doAction( vlayer, e->x(), e->y() ) )
-    QgisApp::instance()->statusBarIface()->showMessage( tr( "No features at this position found." ) );
+    QgisApp::instance()->statusBarIface()->showMessage( tr( "No features found at this position." ), 2000 );
 }
 
 void QgsMapToolFeatureAction::activate()
@@ -138,16 +138,25 @@ bool QgsMapToolFeatureAction::doAction( QgsVectorLayer *layer, int x, int y )
     }
     else
     {
+      QgsExpressionContext context( QgsExpressionContextUtils::globalProjectLayerScopes( layer ) );
+      QgsExpression exp( layer->displayExpression() );
+      exp.prepare( &context );
+
       QMenu *featureMenu = new QMenu();
-      for ( const QgsFeature &feature : qgis::as_const( features ) )
+      for ( const QgsFeature &feature : std::as_const( features ) )
       {
-        QAction *featureAction = featureMenu->addAction( FID_TO_STRING( feature.id() ) );
+        context.setFeature( feature );
+        QString featureTitle = exp.evaluate( &context ).toString();
+        if ( featureTitle.isEmpty() )
+          featureTitle = FID_TO_STRING( feature.id() );
+
+        QAction *featureAction = featureMenu->addAction( featureTitle );
         connect( featureAction, &QAction::triggered, this, [ = ] { doActionForFeature( layer, feature, point );} );
       }
       QAction *allFeatureAction = featureMenu->addAction( tr( "All Features" ) );
       connect( allFeatureAction, &QAction::triggered, this, [ = ]
       {
-        for ( const QgsFeature &feature : qgis::as_const( features ) )
+        for ( const QgsFeature &feature : std::as_const( features ) )
         {
           doActionForFeature( layer, feature, point );
         }

@@ -14,8 +14,9 @@
 
 class QgsRenderContext : QgsTemporalRangeObject
 {
-%Docstring
+%Docstring(signature="appended")
 Contains information about the context of a rendering operation.
+
 The context of a rendering operation defines properties such as
 the conversion ratio between screen and map units, the extents
 to be rendered etc.
@@ -46,6 +47,8 @@ to be rendered etc.
       RenderSymbolPreview,
       LosslessImageRendering,
       ApplyScalingWorkaroundForTextRendering,
+      Render3DMap,
+      ApplyClipAfterReprojection,
     };
     typedef QFlags<QgsRenderContext::Flag> Flags;
 
@@ -277,6 +280,15 @@ per millimeter.
 .. seealso:: :py:func:`setScaleFactor`
 %End
 
+    double dpiTarget() const;
+%Docstring
+Returns the targeted DPI for rendering.
+
+.. seealso:: :py:func:`setDpiTarget`
+
+.. versionadded:: 3.20
+%End
+
     bool renderingStopped() const;
 %Docstring
 Returns ``True`` if the rendering operation has been stopped and any ongoing
@@ -323,6 +335,26 @@ for the rendered map, eg 1000.0 for a 1:1000 map render.
 %End
 
 
+    double symbologyReferenceScale() const;
+%Docstring
+Returns the symbology reference scale.
+
+This represents the desired scale denominator for the rendered map, eg 1000.0 for a 1:1000 map render.
+A value of -1 indicates that symbology scaling by reference scale is disabled.
+
+The symbology reference scale is an optional property which specifies the reference
+scale at which symbology in paper units (such a millimeters or points) is fixed
+to. For instance, if the scale is 1000 then a 2mm thick line will be rendered at
+exactly 2mm thick when a map is rendered at 1:1000, or 1mm thick when rendered at 1:2000, or 4mm thick at 1:500.
+
+.. seealso:: :py:func:`setSymbologyReferenceScale`
+
+.. seealso:: :py:func:`rendererScale`
+
+.. versionadded:: 3.22
+%End
+
+
     QColor selectionColor() const;
 %Docstring
 Returns the color to use when rendering selected features.
@@ -351,7 +383,7 @@ Sets the current coordinate transform for the context.
 This represents the coordinate transform required to transform the layer
 which is being rendered back to the CRS of the rendered map.
 
-Set to an invalid QgsCoordinateTransform to indicate that no transformation is required.
+Set to an invalid :py:class:`QgsCoordinateTransform` to indicate that no transformation is required.
 
 .. seealso:: :py:func:`coordinateTransform`
 %End
@@ -410,7 +442,7 @@ rendering should be canceled immediately.
     void setDistanceArea( const QgsDistanceArea &distanceArea );
 %Docstring
 A general purpose distance and area calculator, capable of performing ellipsoid based calculations.
-Will be used to convert meter distances to active MapUnit values for QgsUnitTypes.RenderMetersInMapUnits
+Will be used to convert meter distances to active MapUnit values for :py:class:`QgsUnitTypes`.RenderMetersInMapUnits
 
 .. versionadded:: 3.0
 %End
@@ -424,12 +456,40 @@ per millimeter.
 .. seealso:: :py:func:`scaleFactor`
 %End
 
+    void setDpiTarget( double dpi );
+%Docstring
+Sets the targeted ``dpi`` for rendering.
+
+.. seealso:: :py:func:`dpiTarget`
+
+.. versionadded:: 3.20
+%End
+
     void setRendererScale( double scale );
 %Docstring
 Sets the renderer map scale. This should match the desired scale denominator
 for the rendered map, eg 1000.0 for a 1:1000 map render.
 
 .. seealso:: :py:func:`rendererScale`
+%End
+
+    void setSymbologyReferenceScale( double scale );
+%Docstring
+Sets the symbology reference ``scale``.
+
+This should match the desired scale denominator for the rendered map, eg 1000.0 for a 1:1000 map render.
+Set to -1 to disable symbology scaling by reference scale.
+
+The symbology reference scale is an optional property which specifies the reference
+scale at which symbology in paper units (such a millimeters or points) is fixed
+to. For instance, if ``scale`` is set to 1000 then a 2mm thick line will be rendered at
+exactly 2mm thick when a map is rendered at 1:1000, or 1mm thick when rendered at 1:2000, or 4mm thick at 1:500.
+
+.. seealso:: :py:func:`symbologyReferenceScale`
+
+.. seealso:: :py:func:`rendererScale`
+
+.. versionadded:: 3.22
 %End
 
     void setPainter( QPainter *p );
@@ -654,7 +714,7 @@ Converts a size from map units to the specified units.
 
     double convertMetersToMapUnits( double meters ) const;
 %Docstring
-Convert meter distances to active MapUnit values for QgsUnitTypes.RenderMetersInMapUnits
+Convert meter distances to active MapUnit values for :py:class:`QgsUnitTypes`.RenderMetersInMapUnits
 \note
 When the :py:func:`~QgsRenderContext.sourceCrs` is geographic, the center of the Extent will be used
 
@@ -836,7 +896,7 @@ Sets a ``geometry`` to use to clip features at render time.
 
 .. note::
 
-   This is not usually set directly, but rather specified by calling QgsMapSettings::py:func:`~QgsRenderContext.addClippingRegion`
+   This is not usually set directly, but rather specified by calling :py:class:`QgsMapSettings`::py:func:`~QgsRenderContext.addClippingRegion`
    prior to constructing a QgsRenderContext.
 
 .. seealso:: :py:func:`featureClipGeometry`
@@ -862,6 +922,24 @@ rendering using QBrush objects.
 .. seealso:: :py:func:`textureOrigin`
 
 .. versionadded:: 3.16
+%End
+
+    QgsDoubleRange zRange() const;
+%Docstring
+Returns the range of z-values which should be rendered.
+
+.. seealso:: :py:func:`setZRange`
+
+.. versionadded:: 3.18
+%End
+
+    void setZRange( const QgsDoubleRange &range );
+%Docstring
+Sets the ``range`` of z-values which should be rendered.
+
+.. seealso:: :py:func:`zRange`
+
+.. versionadded:: 3.18
 %End
 
 };

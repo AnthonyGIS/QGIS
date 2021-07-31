@@ -21,7 +21,7 @@
 
 /**
  * \ingroup core
- * A parameter for "field mapping" configurations, which consist of a definition
+ * \brief A parameter for "field mapping" configurations, which consist of a definition
  * of desired output fields, types, and expressions used to populate then.
  *
  * Designed for use with the "Refactor fields" algorithm.
@@ -63,10 +63,11 @@ class CORE_EXPORT QgsProcessingParameterFieldMapping : public QgsProcessingParam
 
 };
 
+#ifndef SIP_RUN
 ///@cond PRIVATE
 
 /**
- * Parameter type definition for QgsProcessingParameterFieldMapping.
+ * \brief Parameter type definition for QgsProcessingParameterFieldMapping.
  *
  * \ingroup core
  * \note This class is not a part of public API.
@@ -112,5 +113,6 @@ class CORE_EXPORT QgsProcessingParameterTypeFieldMapping : public QgsProcessingP
 };
 
 ///@endcond
+#endif
 
 #endif // QGSPROCESSINGPARAMETERFIELDMAP_H

@@ -32,6 +32,8 @@
 #include <qgsfillsymbollayer.h>
 #include "qgslinesymbollayer.h"
 #include "qgsproperty.h"
+#include "qgsfillsymbol.h"
+#include "qgslinesymbol.h"
 
 //qgis test includes
 #include "qgsrenderchecker.h"
@@ -133,7 +135,7 @@ void TestQgsLineFillSymbol::lineFillSymbol()
 {
   mReport += QLatin1String( "<h2>Line fill symbol renderer test</h2>\n" );
 
-  QgsStringMap properties;
+  QVariantMap properties;
   properties.insert( QStringLiteral( "color" ), QStringLiteral( "0,0,0,255" ) );
   properties.insert( QStringLiteral( "width" ), QStringLiteral( "1" ) );
   properties.insert( QStringLiteral( "capstyle" ), QStringLiteral( "flat" ) );
@@ -181,7 +183,7 @@ void TestQgsLineFillSymbol::dataDefinedSubSymbol()
 {
   mReport += QLatin1String( "<h2>Line fill symbol data defined sub symbol test</h2>\n" );
 
-  QgsStringMap properties;
+  QVariantMap properties;
   properties.insert( QStringLiteral( "color" ), QStringLiteral( "0,0,0,255" ) );
   properties.insert( QStringLiteral( "width" ), QStringLiteral( "1" ) );
   properties.insert( QStringLiteral( "capstyle" ), QStringLiteral( "flat" ) );

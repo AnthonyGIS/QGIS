@@ -69,9 +69,6 @@ void QgsCollapsibleGroupBoxBasic::init()
   mCollapseButton->setIcon( mCollapseIcon );
   // FIXME: This appears to mess up parent-child relationships and causes double-frees of children when destroying in Qt5.10, needs further investigation
   // See also https://github.com/qgis/QGIS/pull/6301
-#if QT_VERSION < QT_VERSION_CHECK(5, 10, 0)
-  setFocusProxy( mCollapseButton );
-#endif
   setFocusPolicy( Qt::StrongFocus );
 
   connect( mCollapseButton, &QAbstractButton::clicked, this, &QgsCollapsibleGroupBoxBasic::toggleCollapsed );
@@ -239,9 +236,9 @@ void QgsCollapsibleGroupBoxBasic::toggleCollapsed()
   {
     QgsDebugMsg( QStringLiteral( "Alt or Shift key down, syncing group" ) );
     // get pointer to parent or grandparent widget
-    if ( parentWidget() )
+    if ( auto *lParentWidget = parentWidget() )
     {
-      mSyncParent = parentWidget();
+      mSyncParent = lParentWidget;
       if ( mSyncParent->parentWidget() )
       {
         // don't use whole app for grandparent (common for dialogs that use main window for parent)
@@ -298,6 +295,15 @@ void QgsCollapsibleGroupBoxBasic::toggleCollapsed()
   }
 
   clearModifiers();
+}
+
+void QgsCollapsibleGroupBoxBasic::setStyleSheet( const QString &style )
+{
+#if QT_VERSION < QT_VERSION_CHECK(5, 12, 4)
+  // Fix crash on old Qt versions, see #39693
+  QGroupBox::setStyleSheet( QString() );
+#endif
+  QGroupBox::setStyleSheet( style );
 }
 
 void QgsCollapsibleGroupBoxBasic::updateStyle()

@@ -31,7 +31,6 @@
 #include <QMenu>
 #include <QClipboard>
 #include <QDrag>
-#include <QDesktopWidget>
 #include <QStyle>
 #include <QStyleOptionToolButton>
 #include <QWidgetAction>
@@ -39,6 +38,7 @@
 #include <QLabel>
 #include <QGridLayout>
 #include <QPushButton>
+#include <QBuffer>
 
 QgsColorButton::QgsColorButton( QWidget *parent, const QString &cdt, QgsColorSchemeRegistry *registry )
   : QToolButton( parent )
@@ -71,10 +71,7 @@ QgsColorButton::QgsColorButton( QWidget *parent, const QString &cdt, QgsColorSch
   {
     setButtonBackground();
   } );
-
 }
-
-
 
 QSize QgsColorButton::minimumSizeHint() const
 {
@@ -128,7 +125,7 @@ void QgsColorButton::showColorDialog()
   }
   else
   {
-    QgsColorDialog dialog( this, nullptr, color() );
+    QgsColorDialog dialog( this, Qt::WindowFlags(), color() );
     dialog.setTitle( mColorDialogTitle );
     dialog.setAllowOpacity( mAllowOpacity );
 
@@ -184,11 +181,7 @@ bool QgsColorButton::event( QEvent *e )
     int saturation = c.saturation();
 
     // create very large preview swatch
-#if QT_VERSION < QT_VERSION_CHECK(5, 11, 0)
-    int width = static_cast< int >( Qgis::UI_SCALE_FACTOR * fontMetrics().width( 'X' ) * 23 );
-#else
     int width = static_cast< int >( Qgis::UI_SCALE_FACTOR * fontMetrics().horizontalAdvance( 'X' ) * 23 );
-#endif
     int height = static_cast< int >( width / 1.61803398875 ); // golden ratio
 
     int margin = static_cast< int >( height * 0.1 );

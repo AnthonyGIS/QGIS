@@ -31,7 +31,7 @@ class QgsRasterMinMaxWidget;
  * \ingroup gui
  * \class QgsSingleBandPseudoColorRendererWidget
  *
- * Single band pseudo color renderer widget consists of a color ramp shader widget,
+ * \brief Single band pseudo color renderer widget consists of a color ramp shader widget,
  * a raster min max widget and a band selector.
  *
  */
@@ -80,6 +80,11 @@ class GUI_EXPORT QgsSingleBandPseudoColorRendererWidget: public QgsRasterRendere
     int mMinMaxOrigin;
 
     void minMaxModified();
+
+    // Convert min/max to localized display value with maximum precision for the current data type
+    QString displayValueWithMaxPrecision( const double value );
+
+    friend class TestQgsSingleBandPseudoColorRendererWidget;
 };
 
 #endif // QGSSINGLEBANDCOLORRENDERERWIDGET_H

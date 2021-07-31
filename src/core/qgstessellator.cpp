@@ -604,7 +604,7 @@ void QgsTessellator::addPolygon( const QgsPolygon &polygon, float extrusionHeigh
     const double *zData = !mNoZ ? exterior->zData() : nullptr;
     for ( int i = 0; i < 3; i++ )
     {
-      float z = mNoZ ? 0 : *zData;
+      float z = !zData ? 0 : *zData;
       if ( z < zMin )
         zMin = z;
       if ( z > zMax )
@@ -626,7 +626,10 @@ void QgsTessellator::addPolygon( const QgsPolygon &polygon, float extrusionHeigh
         }
         mData << p.first << p.second;
       }
-      xData++; yData++; zData++;
+      xData++; yData++;
+      // zData can be nullptr if mNoZ or triangle is 2D
+      if ( zData )
+        zData++;
     }
 
     if ( mAddBackFaces )
@@ -817,7 +820,7 @@ int QgsTessellator::dataVerticesCount() const
 
 std::unique_ptr<QgsMultiPolygon> QgsTessellator::asMultiPolygon() const
 {
-  std::unique_ptr< QgsMultiPolygon > mp = qgis::make_unique< QgsMultiPolygon >();
+  std::unique_ptr< QgsMultiPolygon > mp = std::make_unique< QgsMultiPolygon >();
   const QVector<float> data = mData;
   mp->reserve( mData.size() );
   for ( auto it = data.constBegin(); it != data.constEnd(); )

@@ -14,7 +14,7 @@
 
 class QgsRelationReferenceSearchWidgetWrapper : QgsSearchWidgetWrapper
 {
-%Docstring
+%Docstring(signature="appended")
 Wraps a relation reference search widget.
 
 .. versionadded:: 2.16
@@ -48,6 +48,12 @@ Returns a variant representing the current state of the widget.
 
     virtual QgsSearchWidgetWrapper::FilterFlags supportedFlags() const;
 
+
+    virtual QgsSearchWidgetWrapper::FilterFlags defaultFlags() const;
+
+%Docstring
+Returns the default flags (equalTo)
+%End
     virtual QString createExpression( QgsSearchWidgetWrapper::FilterFlags flags ) const;
 
 

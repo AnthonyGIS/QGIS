@@ -18,9 +18,10 @@
 #include <QObject>
 
 #include "qgslayertreeview.h"
-#include "qgsmaplayer.h"
+#include "qgis.h"
 
 class QAction;
+class QgsCoordinateReferenceSystem;
 
 struct LegendLayerAction
 {
@@ -71,7 +72,8 @@ class QgsAppLayerTreeViewMenuProvider : public QObject, public QgsLayerTreeViewM
     void copySymbolLegendNodeSymbol( const QString &layerId, const QString &ruleKey );
     void pasteSymbolLegendNodeSymbol( const QString &layerId, const QString &ruleKey );
     void setSymbolLegendNodeColor( const QColor &color );
-
+    void setLayerCrs( const QgsCoordinateReferenceSystem &crs );
+    void toggleLabels( bool enabled );
   private:
     bool removeActionEnabled();
 };

@@ -10,9 +10,10 @@
 
 
 
+
 class QgsStringReplacement
 {
-%Docstring
+%Docstring(signature="appended")
 A representation of a single string replacement.
 
 .. versionadded:: 3.0
@@ -87,7 +88,7 @@ Creates a new QgsStringReplacement from an encoded properties map.
 
 class QgsStringReplacementCollection
 {
-%Docstring
+%Docstring(signature="appended")
 A collection of string replacements (specified using QgsStringReplacement objects).
 
 .. versionadded:: 3.0
@@ -125,8 +126,8 @@ Sets the list of string replacements in this collection.
     QString process( const QString &input ) const;
 %Docstring
 Processes a given input string, applying any valid replacements which should be made
-using QgsStringReplacement objects contained by this collection. Replacements
-are made in order of the QgsStringReplacement objects contained in the collection.
+using :py:class:`QgsStringReplacement` objects contained by this collection. Replacements
+are made in order of the :py:class:`QgsStringReplacement` objects contained in the collection.
 
 :param input: input string
 
@@ -157,7 +158,7 @@ Reads the collection state from an XML element.
 
 class QgsStringUtils
 {
-%Docstring
+%Docstring(signature="appended")
 Utility functions for working with strings.
 
 .. versionadded:: 2.11
@@ -285,7 +286,7 @@ links.
 Automatically wraps a ``string`` by inserting new line characters at appropriate locations in the string.
 
 The ``length`` argument specifies either the minimum or maximum length of lines desired, depending
-on whether ``useMaxLineLength`` is true. If ``useMaxLineLength`` is ``True``, then the string will be wrapped
+on whether ``useMaxLineLength`` is ``True``. If ``useMaxLineLength`` is ``True``, then the string will be wrapped
 so that each line ideally will not exceed ``length`` of characters. If ``useMaxLineLength`` is ``False``, then
 the string will be wrapped so that each line will ideally exceed ``length`` of characters.
 
@@ -314,6 +315,28 @@ Convert simple HTML to markdown. Only br, b and link are supported.
 :return: String formatted as markdown
 
 .. versionadded:: 3.10
+%End
+
+    static QString qRegExpEscape( const QString &string );
+%Docstring
+Returns an escaped string matching the behavior of QRegExp.escape.
+
+:param string: String to escape
+
+:return: Escaped string
+
+.. versionadded:: 3.22
+%End
+
+    static QString truncateMiddleOfString( const QString &string, int maxLength );
+%Docstring
+Truncates a ``string`` to the specified maximum character length.
+
+If the ``string`` exceeds the maximum character length, then the string
+will be truncated by removing characters from the middle of the string
+and replacing them with a horizontal ellipsis character.
+
+.. versionadded:: 3.22
 %End
 
 };

@@ -31,7 +31,7 @@ class QgsCoordinateTransform;
 class QgsCoordinateReferenceSystem;
 
 /**
-  \brief Data provider for MDAL layers.
+ * \brief Data provider for MDAL layers.
 */
 class QgsMdalProvider : public QgsMeshDataProvider
 {
@@ -48,7 +48,7 @@ class QgsMdalProvider : public QgsMeshDataProvider
      * \param uri file name
      * \param options generic provider options
      */
-    QgsMdalProvider( const QString &uri, const QgsDataProvider::ProviderOptions &providerOptions );
+    QgsMdalProvider( const QString &uri, const QgsDataProvider::ProviderOptions &providerOptions, QgsDataProvider::ReadFlags flags = QgsDataProvider::ReadFlags() );
     ~QgsMdalProvider() override;
 
     bool isValid() const override;
@@ -77,6 +77,9 @@ class QgsMdalProvider : public QgsMeshDataProvider
     bool isFaceActive( QgsMeshDatasetIndex index, int faceIndex ) const override;
     QgsMeshDataBlock areFacesActive( QgsMeshDatasetIndex index, int faceIndex, int count ) const override;
     QgsRectangle extent() const override;
+    int maximumVerticesCountPerFace() const override;
+
+    QgsMeshDriverMetadata driverMetadata() const override;
 
     bool persistDatasetGroup( const QString &outputFilePath,
                               const QString &outputDriver,
@@ -91,6 +94,10 @@ class QgsMdalProvider : public QgsMeshDataProvider
                               QgsMeshDatasetSourceInterface *source,
                               int datasetGroupIndex
                             ) override;
+
+    bool saveMeshFrame( const QgsMesh &mesh ) override;
+
+    void close() override;
 
     /**
      * Returns file filters for meshes and datasets to be used in Open File Dialogs
@@ -124,6 +131,7 @@ class QgsMdalProvider : public QgsMeshDataProvider
     QStringList mExtraDatasetUris;
     QgsCoordinateReferenceSystem mCrs;
     QStringList mSubLayersUris;
+    QString mDriverName;
 
     /**
      * Closes and reloads dataset
@@ -137,8 +145,16 @@ class QgsMdalProviderMetadata: public QgsProviderMetadata
     QgsMdalProviderMetadata();
     QString filters( FilterType type ) override;
     QList<QgsMeshDriverMetadata> meshDriversMetadata() override;
-    QgsMdalProvider *createProvider( const QString &uri, const QgsDataProvider::ProviderOptions &options ) override;
-    QList<QgsDataItemProvider *> dataItemProviders() const override;
+    QgsMdalProvider *createProvider( const QString &uri, const QgsDataProvider::ProviderOptions &options, QgsDataProvider::ReadFlags flags = QgsDataProvider::ReadFlags() ) override;
+    bool createMeshData( const QgsMesh &mesh,
+                         const QString uri,
+                         const QString &driverName,
+                         const QgsCoordinateReferenceSystem &crs ) const override;
+    QVariantMap decodeUri( const QString &uri ) const override;
+    QString encodeUri( const QVariantMap &parts ) const override;
+    ProviderCapabilities providerCapabilities() const override;
+    QgsProviderMetadata::ProviderMetadataCapabilities capabilities() const override;
+    QList< QgsProviderSublayerDetails > querySublayers( const QString &uri, Qgis::SublayerQueryFlags flags = Qgis::SublayerQueryFlags(), QgsFeedback *feedback = nullptr ) const override;
 };
 
 #endif //QGSMDALPROVIDER_H

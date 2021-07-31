@@ -26,6 +26,7 @@
 
 #include "qgsapplication.h"
 #include "qgsauthmanager.h"
+#include "qgsauthmethodmetadata.h"
 #include "qgsauthconfig.h"
 #include "qgssettings.h"
 
@@ -148,7 +149,7 @@ void TestQgsAuthManager::cleanupTempDir()
   QDir tmpDir = QDir( mTempDir );
   if ( tmpDir.exists() )
   {
-    Q_FOREACH ( const QString &tf, tmpDir.entryList( QDir::NoDotAndDotDot | QDir::Files ) )
+    for ( const QString &tf : tmpDir.entryList( QDir::NoDotAndDotDot | QDir::Files ) )
     {
       QVERIFY2( tmpDir.remove( mTempDir + '/' + tf ), qPrintable( "Could not remove " + mTempDir + '/' + tf ) );
     }
@@ -238,7 +239,7 @@ void TestQgsAuthManager::testAuthConfigs()
   QgsAuthManager *authm = QgsApplication::authManager();
 
   // test storing/loading/updating
-  Q_FOREACH ( QgsAuthMethodConfig config, configs )
+  for ( QgsAuthMethodConfig config : configs )
   {
     QVERIFY( config.isValid() );
 
@@ -273,7 +274,7 @@ void TestQgsAuthManager::testAuthConfigs()
     QVERIFY( config == config2 );
 
     // changed config should update then correctly roundtrip
-    Q_FOREACH ( const QString &key, config2.configMap().keys() )
+    for ( const QString &key : config2.configMap().keys() )
     {
       config2.setConfig( key, config2.configMap().value( key ) + "changed" );
     }
@@ -318,11 +319,26 @@ void TestQgsAuthManager::testAuthConfigs()
 
   // test storing, then retrieving configid -> config map
   QgsAuthMethodConfigsMap idcfgmap;
-  Q_FOREACH ( QgsAuthMethodConfig config, configs )
+  for ( QgsAuthMethodConfig config : configs )
   {
     QVERIFY( authm->storeAuthenticationConfig( config ) );
     idcfgmap.insert( config.id(), config );
   }
+
+  QCOMPARE( authm->availableAuthMethodConfigs().size(), 3 );
+
+  // Password-less export / import
+  QVERIFY( authm->exportAuthenticationConfigsToXml( mTempDir + QStringLiteral( "/configs.xml" ), idcfgmap.keys() ) );
+  QVERIFY( authm->removeAllAuthenticationConfigs() );
+  QVERIFY( authm->importAuthenticationConfigsFromXml( mTempDir + QStringLiteral( "/configs.xml" ) ) );
+
+  QCOMPARE( authm->availableAuthMethodConfigs().size(), 3 );
+
+  // Password-protected export / import
+  QVERIFY( authm->exportAuthenticationConfigsToXml( mTempDir + QStringLiteral( "/configs.xml" ), idcfgmap.keys(), QStringLiteral( "1234" ) ) );
+  QVERIFY( authm->removeAllAuthenticationConfigs() );
+  QVERIFY( authm->importAuthenticationConfigsFromXml( mTempDir + QStringLiteral( "/configs.xml" ), QStringLiteral( "1234" ) ) );
+
   QgsAuthMethodConfigsMap authmap( authm->availableAuthMethodConfigs() );
   QCOMPARE( authmap.size(), 3 );
 
@@ -352,7 +368,7 @@ void TestQgsAuthManager::testAuthMethods()
 
   QgsAuthManager *authm = QgsApplication::authManager();
 
-  Q_FOREACH ( QgsAuthMethodConfig config, configs )
+  for ( QgsAuthMethodConfig config : configs )
   {
     QVERIFY( config.isValid() );
     QVERIFY( authm->storeAuthenticationConfig( config ) );
@@ -361,11 +377,10 @@ void TestQgsAuthManager::testAuthMethods()
     QString configid( config.id() );
 
     // correct method, loaded from core auth method plugin registry, should be returned
-    QgsAuthMethod *authmethod = authm->configAuthMethod( configid );
-    QVERIFY( authmethod );
-    QCOMPARE( authmethod->key(), config.method() );
-
-
+    const QString key = authm->configAuthMethodKey( configid );
+    const QgsAuthMethodMetadata *meta = authm->authMethodMetadata( key );
+    QVERIFY( meta );
+    QCOMPARE( meta->key(), config.method() );
   }
   QVERIFY( authm->removeAllAuthenticationConfigs() );
 }
@@ -426,6 +441,12 @@ void TestQgsAuthManager::doSync()
 void TestQgsAuthManager::testPasswordHelper()
 {
 
+  if ( QgsTest::isCIRun() )
+  {
+    {
+      QSKIP( "QtKeyChain not working on CI (requires dbus)" );
+    }
+  }
   QgsAuthManager *authm = QgsApplication::authManager();
   authm->clearMasterPassword();
 

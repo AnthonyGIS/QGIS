@@ -21,6 +21,7 @@
 #include "qgsoapifapirequest.h"
 #include "qgsoapifcollection.h"
 #include "qgsoapifitemsrequest.h"
+#include "qgswfsconstants.h"
 #include "qgswfsutils.h" // for isCompatibleType()
 
 #include <algorithm>
@@ -29,8 +30,8 @@ const QString QgsOapifProvider::OAPIF_PROVIDER_KEY = QStringLiteral( "OAPIF" );
 const QString QgsOapifProvider::OAPIF_PROVIDER_DESCRIPTION = QStringLiteral( "OGC API - Features data provider" );
 
 
-QgsOapifProvider::QgsOapifProvider( const QString &uri, const ProviderOptions &options )
-  : QgsVectorDataProvider( uri, options ),
+QgsOapifProvider::QgsOapifProvider( const QString &uri, const ProviderOptions &options, QgsDataProvider::ReadFlags flags )
+  : QgsVectorDataProvider( uri, options, flags ),
     mShared( new QgsOapifSharedData( uri ) )
 {
 
@@ -71,13 +72,20 @@ bool QgsOapifProvider::init()
   const bool synchronous = true;
   const bool forceRefresh = false;
 
+  const QString url = QgsDataSourceUri( mShared->mURI.uri() ).param( QgsWFSConstants::URI_PARAM_URL );
+  int pos = url.indexOf( '?' );
+  if ( pos >= 0 )
+  {
+    mShared->mExtraQueryParameters = url.mid( pos + 1 );
+  }
+
   QgsOapifLandingPageRequest landingPageRequest( mShared->mURI.uri() );
   if ( !landingPageRequest.request( synchronous, forceRefresh ) )
     return false;
   if ( landingPageRequest.errorCode() != QgsBaseNetworkRequest::NoError )
     return false;
 
-  QgsOapifApiRequest apiRequest( mShared->mURI.uri(), landingPageRequest.apiUrl() );
+  QgsOapifApiRequest apiRequest( mShared->mURI.uri(), mShared->appendExtraQueryParameters( landingPageRequest.apiUrl() ) );
   if ( !apiRequest.request( synchronous, forceRefresh ) )
     return false;
   if ( apiRequest.errorCode() != QgsBaseNetworkRequest::NoError )
@@ -127,7 +135,7 @@ bool QgsOapifProvider::init()
 
   mShared->mCollectionUrl =
     landingPageRequest.collectionsUrl() + QStringLiteral( "/" ) + mShared->mURI.typeName();
-  QgsOapifCollectionRequest collectionRequest( mShared->mURI.uri(), mShared->mCollectionUrl );
+  QgsOapifCollectionRequest collectionRequest( mShared->mURI.uri(), mShared->appendExtraQueryParameters( mShared->mCollectionUrl ) );
   if ( !collectionRequest.request( synchronous, forceRefresh ) )
     return false;
   if ( collectionRequest.errorCode() != QgsBaseNetworkRequest::NoError )
@@ -141,7 +149,7 @@ bool QgsOapifProvider::init()
 
   mShared->mItemsUrl = mShared->mCollectionUrl +  QStringLiteral( "/items" );
 
-  QgsOapifItemsRequest itemsRequest( mShared->mURI.uri(), mShared->mItemsUrl + QStringLiteral( "?limit=10" ) );
+  QgsOapifItemsRequest itemsRequest( mShared->mURI.uri(), mShared->appendExtraQueryParameters( mShared->mItemsUrl + QStringLiteral( "?limit=10" ) ) );
   if ( mShared->mCapabilityExtent.isNull() )
   {
     itemsRequest.setComputeBbox();
@@ -191,7 +199,7 @@ QgsWkbTypes::Type QgsOapifProvider::wkbType() const
   return mShared->mWKBType;
 }
 
-long QgsOapifProvider::featureCount() const
+long long QgsOapifProvider::featureCount() const
 {
   if ( mUpdateFeatureCountAtNextFeatureCountRequest )
   {
@@ -201,7 +209,7 @@ long QgsOapifProvider::featureCount() const
     QgsFeatureRequest request;
     request.setNoAttributes();
     auto iter = getFeatures( request );
-    int count = 0;
+    long long count = 0;
     bool countExact = true;
     while ( iter.nextFeature( f ) )
     {
@@ -246,7 +254,7 @@ bool QgsOapifProvider::isValid() const
 
 QgsVectorDataProvider::Capabilities QgsOapifProvider::capabilities() const
 {
-  return QgsVectorDataProvider::SelectAtId | QgsVectorDataProvider::ReadLayerMetadata;
+  return QgsVectorDataProvider::SelectAtId | QgsVectorDataProvider::ReadLayerMetadata | QgsVectorDataProvider::Capability::ReloadData;
 }
 
 bool QgsOapifProvider::empty() const
@@ -353,15 +361,25 @@ QgsOapifSharedData::~QgsOapifSharedData()
   cleanup();
 }
 
+QString QgsOapifSharedData::appendExtraQueryParameters( const QString &url ) const
+{
+  if ( mExtraQueryParameters.isEmpty() || url.indexOf( mExtraQueryParameters ) > 0 )
+    return url;
+  int nPos = url.indexOf( '?' );
+  if ( nPos < 0 )
+    return url + '?' + mExtraQueryParameters;
+  return url + '&' + mExtraQueryParameters;
+}
+
 bool QgsOapifSharedData::isRestrictedToRequestBBOX() const
 {
   return mURI.isRestrictedToRequestBBOX();
 }
 
 
-std::unique_ptr<QgsFeatureDownloaderImpl> QgsOapifSharedData::newFeatureDownloaderImpl( QgsFeatureDownloader *downloader )
+std::unique_ptr<QgsFeatureDownloaderImpl> QgsOapifSharedData::newFeatureDownloaderImpl( QgsFeatureDownloader *downloader, bool requestMadeFromMainThread )
 {
-  return std::unique_ptr<QgsFeatureDownloaderImpl>( new QgsOapifFeatureDownloaderImpl( this, downloader ) );
+  return std::unique_ptr<QgsFeatureDownloaderImpl>( new QgsOapifFeatureDownloaderImpl( this, downloader, requestMadeFromMainThread ) );
 }
 
 
@@ -531,9 +549,9 @@ QString QgsOapifSharedData::translateNodeToServer(
         if ( i == 0 )
           untranslatedPart = QStringLiteral( "(" );
         else
-          untranslatedPart += QStringLiteral( " AND (" );
+          untranslatedPart += QLatin1String( " AND (" );
         untranslatedPart += topAndNodes[i]->dump();
-        untranslatedPart += QStringLiteral( ")" );
+        untranslatedPart += QLatin1Char( ')' );
       }
     }
   }
@@ -577,10 +595,11 @@ void QgsOapifSharedData::pushError( const QString &errorMsg )
 
 // ---------------------------------
 
-QgsOapifFeatureDownloaderImpl::QgsOapifFeatureDownloaderImpl( QgsOapifSharedData *shared, QgsFeatureDownloader *downloader ):
+QgsOapifFeatureDownloaderImpl::QgsOapifFeatureDownloaderImpl( QgsOapifSharedData *shared, QgsFeatureDownloader *downloader, bool requestMadeFromMainThread ):
   QgsFeatureDownloaderImpl( shared, downloader ),
   mShared( shared )
 {
+  QGS_FEATURE_DOWNLOADER_IMPL_CONNECT_SIGNALS( requestMadeFromMainThread );
 }
 
 QgsOapifFeatureDownloaderImpl::~QgsOapifFeatureDownloaderImpl()
@@ -593,14 +612,14 @@ void QgsOapifFeatureDownloaderImpl::createProgressDialog()
   CONNECT_PROGRESS_DIALOG( QgsOapifFeatureDownloaderImpl );
 }
 
-void QgsOapifFeatureDownloaderImpl::run( bool serializeFeatures, int maxFeatures )
+void QgsOapifFeatureDownloaderImpl::run( bool serializeFeatures, long long maxFeatures )
 {
   QEventLoop loop;
   connect( this, &QgsOapifFeatureDownloaderImpl::doStop, &loop, &QEventLoop::quit );
 
   const bool useProgressDialog = ( !mShared->mHideProgressDialog && maxFeatures != 1 );
 
-  qint64 maxTotalFeatures = 0;
+  long long maxTotalFeatures = 0;
   if ( maxFeatures > 0 && mShared->mMaxFeatures > 0 )
   {
     maxTotalFeatures = std::min( maxFeatures, mShared->mMaxFeatures );
@@ -614,13 +633,13 @@ void QgsOapifFeatureDownloaderImpl::run( bool serializeFeatures, int maxFeatures
     maxTotalFeatures = mShared->mMaxFeatures;
   }
 
-  qint64 totalDownloadedFeatureCount = 0;
+  long long totalDownloadedFeatureCount = 0;
   bool interrupted = false;
   bool success = true;
   QString errorMessage;
   QString url;
 
-  int maxFeaturesThisRequest = maxTotalFeatures;
+  long long maxFeaturesThisRequest = maxTotalFeatures;
   if ( mShared->mPageSize > 0 )
   {
     if ( maxFeaturesThisRequest > 0 )
@@ -673,6 +692,7 @@ void QgsOapifFeatureDownloaderImpl::run( bool serializeFeatures, int maxFeatures
 
   while ( !url.isEmpty() )
   {
+    url = mShared->appendExtraQueryParameters( url );
 
     if ( maxTotalFeatures > 0 && totalDownloadedFeatureCount >= maxTotalFeatures )
     {
@@ -782,9 +802,9 @@ void QgsOapifFeatureDownloaderImpl::run( bool serializeFeatures, int maxFeatures
 
 // ---------------------------------
 
-QgsOapifProvider *QgsOapifProviderMetadata::createProvider( const QString &uri, const QgsDataProvider::ProviderOptions &options )
+QgsOapifProvider *QgsOapifProviderMetadata::createProvider( const QString &uri, const QgsDataProvider::ProviderOptions &options, QgsDataProvider::ReadFlags flags )
 {
-  return new QgsOapifProvider( uri, options );
+  return new QgsOapifProvider( uri, options, flags );
 }
 
 QgsOapifProviderMetadata::QgsOapifProviderMetadata():

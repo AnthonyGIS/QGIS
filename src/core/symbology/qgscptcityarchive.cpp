@@ -15,19 +15,6 @@
  *                                                                         *
  ***************************************************************************/
 
-#include <QApplication>
-#include <QDateTime>
-#include <QDir>
-#include <QFileInfo>
-#include <QMenu>
-#include <QMouseEvent>
-#include <QTreeWidget>
-#include <QTreeWidgetItem>
-#include <QVector>
-#include <QStyle>
-#include <QDomDocument>
-#include <QDomElement>
-
 #include "qgssettings.h"
 #include "qgscptcityarchive.h"
 #include "qgis.h"
@@ -37,6 +24,16 @@
 #include "qgsmimedatautils.h"
 #include "qgsapplication.h"
 #include "qgssymbollayerutils.h"
+
+#include <QApplication>
+#include <QDateTime>
+#include <QDir>
+#include <QFileInfo>
+#include <QVector>
+#include <QStyle>
+#include <QDomDocument>
+#include <QDomElement>
+#include <QRegularExpression>
 
 typedef QMap< QString, QgsCptCityArchive * > ArchiveRegistry;
 typedef QMap< QString, QMap< QString, QString > > CopyingInfoMap;
@@ -138,7 +135,7 @@ QString QgsCptCityArchive::defaultBaseDir()
 
   // use CptCity/baseDir setting if set, default is user dir
   baseDir = settings.value( QStringLiteral( "CptCity/baseDir" ),
-                            QgsApplication::pkgDataPath() + "/resources" ).toString();
+                            QString( QgsApplication::pkgDataPath() + "/resources" ) ).toString();
   // sub-dir defaults to cpt-city
   archiveName = settings.value( QStringLiteral( "CptCity/archiveName" ), DEFAULT_CPTCITY_ARCHIVE ).toString();
 
@@ -240,7 +237,7 @@ QgsStringMap QgsCptCityArchive::copyingInfo( const QString &fileName )
       }
       e = e.nextSiblingElement();
     }
-    copyingMap[ QStringLiteral( "authors" )] = authors.join( QStringLiteral( ", " ) );
+    copyingMap[ QStringLiteral( "authors" )] = authors.join( QLatin1String( ", " ) );
   }
 
   // load license information
@@ -447,7 +444,7 @@ void QgsCptCityArchive::initDefaultArchive()
   QgsSettings settings;
   // use CptCity/baseDir setting if set, default is user dir
   QString baseDir = settings.value( QStringLiteral( "CptCity/baseDir" ),
-                                    QgsApplication::pkgDataPath() + "/resources" ).toString();
+                                    QString( QgsApplication::pkgDataPath() + "/resources" ) ).toString();
   // sub-dir defaults to
   QString defArchiveName = settings.value( QStringLiteral( "CptCity/archiveName" ), DEFAULT_CPTCITY_ARCHIVE ).toString();
 
@@ -463,7 +460,7 @@ void QgsCptCityArchive::initArchives( bool loadAll )
 
   // use CptCity/baseDir setting if set, default is user dir
   baseDir = settings.value( QStringLiteral( "CptCity/baseDir" ),
-                            QgsApplication::pkgDataPath() + "/resources" ).toString();
+                            QString( QgsApplication::pkgDataPath() + "/resources" ) ).toString();
   // sub-dir defaults to
   defArchiveName = settings.value( QStringLiteral( "CptCity/archiveName" ), DEFAULT_CPTCITY_ARCHIVE ).toString();
 
@@ -978,12 +975,12 @@ QMap< QString, QStringList > QgsCptCityDirectoryItem::rampsMap()
     }
     else
     {
-      QRegExp rxVariant( "^(.*[^\\d])(\\d{1,3})$" );
-      int pos = rxVariant.indexIn( schemeName );
-      if ( pos > -1 )
+      const thread_local QRegularExpression rxVariant( "^(.*[^\\d])(\\d{1,3})$" );
+      const QRegularExpressionMatch match = rxVariant.match( schemeName );
+      if ( match.hasMatch() )
       {
-        curName = rxVariant.cap( 1 );
-        curVariant = rxVariant.cap( 2 );
+        curName = match.captured( 1 );
+        curVariant = match.captured( 2 );
       }
     }
 
@@ -1312,7 +1309,7 @@ QgsCptCityBrowserModel::QgsCptCityBrowserModel( QObject *parent,
   , mViewType( viewType )
 {
   Q_ASSERT( mArchive );
-  QgsDebugMsg( "archiveName = " + archive->archiveName() + " viewType=" + static_cast< int >( viewType ) );
+  QgsDebugMsg( QLatin1String( "archiveName = " ) + archive->archiveName() + " viewType=" + QString::number( static_cast< int >( viewType ) ) );
   // keep iconsize for now, but not effectively used
   mIconSize = QSize( 100, 15 );
   addRootItems();
@@ -1338,12 +1335,6 @@ void QgsCptCityBrowserModel::addRootItems()
 
 void QgsCptCityBrowserModel::removeRootItems()
 {
-  // don't remove root items, they belong to the QgsCptCityArchive
-  // Q_FOREACH ( QgsCptCityDataItem* item, mRootItems )
-  // {
-  //   delete item;
-  // }
-
   mRootItems.clear();
 }
 
@@ -1381,7 +1372,7 @@ QVariant QgsCptCityBrowserModel::data( const QModelIndex &index, int role ) cons
   {
     if ( item->type() == QgsCptCityDataItem::ColorRamp &&
          mViewType == List )
-      return item->path() + '\n' + item->info();
+      return QString( item->path() + '\n' + item->info() );
     return item->toolTip();
   }
   else if ( role == Qt::DecorationRole && index.column() == 1 &&

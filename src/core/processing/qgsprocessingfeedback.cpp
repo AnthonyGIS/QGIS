@@ -20,10 +20,10 @@
 #include "qgsprocessingprovider.h"
 #include <ogr_api.h>
 #include <gdal_version.h>
-#if PROJ_VERSION_MAJOR > 4
 #include <proj.h>
-#else
-#include <proj_api.h>
+
+#ifdef HAVE_PDAL
+#include <pdal/pdal.hpp>
 #endif
 
 QgsProcessingFeedback::QgsProcessingFeedback( bool logFeedback )
@@ -36,49 +36,78 @@ void QgsProcessingFeedback::setProgressText( const QString & )
 {
 }
 
+void QgsProcessingFeedback::log( const QString &htmlMessage, const QString &textMessage )
+{
+  constexpr int MESSAGE_COUNT_LIMIT = 10000;
+  // Avoid logging too many messages, which might blow memory.
+  if ( mMessageLoggedCount == MESSAGE_COUNT_LIMIT )
+    return;
+  ++mMessageLoggedCount;
+  if ( mMessageLoggedCount == MESSAGE_COUNT_LIMIT )
+  {
+    mHtmlLog.append( QStringLiteral( "<span style=\"color:red\">%1</span><br/>" ).arg( tr( "Message log truncated" ) ) );
+    mTextLog.append( tr( "Message log truncated" ) + '\n' );
+  }
+  else
+  {
+    mHtmlLog.append( htmlMessage );
+    mTextLog.append( textMessage );
+  }
+}
+
+
 void QgsProcessingFeedback::reportError( const QString &error, bool )
 {
   if ( mLogFeedback )
-    QgsMessageLog::logMessage( error, tr( "Processing" ), Qgis::Critical );
+    QgsMessageLog::logMessage( error, tr( "Processing" ), Qgis::MessageLevel::Critical );
 
-  mHtmlLog.append( QStringLiteral( "<span style=\"color:red\">%1</span><br/>" ).arg( error.toHtmlEscaped() ).replace( '\n', QStringLiteral( "<br>" ) ) );
-  mTextLog.append( error + '\n' );
+  log( QStringLiteral( "<span style=\"color:red\">%1</span><br/>" ).arg( error.toHtmlEscaped() ).replace( '\n', QLatin1String( "<br>" ) ),
+       error + '\n' );
+}
+
+void QgsProcessingFeedback::pushWarning( const QString &warning )
+{
+  if ( mLogFeedback )
+    QgsMessageLog::logMessage( warning, tr( "Processing" ), Qgis::MessageLevel::Warning );
+
+  log( QStringLiteral( "<span style=\"color:#b85a20;\">%1</span><br/>" ).arg( warning.toHtmlEscaped() ).replace( '\n', QLatin1String( "<br>" ) ) + QStringLiteral( "<br/>" ),
+       warning + '\n' );
 }
 
 void QgsProcessingFeedback::pushInfo( const QString &info )
 {
   if ( mLogFeedback )
-    QgsMessageLog::logMessage( info, tr( "Processing" ), Qgis::Info );
+    QgsMessageLog::logMessage( info, tr( "Processing" ), Qgis::MessageLevel::Info );
 
-  mHtmlLog.append( info.toHtmlEscaped().replace( '\n', QStringLiteral( "<br>" ) ) + QStringLiteral( "<br/>" ) );
+  mHtmlLog.append( info.toHtmlEscaped().replace( '\n', QLatin1String( "<br>" ) ) + QStringLiteral( "<br/>" ) );
   mTextLog.append( info + '\n' );
 }
 
 void QgsProcessingFeedback::pushCommandInfo( const QString &info )
 {
   if ( mLogFeedback )
-    QgsMessageLog::logMessage( info, tr( "Processing" ), Qgis::Info );
+    QgsMessageLog::logMessage( info, tr( "Processing" ), Qgis::MessageLevel::Info );
 
-  mHtmlLog.append( QStringLiteral( "<code>%1</code><br/>" ).arg( info.toHtmlEscaped().replace( '\n', QStringLiteral( "<br>" ) ) ) );
-  mTextLog.append( info + '\n' );
+  log( QStringLiteral( "<code>%1</code><br/>" ).arg( info.toHtmlEscaped().replace( '\n', QLatin1String( "<br>" ) ) ),
+       info + '\n' );
 }
 
 void QgsProcessingFeedback::pushDebugInfo( const QString &info )
 {
   if ( mLogFeedback )
-    QgsMessageLog::logMessage( info, tr( "Processing" ), Qgis::Info );
+    QgsMessageLog::logMessage( info, tr( "Processing" ), Qgis::MessageLevel::Info );
 
-  mHtmlLog.append( QStringLiteral( "<span style=\"color:#777\">%1</span><br/>" ).arg( info.toHtmlEscaped().replace( '\n', QStringLiteral( "<br>" ) ) ) );
-  mTextLog.append( info + '\n' );
+  log( QStringLiteral( "<span style=\"color:#777\">%1</span><br/>" ).arg( info.toHtmlEscaped().replace( '\n', QLatin1String( "<br>" ) ) ),
+       info + '\n' );
 }
 
 void QgsProcessingFeedback::pushConsoleInfo( const QString &info )
 {
   if ( mLogFeedback )
-    QgsMessageLog::logMessage( info, tr( "Processing" ), Qgis::Info );
+    QgsMessageLog::logMessage( info, tr( "Processing" ), Qgis::MessageLevel::Info );
 
-  mHtmlLog.append( QStringLiteral( "<code style=\"color:#777\">%1</code><br/>" ).arg( info.toHtmlEscaped().replace( '\n', QStringLiteral( "<br>" ) ) ) );
-  mTextLog.append( info + '\n' );
+  log( QStringLiteral( "<code style=\"color:#777\">%1</code><br/>" ).arg( info.toHtmlEscaped().replace( '\n', QLatin1String( "<br>" ) ) ),
+       info + '\n' );
 }
 
 void QgsProcessingFeedback::pushVersionInfo( const QgsProcessingProvider *provider )
@@ -89,15 +118,21 @@ void QgsProcessingFeedback::pushVersionInfo( const QgsProcessingProvider *provid
     pushDebugInfo( tr( "QGIS code revision: %1" ).arg( Qgis::devVersion() ) );
   }
   pushDebugInfo( tr( "Qt version: %1" ).arg( qVersion() ) );
+  pushDebugInfo( tr( "Python version: %1" ).arg( PYTHON_VERSION ) );
   pushDebugInfo( tr( "GDAL version: %1" ).arg( GDALVersionInfo( "RELEASE_NAME" ) ) );
   pushDebugInfo( tr( "GEOS version: %1" ).arg( GEOSversion() ) );
 
-#if PROJ_VERSION_MAJOR > 4
   PJ_INFO info = proj_info();
   pushDebugInfo( tr( "PROJ version: %1" ).arg( info.release ) );
+
+#ifdef HAVE_PDAL
+#if PDAL_VERSION_MAJOR_INT > 1 || (PDAL_VERSION_MAJOR_INT == 1 && PDAL_VERSION_MINOR_INT >= 7)
+  pushDebugInfo( tr( "PDAL version: %1" ).arg( QString::fromStdString( pdal::Config::fullVersionString() ) ) );
 #else
-  pushDebugInfo( tr( "PROJ version: %1" ).arg( PJ_VERSION ) );
+  pushDebugInfo( tr( "PDAL version: %1" ).arg( QString::fromStdString( pdal::GetFullVersionString() ) ) );
 #endif
+#endif
+
   if ( provider && !provider->versionInfo().isEmpty() )
   {
     pushDebugInfo( tr( "%1 version: %2" ).arg( provider->name(), provider->versionInfo() ) );
@@ -137,6 +172,11 @@ void QgsProcessingMultiStepFeedback::setProgressText( const QString &text )
 void QgsProcessingMultiStepFeedback::reportError( const QString &error, bool fatalError )
 {
   mFeedback->reportError( error, fatalError );
+}
+
+void QgsProcessingMultiStepFeedback::pushWarning( const QString &warning )
+{
+  mFeedback->pushWarning( warning );
 }
 
 void QgsProcessingMultiStepFeedback::pushInfo( const QString &info )

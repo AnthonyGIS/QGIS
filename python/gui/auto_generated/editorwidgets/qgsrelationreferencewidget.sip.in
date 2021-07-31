@@ -94,7 +94,7 @@ determines if the form of the related feature will be shown
 
     bool readOnlySelector();
 %Docstring
-determines if the foreign key is shown in a combox box or a read-only line edit
+determines if the drop-down is enabled
 %End
     void setReadOnlySelector( bool readOnly );
 
@@ -136,6 +136,16 @@ Set if filters are chained.
 Chained filters restrict the option of subsequent filters based on the selection of a previous filter.
 
 :param chainFilters: If chaining should be enabled
+%End
+
+    QString filterExpression() const;
+%Docstring
+Returns the currently set filter expression.
+%End
+    void setFilterExpression( const QString &filterExpression );
+%Docstring
+If not empty, will be used as filter expression.
+Only if this evaluates to ``True``, the value will be shown.
 %End
 
     QgsFeature referencedFeature() const;

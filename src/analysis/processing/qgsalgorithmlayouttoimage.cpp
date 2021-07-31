@@ -17,6 +17,7 @@
 
 #include "qgsalgorithmlayouttoimage.h"
 #include "qgslayout.h"
+#include "qgslayoutitemmap.h"
 #include "qgsprintlayout.h"
 #include "qgsprocessingoutputs.h"
 #include "qgslayoutexporter.h"
@@ -63,19 +64,23 @@ void QgsLayoutToImageAlgorithm::initAlgorithm( const QVariantMap & )
 {
   addParameter( new QgsProcessingParameterLayout( QStringLiteral( "LAYOUT" ), QObject::tr( "Print layout" ) ) );
 
-  std::unique_ptr< QgsProcessingParameterNumber > dpiParam = qgis::make_unique< QgsProcessingParameterNumber >( QStringLiteral( "DPI" ), QObject::tr( "DPI (leave blank for default layout DPI)" ), QgsProcessingParameterNumber::Double, QVariant(), true, 0 );
+  std::unique_ptr< QgsProcessingParameterMultipleLayers > layersParam = std::make_unique< QgsProcessingParameterMultipleLayers>( QStringLiteral( "LAYERS" ), QObject::tr( "Map layers to assign to unlocked map item(s)" ), QgsProcessing::TypeMapLayer, QVariant(), true );
+  layersParam->setFlags( layersParam->flags() | QgsProcessingParameterDefinition::FlagAdvanced );
+  addParameter( layersParam.release() );
+
+  std::unique_ptr< QgsProcessingParameterNumber > dpiParam = std::make_unique< QgsProcessingParameterNumber >( QStringLiteral( "DPI" ), QObject::tr( "DPI (leave blank for default layout DPI)" ), QgsProcessingParameterNumber::Double, QVariant(), true, 0 );
   dpiParam->setFlags( dpiParam->flags() | QgsProcessingParameterDefinition::FlagAdvanced );
   addParameter( dpiParam.release() );
 
-  std::unique_ptr< QgsProcessingParameterBoolean > appendGeorefParam = qgis::make_unique< QgsProcessingParameterBoolean >( QStringLiteral( "GEOREFERENCE" ), QObject::tr( "Generate world file" ), true );
+  std::unique_ptr< QgsProcessingParameterBoolean > appendGeorefParam = std::make_unique< QgsProcessingParameterBoolean >( QStringLiteral( "GEOREFERENCE" ), QObject::tr( "Generate world file" ), true );
   appendGeorefParam->setFlags( appendGeorefParam->flags() | QgsProcessingParameterDefinition::FlagAdvanced );
   addParameter( appendGeorefParam.release() );
 
-  std::unique_ptr< QgsProcessingParameterBoolean > exportRDFParam = qgis::make_unique< QgsProcessingParameterBoolean >( QStringLiteral( "INCLUDE_METADATA" ), QObject::tr( "Export RDF metadata (title, author, etc.)" ), true );
+  std::unique_ptr< QgsProcessingParameterBoolean > exportRDFParam = std::make_unique< QgsProcessingParameterBoolean >( QStringLiteral( "INCLUDE_METADATA" ), QObject::tr( "Export RDF metadata (title, author, etc.)" ), true );
   exportRDFParam->setFlags( exportRDFParam->flags() | QgsProcessingParameterDefinition::FlagAdvanced );
   addParameter( exportRDFParam.release() );
 
-  std::unique_ptr< QgsProcessingParameterBoolean > antialias = qgis::make_unique< QgsProcessingParameterBoolean >( QStringLiteral( "ANTIALIAS" ), QObject::tr( "Enable antialiasing" ), true );
+  std::unique_ptr< QgsProcessingParameterBoolean > antialias = std::make_unique< QgsProcessingParameterBoolean >( QStringLiteral( "ANTIALIAS" ), QObject::tr( "Enable antialiasing" ), true );
   antialias->setFlags( antialias->flags() | QgsProcessingParameterDefinition::FlagAdvanced );
   addParameter( antialias.release() );
 
@@ -87,7 +92,7 @@ void QgsLayoutToImageAlgorithm::initAlgorithm( const QVariantMap & )
       continue;
 
     QString longName = format.toUpper() + QObject::tr( " format" );
-    QString glob = "*." + format;
+    QString glob = QStringLiteral( "*." ) + format;
 
     if ( format == "png" && !imageFilters.empty() )
       imageFilters.insert( 0, QStringLiteral( "%1 (%2 %3)" ).arg( longName, glob.toLower(), glob.toUpper() ) );
@@ -95,7 +100,7 @@ void QgsLayoutToImageAlgorithm::initAlgorithm( const QVariantMap & )
       imageFilters.append( QStringLiteral( "%1 (%2 %3)" ).arg( longName, glob.toLower(), glob.toUpper() ) );
   }
 
-  addParameter( new QgsProcessingParameterFileDestination( QStringLiteral( "OUTPUT" ), QObject::tr( "Image file" ), imageFilters.join( QStringLiteral( ";;" ) ) ) );
+  addParameter( new QgsProcessingParameterFileDestination( QStringLiteral( "OUTPUT" ), QObject::tr( "Image file" ), imageFilters.join( QLatin1String( ";;" ) ) ) );
 }
 
 QgsProcessingAlgorithm::Flags QgsLayoutToImageAlgorithm::flags() const
@@ -111,13 +116,30 @@ QgsLayoutToImageAlgorithm *QgsLayoutToImageAlgorithm::createInstance() const
 QVariantMap QgsLayoutToImageAlgorithm::processAlgorithm( const QVariantMap &parameters, QgsProcessingContext &context, QgsProcessingFeedback *feedback )
 {
   // this needs to be done in main thread, layouts are not thread safe
-  QgsPrintLayout *layout = parameterAsLayout( parameters, QStringLiteral( "LAYOUT" ), context );
-  if ( !layout )
+  QgsPrintLayout *l = parameterAsLayout( parameters, QStringLiteral( "LAYOUT" ), context );
+  if ( !l )
     throw QgsProcessingException( QObject::tr( "Cannot find layout with name \"%1\"" ).arg( parameters.value( QStringLiteral( "LAYOUT" ) ).toString() ) );
+  std::unique_ptr< QgsPrintLayout > layout( l->clone() );
+
+  const QList< QgsMapLayer * > layers = parameterAsLayerList( parameters, QStringLiteral( "LAYERS" ), context );
+  if ( layers.size() > 0 )
+  {
+    const QList<QGraphicsItem *> items = layout->items();
+    for ( QGraphicsItem *graphicsItem : items )
+    {
+      QgsLayoutItem *item = dynamic_cast<QgsLayoutItem *>( graphicsItem );
+      QgsLayoutItemMap *map = dynamic_cast<QgsLayoutItemMap *>( item );
+      if ( map && !map->followVisibilityPreset() && !map->keepLayerSet() )
+      {
+        map->setKeepLayerSet( true );
+        map->setLayers( layers );
+      }
+    }
+  }
 
   const QString dest = parameterAsFileOutput( parameters, QStringLiteral( "OUTPUT" ), context );
 
-  QgsLayoutExporter exporter( layout );
+  QgsLayoutExporter exporter( layout.get() );
   QgsLayoutExporter::ImageExportSettings settings;
 
   if ( parameters.value( QStringLiteral( "DPI" ) ).isValid() )

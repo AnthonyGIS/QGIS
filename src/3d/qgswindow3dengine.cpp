@@ -18,15 +18,24 @@
 #include <Qt3DRender/QRenderCapture>
 #include <Qt3DExtras/Qt3DWindow>
 #include <Qt3DExtras/QForwardRenderer>
+#include <Qt3DRender/QRenderSettings>
 
+#include "qgspreviewquad.h"
 
-QgsWindow3DEngine::QgsWindow3DEngine()
+QgsWindow3DEngine::QgsWindow3DEngine( QObject *parent )
+  : QgsAbstract3DEngine( parent )
 {
   mWindow3D = new Qt3DExtras::Qt3DWindow;
 
-  mCapture = new Qt3DRender::QRenderCapture;
-  mWindow3D->activeFrameGraph()->setParent( mCapture );
-  mWindow3D->setActiveFrameGraph( mCapture );
+  mRoot = new Qt3DCore::QEntity;
+  mWindow3D->setRootEntity( mRoot );
+
+  mFrameGraph = new QgsShadowRenderingFrameGraph( mWindow3D, QSize( 1024, 768 ), mWindow3D->camera(), mRoot );
+  mFrameGraph->setRenderCaptureEnabled( false );
+  mWindow3D->setActiveFrameGraph( mFrameGraph->frameGraphRoot() );
+
+  // force switching to no shadow rendering
+  setShadowRenderingEnabled( false );
 }
 
 QWindow *QgsWindow3DEngine::window()
@@ -34,30 +43,29 @@ QWindow *QgsWindow3DEngine::window()
   return mWindow3D;
 }
 
-void QgsWindow3DEngine::requestCaptureImage()
+void QgsWindow3DEngine::setShadowRenderingEnabled( bool enabled )
 {
-  Qt3DRender::QRenderCaptureReply *captureReply;
-  captureReply = mCapture->requestCapture();
-  connect( captureReply, &Qt3DRender::QRenderCaptureReply::completed, this, [ = ]
-  {
-    emit imageCaptured( captureReply->image() );
-    captureReply->deleteLater();
-  } );
+  mShadowRenderingEnabled = enabled;
+  mFrameGraph->setShadowRenderingEnabled( mShadowRenderingEnabled );
 }
 
 void QgsWindow3DEngine::setClearColor( const QColor &color )
 {
-  mWindow3D->defaultFrameGraph()->setClearColor( color );
+  mFrameGraph->setClearColor( color );
 }
 
 void QgsWindow3DEngine::setFrustumCullingEnabled( bool enabled )
 {
-  mWindow3D->defaultFrameGraph()->setFrustumCullingEnabled( enabled );
+  // Not sure if this works properly
+  mFrameGraph->setFrustumCullingEnabled( enabled );
 }
 
 void QgsWindow3DEngine::setRootEntity( Qt3DCore::QEntity *root )
 {
-  mWindow3D->setRootEntity( root );
+  mSceneRoot = root;
+  mSceneRoot->setParent( mRoot );
+  mSceneRoot->addComponent( mFrameGraph->forwardRenderLayer() );
+  mSceneRoot->addComponent( mFrameGraph->castShadowsLayer() );
 }
 
 Qt3DRender::QRenderSettings *QgsWindow3DEngine::renderSettings()
@@ -78,4 +86,14 @@ QSize QgsWindow3DEngine::size() const
 QSurface *QgsWindow3DEngine::surface() const
 {
   return mWindow3D;
+}
+
+void QgsWindow3DEngine::setSize( QSize s )
+{
+  mSize = s;
+
+  mWindow3D->setWidth( mSize.width() );
+  mWindow3D->setHeight( mSize.height() );
+  mFrameGraph->setSize( mSize );
+  camera()->setAspectRatio( float( mSize.width() ) / float( mSize.height() ) );
 }

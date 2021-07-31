@@ -19,8 +19,11 @@
 #include <QWidget>
 #include <QGridLayout>
 #include <QToolButton>
+#include <QLabel>
+#include <QTableView>
+#include <QStandardItemModel>
 
-#include "qwt_compass.h"
+class QwtCompass;
 
 #include "qgs3dmapcanvas.h"
 #include "qgscameracontroller.h"
@@ -31,14 +34,12 @@ class Qgs3DNavigationWidget : public QWidget
   public:
     Qgs3DNavigationWidget( Qgs3DMapCanvas *parent = nullptr );
 
+  public slots:
+
     /**
      * Update the state of navigation widget from camera's state
      */
     void updateFromCamera();
-
-  signals:
-
-  public slots:
 
   private:
     Qgs3DMapCanvas *mParent3DMapCanvas = nullptr;
@@ -51,6 +52,8 @@ class Qgs3DNavigationWidget : public QWidget
     QToolButton *mMoveDownButton = nullptr;
     QToolButton *mMoveLeftButton = nullptr;
     QwtCompass *mCompas = nullptr;
+    QTableView *mCameraInfo = nullptr;
+    QStandardItemModel *mCameraInfoItemModel = nullptr;
 };
 
 #endif // QGS3DNAVIGATIONWIDGET_H

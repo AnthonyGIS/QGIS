@@ -12,7 +12,7 @@
 
 class QgsNewHttpConnection : QDialog
 {
-%Docstring
+%Docstring(signature="appended")
 Dialog to allow the user to configure and save connection
 information for an HTTP Server for WMS, etc.
 %End
@@ -101,6 +101,7 @@ Returns the "test connection" button.
 
 .. versionadded:: 3.0
 %End
+
 
 
 

@@ -165,7 +165,7 @@ bool QgsRasterChecker::runTest( const QString &verifiedKey, QString verifiedUri,
         QString valStr;
         if ( compare( verifiedVal, expectedVal, 0 ) )
         {
-          valStr = QStringLiteral( "%1" ).arg( verifiedVal );
+          valStr = QString::number( verifiedVal );
         }
         else
         {
@@ -211,6 +211,14 @@ void QgsRasterChecker::compare( const QString &paramName, int verifiedVal, int e
 {
   bool isEqual = verifiedVal == expectedVal;
   compareRow( paramName, QString::number( verifiedVal ), QString::number( expectedVal ), report, isEqual, QString::number( verifiedVal - expectedVal ) );
+  if ( !isEqual )
+    ok = false;
+}
+
+void QgsRasterChecker::compare( const QString &paramName, Qgis::DataType verifiedVal, Qgis::DataType expectedVal, QString &report, bool &ok )
+{
+  bool isEqual = verifiedVal == expectedVal;
+  compareRow( paramName, QString::number( static_cast< int>( verifiedVal ) ), QString::number( static_cast< int >( expectedVal ) ), report, isEqual, QString::number( static_cast< int >( verifiedVal ) - static_cast< int>( expectedVal ) ) );
   if ( !isEqual )
     ok = false;
 }

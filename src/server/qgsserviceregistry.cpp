@@ -128,7 +128,7 @@ void QgsServiceRegistry::registerService( QgsService *service )
     return;
   }
 
-  QgsMessageLog::logMessage( QStringLiteral( "Adding service %1 %2" ).arg( name, version ), QStringLiteral( "Server" ), Qgis::Info );
+  QgsMessageLog::logMessage( QStringLiteral( "Adding service %1 %2" ).arg( name, version ), QStringLiteral( "Server" ), Qgis::MessageLevel::Info );
   mServices.insert( key, std::shared_ptr<QgsService>( service ) );
 
   // Check the default version
@@ -228,11 +228,11 @@ QgsServerApi *QgsServiceRegistry::apiForRequest( const QgsServerRequest &request
 {
   for ( const auto &api : mApis )
   {
-    QgsMessageLog::logMessage( QStringLiteral( "Trying URL path: %1 for %2" ).arg( request.url().path(), api->rootPath() ), QStringLiteral( "Server" ), Qgis::Info );
+    QgsMessageLog::logMessage( QStringLiteral( "Trying URL path: '%1' for '%2'" ).arg( request.url().path(), api->rootPath() ), QStringLiteral( "Server" ), Qgis::MessageLevel::Info );
     if ( api->accept( request.url() ) )
     {
       Q_ASSERT( !api->name().isEmpty() );
-      QgsMessageLog::logMessage( QStringLiteral( "API %1 accepts the URL path %2 " ).arg( api->name(), request.url().path() ), QStringLiteral( "Server" ), Qgis::Info );
+      QgsMessageLog::logMessage( QStringLiteral( "API %1 accepts the URL path '%2' " ).arg( api->name(), request.url().path() ), QStringLiteral( "Server" ), Qgis::MessageLevel::Info );
       return api.get();
     }
   }
@@ -244,7 +244,7 @@ QgsServerApi *QgsServiceRegistry::getApi( const QString &name, const QString &ve
   QgsServerApi *api = nullptr;
   QString key;
 
-  // Check that we have an API of that name
+  // Check that we have an API with that name
   VersionTable::const_iterator v = mApiVersions.constFind( name );
   if ( v != mApiVersions.constEnd() )
   {
@@ -360,7 +360,7 @@ bool QgsServiceRegistry::registerApi( QgsServerApi *api )
     return false;
   }
 
-  QgsMessageLog::logMessage( QStringLiteral( "Adding API %1 %2" ).arg( name, version ) );
+  QgsMessageLog::logMessage( QStringLiteral( "Adding API %1 %2" ).arg( name, version ), QString(), Qgis::MessageLevel::Info );
   mApis.insert( key, std::shared_ptr<QgsServerApi>( api ) );
 
   // Check the default version

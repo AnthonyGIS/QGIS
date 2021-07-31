@@ -22,12 +22,14 @@
 #include <qgspointxy.h>
 
 class QgsRectangle;
+struct QgsChunkNodeId;
 
 #define SIP_NO_FILE
 
 /**
  * \ingroup 3d
- * The class encapsulates tiling scheme (just like with WMTS / TMS / XYZ layers).
+ * \brief The class encapsulates tiling scheme (just like with WMTS / TMS / XYZ layers).
+ *
  * The origin (tile [0,0]) is in bottom-left corner.
  * \note Not available in Python bindings
  * \since QGIS 3.0
@@ -48,6 +50,9 @@ class _3D_EXPORT QgsTilingScheme
 
     //! Returns map coordinates of the extent of a tile
     QgsRectangle tileToExtent( int x, int y, int z ) const;
+
+    //! Returns map coordinates of the extent of a tile
+    QgsRectangle tileToExtent( const QgsChunkNodeId &nodeId ) const;
 
     //! Returns coordinates of a tile that most tightly fits the whole extent
     void extentToTile( const QgsRectangle &extent, int &x, int &y, int &z ) const;

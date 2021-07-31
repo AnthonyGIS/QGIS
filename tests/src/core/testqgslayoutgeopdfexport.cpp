@@ -213,11 +213,7 @@ void TestQgsLayoutGeoPdfExport::testCollectingFeatures()
   // finalize and test collation
   QgsAbstractGeoPdfExporter::ExportDetails details;
   details.pageSizeMm = QSizeF( 297, 210 );
-#if GDAL_VERSION_NUM < GDAL_COMPUTE_VERSION(3,0,0)
-  bool expected = false;
-#else
   bool expected = true;
-#endif
   QCOMPARE( geoPdfExporter.finalize( QList<QgsAbstractGeoPdfExporter::ComponentLayerDetail>(), outputFile, details ), expected );
   QVERIFY( geoPdfExporter.errorMessage().isEmpty() );
 
@@ -229,7 +225,7 @@ void TestQgsLayoutGeoPdfExport::testCollectingFeatures()
   }
 
   // read in as vector
-  std::unique_ptr< QgsVectorLayer > layer1 = qgis::make_unique< QgsVectorLayer >( QStringLiteral( "%1|layername=%2" ).arg( vectorDetail.sourceVectorPath, vectorDetail.sourceVectorLayer ),
+  std::unique_ptr< QgsVectorLayer > layer1 = std::make_unique< QgsVectorLayer >( QStringLiteral( "%1|layername=%2" ).arg( vectorDetail.sourceVectorPath, vectorDetail.sourceVectorLayer ),
       QStringLiteral( "lines" ), QStringLiteral( "ogr" ) );
   QVERIFY( layer1->isValid() );
   QCOMPARE( layer1->featureCount(), 6L );
@@ -238,7 +234,7 @@ void TestQgsLayoutGeoPdfExport::testCollectingFeatures()
     if ( it.mapLayerId == pointsLayer->id() )
       vectorDetail = it;
   }
-  std::unique_ptr< QgsVectorLayer > layer2 = qgis::make_unique< QgsVectorLayer >( QStringLiteral( "%1|layername=%2" ).arg( vectorDetail.sourceVectorPath, vectorDetail.sourceVectorLayer ),
+  std::unique_ptr< QgsVectorLayer > layer2 = std::make_unique< QgsVectorLayer >( QStringLiteral( "%1|layername=%2" ).arg( vectorDetail.sourceVectorPath, vectorDetail.sourceVectorLayer ),
       QStringLiteral( "lines" ), QStringLiteral( "ogr" ) );
   QVERIFY( layer2->isValid() );
   QCOMPARE( layer2->featureCount(), 32L );
@@ -247,7 +243,7 @@ void TestQgsLayoutGeoPdfExport::testCollectingFeatures()
     if ( it.mapLayerId == polygonLayer->id() )
       vectorDetail = it;
   }
-  std::unique_ptr< QgsVectorLayer > layer3 = qgis::make_unique< QgsVectorLayer >( QStringLiteral( "%1|layername=%2" ).arg( vectorDetail.sourceVectorPath, vectorDetail.sourceVectorLayer ),
+  std::unique_ptr< QgsVectorLayer > layer3 = std::make_unique< QgsVectorLayer >( QStringLiteral( "%1|layername=%2" ).arg( vectorDetail.sourceVectorPath, vectorDetail.sourceVectorLayer ),
       QStringLiteral( "lines" ), QStringLiteral( "ogr" ) );
   QVERIFY( layer3->isValid() );
   QCOMPARE( layer3->featureCount(), 10L );
@@ -300,34 +296,34 @@ void TestQgsLayoutGeoPdfExport::testCollectingFeatures()
   vectorDetail = QgsAbstractGeoPdfExporter::VectorComponentDetail();
   for ( const auto &it : geoPdfExporter2.mVectorComponents )
   {
-    if ( it.mapLayerId == linesLayer->id() && it.group == QStringLiteral( "test preset2" ) )
+    if ( it.mapLayerId == linesLayer->id() && it.group == QLatin1String( "test preset2" ) )
       vectorDetail = it;
   }
 
   // read in as vector
-  layer1 = qgis::make_unique< QgsVectorLayer >( QStringLiteral( "%1|layername=%2" ).arg( vectorDetail.sourceVectorPath, vectorDetail.sourceVectorLayer ),
+  layer1 = std::make_unique< QgsVectorLayer >( QStringLiteral( "%1|layername=%2" ).arg( vectorDetail.sourceVectorPath, vectorDetail.sourceVectorLayer ),
            QStringLiteral( "lines" ), QStringLiteral( "ogr" ) );
   QVERIFY( layer1->isValid() );
   QCOMPARE( layer1->featureCount(), 6L );
   vectorDetail = QgsAbstractGeoPdfExporter::VectorComponentDetail();
   for ( const auto &it : geoPdfExporter2.mVectorComponents )
   {
-    if ( it.mapLayerId == linesLayer->id() && it.group == QStringLiteral( "test preset" ) )
+    if ( it.mapLayerId == linesLayer->id() && it.group == QLatin1String( "test preset" ) )
       vectorDetail = it;
   }
 
   // read in as vector
-  layer1 = qgis::make_unique< QgsVectorLayer >( QStringLiteral( "%1|layername=%2" ).arg( vectorDetail.sourceVectorPath, vectorDetail.sourceVectorLayer ),
+  layer1 = std::make_unique< QgsVectorLayer >( QStringLiteral( "%1|layername=%2" ).arg( vectorDetail.sourceVectorPath, vectorDetail.sourceVectorLayer ),
            QStringLiteral( "lines" ), QStringLiteral( "ogr" ) );
   QVERIFY( layer1->isValid() );
   QCOMPARE( layer1->featureCount(), 6L );
   vectorDetail = QgsAbstractGeoPdfExporter::VectorComponentDetail();
   for ( const auto &it :  geoPdfExporter2.mVectorComponents )
   {
-    if ( it.mapLayerId == pointsLayer->id() && it.group == QStringLiteral( "test preset2" ) )
+    if ( it.mapLayerId == pointsLayer->id() && it.group == QLatin1String( "test preset2" ) )
       vectorDetail = it;
   }
-  layer2 = qgis::make_unique< QgsVectorLayer >( QStringLiteral( "%1|layername=%2" ).arg( vectorDetail.sourceVectorPath, vectorDetail.sourceVectorLayer ),
+  layer2 = std::make_unique< QgsVectorLayer >( QStringLiteral( "%1|layername=%2" ).arg( vectorDetail.sourceVectorPath, vectorDetail.sourceVectorLayer ),
            QStringLiteral( "lines" ), QStringLiteral( "ogr" ) );
   QVERIFY( layer2->isValid() );
   QCOMPARE( layer2->featureCount(), 15L );
@@ -337,17 +333,17 @@ void TestQgsLayoutGeoPdfExport::testCollectingFeatures()
     if ( it.mapLayerId == polygonLayer->id()  && it.group.isEmpty() )
       vectorDetail = it;
   }
-  layer3 = qgis::make_unique< QgsVectorLayer >( QStringLiteral( "%1|layername=%2" ).arg( vectorDetail.sourceVectorPath, vectorDetail.sourceVectorLayer ),
+  layer3 = std::make_unique< QgsVectorLayer >( QStringLiteral( "%1|layername=%2" ).arg( vectorDetail.sourceVectorPath, vectorDetail.sourceVectorLayer ),
            QStringLiteral( "lines" ), QStringLiteral( "ogr" ) );
   QVERIFY( layer3->isValid() );
   QCOMPARE( layer3->featureCount(), 10L );
   vectorDetail = QgsAbstractGeoPdfExporter::VectorComponentDetail();
   for ( const auto &it :  geoPdfExporter2.mVectorComponents )
   {
-    if ( it.mapLayerId == polygonLayer->id() && it.group == QStringLiteral( "test preset3" ) )
+    if ( it.mapLayerId == polygonLayer->id() && it.group == QLatin1String( "test preset3" ) )
       vectorDetail = it;
   }
-  layer3 = qgis::make_unique< QgsVectorLayer >( QStringLiteral( "%1|layername=%2" ).arg( vectorDetail.sourceVectorPath, vectorDetail.sourceVectorLayer ),
+  layer3 = std::make_unique< QgsVectorLayer >( QStringLiteral( "%1|layername=%2" ).arg( vectorDetail.sourceVectorPath, vectorDetail.sourceVectorLayer ),
            QStringLiteral( "lines" ), QStringLiteral( "ogr" ) );
   QVERIFY( layer3->isValid() );
   QCOMPARE( layer3->featureCount(), 10L );

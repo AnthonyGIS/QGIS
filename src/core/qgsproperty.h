@@ -242,11 +242,26 @@ class CORE_EXPORT QgsProperty
     };
 
     /**
-     * Constructor for a QgsAbstractProperty. The property will be set to an InvalidProperty type.
+     * Convert a map of QgsProperty to a map of QVariant
+     * This is useful to save a map of properties
+     * \since QGIS 3.20
+     */
+    static QVariantMap propertyMapToVariantMap( const QMap<QString, QgsProperty> &propertyMap );
+
+    /**
+     * Convert a map of QVariant to a map of QgsProperty
+     * This is useful to restore a map of properties.
+     * The properties are created using QgsProperty::loadVariant
+     * \since QGIS 3.20
+     */
+    static QMap<QString, QgsProperty> variantMapToPropertyMap( const QVariantMap &variantMap );
+
+    /**
+     * Constructor for a QgsProperty. The property will be set to an InvalidProperty type.
      */
     QgsProperty();
 
-    virtual ~QgsProperty();
+    ~QgsProperty();
 
     /**
      * Returns a new ExpressionBasedProperty created from the specified expression.
@@ -351,7 +366,7 @@ class CORE_EXPORT QgsProperty
     /**
      * Returns the set of any fields referenced by the property for a specified
      * expression context.
-     * \note The optional argument ignoreContext has been added in QGIS 3.14. When set to true,
+     * \note The optional argument ignoreContext has been added in QGIS 3.14. When set to TRUE,
      * even fields not set in context's fields() will be reported - this is useful e.g. with vector tiles
      * where the actual available field names may not be known beforehand.
      */

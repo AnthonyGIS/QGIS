@@ -20,13 +20,13 @@
 #define QGSGDALPROVIDER_H
 
 #include "qgscoordinatereferencesystem.h"
-#include "qgsdataitem.h"
 #include "qgsrasterdataprovider.h"
 #include "qgsgdalproviderbase.h"
 #include "qgsrectangle.h"
 #include "qgscolorrampshader.h"
 #include "qgsrasterbandstats.h"
 #include "qgsprovidermetadata.h"
+#include "qgsprovidersublayerdetails.h"
 
 #include <QString>
 #include <QStringList>
@@ -45,7 +45,7 @@ class QgsRasterPyramid;
 
 /**
  * \ingroup core
- * A call back function for showing progress of gdal operations.
+ * \brief A call back function for showing progress of gdal operations.
  */
 int CPL_STDCALL progressCallback( double dfComplete,
                                   const char *pszMessage,
@@ -55,12 +55,12 @@ int CPL_STDCALL progressCallback( double dfComplete,
 class QgsCoordinateTransform;
 
 /**
-
-  \brief Data provider for GDAL layers.
-
-  This provider implements the interface defined in the QgsDataProvider class
-  to provide access to spatial data residing in a GDAL layers.
-
+ *
+ * \brief Data provider for GDAL layers.
+ *
+ * This provider implements the interface defined in the QgsDataProvider class
+ * to provide access to spatial data residing in a GDAL layers.
+ *
 */
 class QgsGdalProvider final: public QgsRasterDataProvider, QgsGdalProviderBase
 {
@@ -156,7 +156,8 @@ class QgsGdalProvider final: public QgsRasterDataProvider, QgsGdalProviderBase
     QList<QgsColorRampShader::ColorRampItem> colorTable( int bandNo )const override;
     QString htmlMetadata() override;
     QStringList subLayers() const override;
-    static QStringList subLayers( GDALDatasetH dataset );
+
+    static QList< QgsProviderSublayerDetails > sublayerDetails( GDALDatasetH dataset, const QString &baseUri );
 
     bool hasStatistics( int bandNo,
                         int stats = QgsRasterBandStats::All,
@@ -189,7 +190,7 @@ class QgsGdalProvider final: public QgsRasterDataProvider, QgsGdalProviderBase
                            QgsRaster::RasterPyramidsFormat format = QgsRaster::PyramidsGTiff,
                            const QStringList &createOptions = QStringList(),
                            QgsRasterBlockFeedback *feedback = nullptr ) override;
-    QList<QgsRasterPyramid> buildPyramidList( QList<int> overviewList = QList<int>() ) override;
+    QList<QgsRasterPyramid> buildPyramidList( const QList<int> &overviewList = QList<int>() ) override;
 
     static QMap<QString, QString> supportedMimes();
 
@@ -235,7 +236,12 @@ class QgsGdalProvider final: public QgsRasterDataProvider, QgsGdalProviderBase
     QAtomicInt *mpRefCounter = nullptr;
 
     // mutex to protect access to mGdalDataset among main and shared provider instances
+#if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)
     QMutex *mpMutex = nullptr;
+#else
+    QRecursiveMutex *mpMutex = nullptr;
+#endif
+
 
     // pointer to a QgsGdalProvider* that is the parent. Note when *mpParent == this, we are the parent.
     QgsGdalProvider **mpParent = nullptr;
@@ -245,11 +251,6 @@ class QgsGdalProvider final: public QgsRasterDataProvider, QgsGdalProviderBase
 
     // update mode
     bool mUpdate;
-
-#if GDAL_VERSION_NUM < GDAL_COMPUTE_VERSION(3,0,0)
-    // initialize CRS from wkt
-    bool crsFromWkt( const char *wkt );
-#endif
 
     //! Do some initialization on the dataset (e.g. handling of south-up datasets)
     void initBaseDataset();
@@ -298,7 +299,7 @@ class QgsGdalProvider final: public QgsRasterDataProvider, QgsGdalProviderBase
     QList<QgsRasterPyramid> mPyramidList;
 
     //! \brief sublayers list saved for subsequent access
-    QStringList mSubLayers;
+    QList< QgsProviderSublayerDetails > mSubLayers;
 
     //! Whether a per-dataset mask band is exposed as an alpha band for the point of view of the rest of the application.
     bool mMaskBandExposedAsAlpha = false;
@@ -365,9 +366,10 @@ class QgsGdalProviderMetadata final: public QgsProviderMetadata
 {
   public:
     QgsGdalProviderMetadata();
-    QVariantMap decodeUri( const QString &uri ) override;
-    QString encodeUri( const QVariantMap &parts ) override;
-    QgsGdalProvider *createProvider( const QString &uri, const QgsDataProvider::ProviderOptions &options ) override;
+    QVariantMap decodeUri( const QString &uri ) const override;
+    QString encodeUri( const QVariantMap &parts ) const override;
+    bool uriIsBlocklisted( const QString &uri ) const override;
+    QgsGdalProvider *createProvider( const QString &uri, const QgsDataProvider::ProviderOptions &options, QgsDataProvider::ReadFlags flags = QgsDataProvider::ReadFlags() ) override;
     QgsGdalProvider *createRasterDataProvider(
       const QString &uri,
       const QString &format,
@@ -379,8 +381,10 @@ class QgsGdalProviderMetadata final: public QgsProviderMetadata
       const QgsCoordinateReferenceSystem &crs,
       const QStringList &createOptions ) override;
     QString filters( FilterType type ) override;
-    QList< QgsDataItemProvider * > dataItemProviders() const override;
     QList<QPair<QString, QString> > pyramidResamplingMethods() override;
+    QgsProviderMetadata::ProviderMetadataCapabilities capabilities() const override;
+    ProviderCapabilities providerCapabilities() const override;
+    QList< QgsProviderSublayerDetails > querySublayers( const QString &uri, Qgis::SublayerQueryFlags flags = Qgis::SublayerQueryFlags(), QgsFeedback *feedback = nullptr ) const override;
 };
 
 ///@endcond

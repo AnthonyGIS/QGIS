@@ -38,7 +38,6 @@ QgsMapTool::~QgsMapTool()
     mCanvas->unsetMapTool( this );
 }
 
-
 QgsPointXY QgsMapTool::toMapCoordinates( QPoint point )
 {
   return mCanvas->getCoordinateTransform()->toMapCoordinates( point );
@@ -46,10 +45,8 @@ QgsPointXY QgsMapTool::toMapCoordinates( QPoint point )
 
 QgsPoint QgsMapTool::toMapCoordinates( const QgsMapLayer *layer, const QgsPoint &point )
 {
-  QgsPointXY result = mCanvas->mapSettings().layerToMapCoordinates( layer, QgsPointXY( point.x(), point.y() ) );
-  return QgsPoint( result );
+  return mCanvas->mapSettings().layerToMapCoordinates( layer, point );
 }
-
 
 QgsPointXY QgsMapTool::toLayerCoordinates( const QgsMapLayer *layer, QPoint point )
 {
@@ -79,6 +76,10 @@ QPoint QgsMapTool::toCanvasCoordinates( const QgsPointXY &point ) const
   return QPoint( std::round( x ), std::round( y ) );
 }
 
+void QgsMapTool::setToolName( const QString &name )
+{
+  mToolName = name;
+}
 
 void QgsMapTool::activate()
 {
@@ -195,6 +196,12 @@ bool QgsMapTool::gestureEvent( QGestureEvent *e )
   return true;
 }
 
+bool QgsMapTool::canvasToolTipEvent( QHelpEvent *e )
+{
+  Q_UNUSED( e )
+  return false;
+}
+
 QgsMapCanvas *QgsMapTool::canvas() const
 {
   return mCanvas;
@@ -228,7 +235,14 @@ double QgsMapTool::searchRadiusMU( QgsMapCanvas *canvas )
   return searchRadiusMU( context );
 }
 
+
 void QgsMapTool::populateContextMenu( QMenu * )
 {
 
+}
+
+
+bool QgsMapTool::populateContextMenuWithEvent( QMenu *, QgsMapMouseEvent * )
+{
+  return false;
 }

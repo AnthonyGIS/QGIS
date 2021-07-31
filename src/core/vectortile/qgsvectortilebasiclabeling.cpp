@@ -127,7 +127,7 @@ QgsVectorTileBasicLabelProvider::QgsVectorTileBasicLabelProvider( QgsVectorTileL
 QMap<QString, QSet<QString> > QgsVectorTileBasicLabelProvider::usedAttributes( const QgsRenderContext &context, int tileZoom ) const
 {
   QMap<QString, QSet<QString> > requiredFields;
-  for ( const QgsVectorTileBasicLabelingStyle &layerStyle : qgis::as_const( mStyles ) )
+  for ( const QgsVectorTileBasicLabelingStyle &layerStyle : std::as_const( mStyles ) )
   {
     if ( !layerStyle.isActive( tileZoom ) )
       continue;
@@ -143,6 +143,19 @@ QMap<QString, QSet<QString> > QgsVectorTileBasicLabelProvider::usedAttributes( c
   return requiredFields;
 }
 
+QSet<QString> QgsVectorTileBasicLabelProvider::requiredLayers( QgsRenderContext &, int tileZoom ) const
+{
+  QSet< QString > res;
+  for ( const QgsVectorTileBasicLabelingStyle &layerStyle : std::as_const( mStyles ) )
+  {
+    if ( layerStyle.isActive( tileZoom ) )
+    {
+      res.insert( layerStyle.layerName() );
+    }
+  }
+  return res;
+}
+
 void QgsVectorTileBasicLabelProvider::setFields( const QMap<QString, QgsFields> &perLayerFields )
 {
   mPerLayerFields = perLayerFields;
@@ -151,7 +164,7 @@ void QgsVectorTileBasicLabelProvider::setFields( const QMap<QString, QgsFields> 
 QList<QgsAbstractLabelProvider *> QgsVectorTileBasicLabelProvider::subProviders()
 {
   QList<QgsAbstractLabelProvider *> lst;
-  for ( QgsVectorLayerLabelProvider *subprovider : qgis::as_const( mSubProviders ) )
+  for ( QgsVectorLayerLabelProvider *subprovider : std::as_const( mSubProviders ) )
   {
     if ( subprovider )  // sub-providers that failed to initialize are set to null
       lst << subprovider;
@@ -161,7 +174,7 @@ QList<QgsAbstractLabelProvider *> QgsVectorTileBasicLabelProvider::subProviders(
 
 bool QgsVectorTileBasicLabelProvider::prepare( QgsRenderContext &context, QSet<QString> &attributeNames )
 {
-  for ( QgsVectorLayerLabelProvider *provider : qgis::as_const( mSubProviders ) )
+  for ( QgsVectorLayerLabelProvider *provider : std::as_const( mSubProviders ) )
     provider->setEngine( mEngine );
 
   // populate sub-providers

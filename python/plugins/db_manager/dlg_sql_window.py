@@ -28,7 +28,7 @@ from hashlib import md5
 
 import os
 
-from qgis.PyQt.QtCore import Qt, pyqtSignal, QDir
+from qgis.PyQt.QtCore import Qt, pyqtSignal, QDir, QCoreApplication
 from qgis.PyQt.QtWidgets import (QDialog,
                                  QWidget,
                                  QAction,
@@ -46,7 +46,7 @@ from qgis.PyQt.QtGui import (QKeySequence,
                              QStandardItemModel,
                              QStandardItem
                              )
-from qgis.PyQt.Qsci import QsciAPIs
+from qgis.PyQt.Qsci import QsciAPIs, QsciScintilla
 
 from qgis.core import (
     QgsProject,
@@ -80,13 +80,14 @@ def check_comments_in_sql(raw_sql_input):
     for line in raw_sql_input.splitlines():
         if not line.strip().startswith('--'):
             if '--' in line:
-                comment_positions = []
                 comments = re.finditer(r'--', line)
-                for match in comments:
-                    comment_positions.append(match.start())
-                quote_positions = []
+                comment_positions = [
+                    match.start()
+                    for match in comments
+                ]
                 identifiers = re.finditer(r'"(?:[^"]|"")*"', line)
                 quotes = re.finditer(r"'(?:[^']|'')*'", line)
+                quote_positions = []
                 for match in identifiers:
                     quote_positions.append((match.start(), match.end()))
                 for match in quotes:
@@ -136,7 +137,7 @@ class DlgSqlWindow(QWidget, Ui_Dialog):
 
         self.editSql.setFocus()
         self.editSql.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
-        self.editSql.setMarginVisible(True)
+        self.editSql.setLineNumbersVisible(True)
         self.initCompleter()
         self.editSql.textChanged.connect(lambda: self.setHasChanged(True))
 
@@ -381,6 +382,7 @@ class DlgSqlWindow(QWidget, Ui_Dialog):
 
     def executeSqlCanceled(self):
         self.btnCancel.setEnabled(False)
+        self.btnCancel.setText(QCoreApplication.translate("DlgSqlWindow", "Canceling…"))
         self.modelAsync.cancel()
 
     def executeSqlCompleted(self):
@@ -389,22 +391,26 @@ class DlgSqlWindow(QWidget, Ui_Dialog):
         with OverrideCursor(Qt.WaitCursor):
             if self.modelAsync.task.status() == QgsTask.Complete:
                 model = self.modelAsync.model
-                quotedCols = []
-
+                self.showError(None)
                 self.viewResult.setModel(model)
                 self.lblResult.setText(self.tr("{0} rows, {1:.3f} seconds").format(model.affectedRows(), model.secs()))
                 cols = self.viewResult.model().columnNames()
-                for col in cols:
-                    quotedCols.append(self.db.connector.quoteId(col))
+                quotedCols = [
+                    self.db.connector.quoteId(col)
+                    for col in cols
+                ]
 
                 self.setColumnCombos(cols, quotedCols)
 
                 self.writeQueryHistory(self.modelAsync.task.sql, model.affectedRows(), model.secs())
                 self.update()
             elif not self.modelAsync.canceled:
-                DlgDbError.showError(self.modelAsync.error, self)
+                self.showError(self.modelAsync.error)
+
                 self.uniqueModel.clear()
                 self.geomCombo.clear()
+
+            self.btnCancel.setText(self.tr("Cancel"))
 
     def executeSql(self):
         sql = self._getExecutableSqlQuery()
@@ -423,24 +429,36 @@ class DlgSqlWindow(QWidget, Ui_Dialog):
             self.updateUiWhileSqlExecution(True)
             QgsApplication.taskManager().addTask(self.modelAsync.task)
         except Exception as e:
-            DlgDbError.showError(e, self)
+            self.showError(e)
             self.uniqueModel.clear()
             self.geomCombo.clear()
             return
 
+    def showError(self, error):
+        '''Shows the error or hides it if error is None'''
+        if error:
+            self.viewResult.setVisible(False)
+            self.errorText.setVisible(True)
+            self.errorText.setText(error.msg)
+            self.errorText.setWrapMode(QsciScintilla.WrapWord)
+        else:
+            self.viewResult.setVisible(True)
+            self.errorText.setVisible(False)
+
     def _getSqlLayer(self, _filter):
         hasUniqueField = self.uniqueColumnCheck.checkState() == Qt.Checked
-        if hasUniqueField:
-            if self.allowMultiColumnPk:
-                checkedCols = []
-                for item in self.uniqueModel.findItems("*", Qt.MatchWildcard):
-                    if item.checkState() == Qt.Checked:
-                        checkedCols.append(item.data())
-                uniqueFieldName = ",".join(checkedCols)
-            elif self.uniqueCombo.currentIndex() >= 0:
-                uniqueFieldName = self.uniqueModel.item(self.uniqueCombo.currentIndex()).data()
-            else:
-                uniqueFieldName = None
+        if hasUniqueField and self.allowMultiColumnPk:
+            uniqueFieldName = ",".join(
+                item.data()
+                for item in self.uniqueModel.findItems("*", Qt.MatchWildcard)
+                if item.checkState() == Qt.Checked
+            )
+        elif (
+            hasUniqueField
+            and not self.allowMultiColumnPk
+            and self.uniqueCombo.currentIndex() >= 0
+        ):
+            uniqueFieldName = self.uniqueModel.item(self.uniqueCombo.currentIndex()).data()
         else:
             uniqueFieldName = None
         hasGeomCol = self.hasGeometryCol.checkState() == Qt.Checked
@@ -665,11 +683,11 @@ class DlgSqlWindow(QWidget, Ui_Dialog):
 
     def uniqueTextChanged(self, text):
         # Whenever there is new text displayed in the combobox, check if it is the correct one and if not, display the correct one.
-        checkedItems = []
-        for item in self.uniqueModel.findItems("*", Qt.MatchWildcard):
-            if item.checkState() == Qt.Checked:
-                checkedItems.append(item.text())
-        label = ", ".join(checkedItems)
+        label = ", ".join(
+            item.text()
+            for item in self.uniqueModel.findItems("*", Qt.MatchWildcard)
+            if item.checkState() == Qt.Checked
+        )
         if text != label:
             self.uniqueCombo.setEditText(label)
 

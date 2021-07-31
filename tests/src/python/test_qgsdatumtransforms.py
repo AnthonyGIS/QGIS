@@ -27,7 +27,6 @@ TEST_DATA_DIR = unitTestDataPath()
 
 class TestPyQgsDatumTransform(unittest.TestCase):
 
-    @unittest.skipIf(QgsProjUtils.projVersionMajor() < 6, 'Not a proj6 build')
     def testOperations(self):
         ops = QgsDatumTransform.operations(QgsCoordinateReferenceSystem(),
                                            QgsCoordinateReferenceSystem())
@@ -237,17 +236,56 @@ class TestPyQgsDatumTransform(unittest.TestCase):
     @unittest.skipIf(QgsProjUtils.projVersionMajor() < 7, 'Not a proj >= 7 build')
     def testNoLasLos(self):
         """
-        Test that operations which rely on an las/los grid shift file (which are unsupported by Proj6) are not returned
+        Test that operations which rely on an NADCON5 grid shift file (which are unsupported by Proj... at time of writing !) are not returned
         """
-        ops = QgsDatumTransform.operations(QgsCoordinateReferenceSystem('EPSG:3035'),
-                                           QgsCoordinateReferenceSystem('EPSG:5514'))
-        self.assertEqual(len(ops), 3)
+        ops = QgsDatumTransform.operations(QgsCoordinateReferenceSystem('EPSG:4138'),
+                                           QgsCoordinateReferenceSystem('EPSG:4269'))
+        self.assertEqual(len(ops), 2)
         self.assertTrue(ops[0].name)
         self.assertTrue(ops[0].proj)
         self.assertTrue(ops[1].name)
         self.assertTrue(ops[1].proj)
-        self.assertTrue(ops[2].name)
-        self.assertTrue(ops[2].proj)
+
+    @unittest.skipIf(QgsProjUtils.projVersionMajor() < 8, 'Not a proj >= 8 build')
+    def testDatumEnsembles(self):
+        """
+        Test datum ensemble details
+        """
+        crs = QgsCoordinateReferenceSystem()
+        self.assertFalse(crs.datumEnsemble().isValid())
+        self.assertEqual(str(crs.datumEnsemble()), '<QgsDatumEnsemble: invalid>')
+        crs = QgsCoordinateReferenceSystem('EPSG:3111')
+        self.assertFalse(crs.datumEnsemble().isValid())
+
+        crs = QgsCoordinateReferenceSystem('EPSG:3857')
+        ensemble = crs.datumEnsemble()
+        self.assertTrue(ensemble.isValid())
+        self.assertEqual(ensemble.name(), 'World Geodetic System 1984 ensemble')
+        self.assertEqual(ensemble.authority(), 'EPSG')
+        self.assertEqual(ensemble.code(), '6326')
+        self.assertEqual(ensemble.scope(), 'Satellite navigation.')
+        self.assertEqual(ensemble.accuracy(), 2.0)
+        self.assertEqual(str(ensemble), '<QgsDatumEnsemble: World Geodetic System 1984 ensemble (EPSG:6326)>')
+        self.assertEqual(ensemble.members()[0].name(), 'World Geodetic System 1984 (Transit)')
+        self.assertEqual(ensemble.members()[0].authority(), 'EPSG')
+        self.assertEqual(ensemble.members()[0].code(), '1166')
+        self.assertEqual(ensemble.members()[0].scope(), 'Geodesy. Navigation and positioning using GPS satellite system.')
+        self.assertEqual(str(ensemble.members()[0]),
+                         '<QgsDatumEnsembleMember: World Geodetic System 1984 (Transit) (EPSG:1166)>')
+        self.assertEqual(ensemble.members()[1].name(), 'World Geodetic System 1984 (G730)')
+        self.assertEqual(ensemble.members()[1].authority(), 'EPSG')
+        self.assertEqual(ensemble.members()[1].code(), '1152')
+        self.assertEqual(ensemble.members()[1].scope(), 'Geodesy. Navigation and positioning using GPS satellite system.')
+
+        crs = QgsCoordinateReferenceSystem('EPSG:4936')
+        ensemble = crs.datumEnsemble()
+        self.assertTrue(ensemble.isValid())
+        self.assertEqual(ensemble.name(), 'European Terrestrial Reference System 1989 ensemble')
+        self.assertEqual(ensemble.authority(), 'EPSG')
+        self.assertEqual(ensemble.code(), '6258')
+        self.assertEqual(ensemble.scope(), 'Spatial referencing.')
+        self.assertEqual(ensemble.accuracy(), 0.1)
+        self.assertTrue(ensemble.members())
 
 
 if __name__ == '__main__':

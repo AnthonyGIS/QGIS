@@ -32,7 +32,7 @@ class QgsMapLayer;
 
 /**
  * \ingroup core
- * Implements a temporal controller based on a frame by frame navigation and animation.
+ * \brief Implements a temporal controller based on a frame by frame navigation and animation.
  *
  * \since QGIS 3.14
  */
@@ -85,7 +85,7 @@ class CORE_EXPORT QgsTemporalNavigationObject : public QgsTemporalController, pu
     void setNavigationMode( const NavigationMode mode );
 
     /**
-     * Returns the currenttemporal navigation mode.
+     * Returns the current temporal navigation mode.
      *
      * \see setNavigationMode()
      */
@@ -110,10 +110,32 @@ class CORE_EXPORT QgsTemporalNavigationObject : public QgsTemporalController, pu
     QgsDateTimeRange temporalExtents() const;
 
     /**
+     * Sets the list of all available temporal \a ranges which have data available.
+     *
+     * The \a ranges list can be a list of non-contiguous ranges (i.e. containing gaps)
+     * which together describe the complete range of times which contain data.
+     *
+     * \see availableTemporalRanges()
+     * \since QGIS 3.20
+     */
+    void setAvailableTemporalRanges( const QList< QgsDateTimeRange > &ranges );
+
+    /**
+     * Returns the list of all available temporal ranges which have data available.
+     *
+     * The ranges list can be a list of non-contiguous ranges (i.e. containing gaps)
+     * which together describe the complete range of times which contain data.
+     *
+     * \see setAvailableTemporalRanges()
+     * \since QGIS 3.20
+     */
+    QList< QgsDateTimeRange > availableTemporalRanges() const;
+
+    /**
      * Sets the current animation \a frame number.
      *
-     * Caling this method will change the controllers current datetime range to match, based on the
-     * temporalExtents() and frameDuration() values.
+     * Calling this method will change the controllers current datetime range to match,
+     * based on the temporalExtents() and frameDuration() values.
      *
      * \see currentFrameNumber()
      */
@@ -129,11 +151,11 @@ class CORE_EXPORT QgsTemporalNavigationObject : public QgsTemporalController, pu
     /**
      * Sets the frame \a duration, which dictates the temporal length of each frame in the animation.
      *
-     * \note Calling this will reset the currentFrameNumber() to the first frame.
+     * \note Calling this will reset the currentFrameNumber() to the closest temporal match for the previous temporal range.
      *
      * \see frameDuration()
      */
-    void setFrameDuration( QgsInterval duration );
+    void setFrameDuration( const QgsInterval &duration );
 
     /**
      * Returns the current set frame duration, which dictates the temporal length of each frame in the animation.
@@ -187,7 +209,7 @@ class CORE_EXPORT QgsTemporalNavigationObject : public QgsTemporalController, pu
     /**
      * Returns the total number of frames for the navigation.
      */
-    long long totalFrameCount();
+    long long totalFrameCount() const;
 
     /**
      * Returns TRUE if the animation should loop after hitting the end or start frame.
@@ -203,6 +225,11 @@ class CORE_EXPORT QgsTemporalNavigationObject : public QgsTemporalController, pu
      */
     void setLooping( bool loop );
 
+    /**
+     * Returns the best suited frame number for the specified datetime, based on the start of the corresponding temporal range.
+     */
+    long long findBestFrameNumberForFrameStart( const QDateTime &frameStart ) const;
+
     QgsExpressionContextScope *createExpressionContextScope() const override SIP_FACTORY;
 
   signals:
@@ -216,6 +243,17 @@ class CORE_EXPORT QgsTemporalNavigationObject : public QgsTemporalController, pu
      * Emitted whenever the navigation \a mode changes.
      */
     void navigationModeChanged( NavigationMode mode );
+
+    /**
+     * Emitted whenever the temporalExtent \a extent changes.
+     */
+    void temporalExtentsChanged( const QgsDateTimeRange &extent );
+
+    /**
+     * Emitted whenever the frameDuration \a interval of the controller changes.
+     */
+    void temporalFrameDurationChanged( const QgsInterval &interval );
+
 
   public slots:
 
@@ -282,13 +320,16 @@ class CORE_EXPORT QgsTemporalNavigationObject : public QgsTemporalController, pu
     //! The controller temporal navigation extent range.
     QgsDateTimeRange mTemporalExtents;
 
+    //! Complete list of time ranges with data available
+    QList< QgsDateTimeRange > mAllRanges;
+
     NavigationMode mNavigationMode = NavigationOff;
 
     //! The current set frame value
     long long mCurrentFrameNumber = 0;
 
     //! Frame duration
-    QgsInterval mFrameDuration;
+    QgsInterval mFrameDuration = QgsInterval( 1.0, QgsUnitTypes::TemporalUnit::TemporalHours );
 
     //! Member for frame rate
     double mFramesPerSecond = 1;
@@ -302,6 +343,8 @@ class CORE_EXPORT QgsTemporalNavigationObject : public QgsTemporalController, pu
     bool mLoopAnimation = false;
 
     bool mCumulativeTemporalRange = false;
+
+    int mBlockUpdateTemporalRangeSignal = 0;
 
     QgsTemporalNavigationObject( const QgsTemporalNavigationObject & ) = delete;
     QgsTemporalNavigationObject &operator= ( const QgsTemporalNavigationObject & ) = delete;

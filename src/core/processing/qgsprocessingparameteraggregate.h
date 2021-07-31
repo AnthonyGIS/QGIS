@@ -21,7 +21,7 @@
 
 /**
  * \ingroup core
- * A parameter for "aggregate" configurations, which consist of a definition
+ * \brief A parameter for "aggregate" configurations, which consist of a definition
  * of desired output fields, types, and aggregate used to populate then.
  *
  * Designed for use with the "Aggregate" algorithm.
@@ -63,11 +63,11 @@ class CORE_EXPORT QgsProcessingParameterAggregate : public QgsProcessingParamete
 
 };
 
-
+#ifndef SIP_RUN
 ///@cond PRIVATE
 
 /**
- * Parameter type definition for QgsProcessingParameterAggregate.
+ * \brief Parameter type definition for QgsProcessingParameterAggregate.
  *
  * \ingroup core
  * \note This class is not a part of public API.
@@ -113,5 +113,6 @@ class CORE_EXPORT QgsProcessingParameterTypeAggregate : public QgsProcessingPara
 };
 
 ///@endcond
+#endif
 
 #endif // QGSPROCESSINGPARAMETERAGGREGATE_H

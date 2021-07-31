@@ -82,7 +82,7 @@ class QgsSymbolSelectorDialog;
 
 /**
  * \ingroup gui
- * Symbol selector widget that can be used to select and build a symbol
+ * \brief Symbol selector widget that can be used to select and build a symbol
  */
 class GUI_EXPORT QgsSymbolSelectorWidget: public QgsPanelWidget, private Ui::QgsSymbolSelectorDialogBase
 {
@@ -203,6 +203,19 @@ class GUI_EXPORT QgsSymbolSelectorWidget: public QgsPanelWidget, private Ui::Qgs
      */
     void symbolModified();
 
+  private slots:
+
+    /**
+     * Called when project data (such as project colors, image cache) has changed. Updates
+     * the symbol preview to take changes into account.
+     */
+    void projectDataChanged();
+
+    /**
+     * Called when layers are about to be removed from the project.
+     */
+    void layersAboutToBeRemoved( const QList<QgsMapLayer *> &layers );
+
   private:
 
     /**
@@ -245,7 +258,7 @@ class GUI_EXPORT QgsSymbolSelectorWidget: public QgsPanelWidget, private Ui::Qgs
     QMenu *mAdvancedMenu = nullptr;
     QgsVectorLayer *mVectorLayer = nullptr;
 
-    QStandardItemModel *model = nullptr;
+    QStandardItemModel *mSymbolLayersModel = nullptr;
     QWidget *mPresentWidget = nullptr;
 
     std::unique_ptr<DataDefinedRestorer> mDataDefineRestorer;

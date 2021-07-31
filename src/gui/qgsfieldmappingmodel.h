@@ -28,7 +28,7 @@
 
 /**
  * \ingroup gui
- * The QgsFieldMappingModel holds mapping information for mapping from one set of QgsFields to another,
+ * \brief The QgsFieldMappingModel holds mapping information for mapping from one set of QgsFields to another,
  * for each set of "destination" fields an expression defines how to obtain the values of the
  * "destination" fields.
  * The model can be optionally set "editable" allowing to modify all the fields, by default only
@@ -165,12 +165,13 @@ class GUI_EXPORT QgsFieldMappingModel: public QAbstractTableModel
         // QgsExpressionContextGenerator interface
         QgsExpressionContext createExpressionContext() const override;
         void setBaseExpressionContextGenerator( const QgsExpressionContextGenerator *generator );
+        void setSourceFields( const QgsFields &fields );
 
       private:
 
         const QgsExpressionContextGenerator *mBaseGenerator = nullptr;
 
-        const QgsFields mSourceFields;
+        QgsFields mSourceFields;
 
     };
 

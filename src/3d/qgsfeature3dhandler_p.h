@@ -41,7 +41,7 @@ class Qgs3DMapSettings;
 
 /**
  * \ingroup 3d
- * Rendering context for preparation of 3D entities.
+ * \brief Rendering context for preparation of 3D entities.
  *
  * \note Not available in Python bindings
  */
@@ -84,7 +84,7 @@ class Qgs3DRenderContext
 
 /**
  * \ingroup 3d
- * Interface to be implemented by 3D symbol implementations in order to generate 3D entities.
+ * \brief Interface to be implemented by 3D symbol implementations in order to generate 3D entities.
  */
 class QgsFeature3DHandler
 {
@@ -101,7 +101,7 @@ class QgsFeature3DHandler
      * Called for every feature to extract information out of it into some
      * temporary variables in the derived handler class.
      */
-    virtual void processFeature( QgsFeature &feature, const Qgs3DRenderContext &context ) = 0;
+    virtual void processFeature( const QgsFeature &feature, const Qgs3DRenderContext &context ) = 0;
 
     /**
      * When feature iteration has finished, finalize() is called to turn the extracted data

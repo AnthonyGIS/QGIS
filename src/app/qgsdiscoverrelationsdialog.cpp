@@ -15,6 +15,7 @@
 #include "qgsdiscoverrelationsdialog.h"
 #include "qgsvectorlayer.h"
 #include "qgsrelationmanager.h"
+#include "qgshelp.h"
 
 #include <QPushButton>
 
@@ -25,10 +26,15 @@ QgsDiscoverRelationsDialog::QgsDiscoverRelationsDialog( const QList<QgsRelation>
   setupUi( this );
 
   mButtonBox->button( QDialogButtonBox::Ok )->setEnabled( false );
+  mButtonBox->addButton( QDialogButtonBox::Help );
+  connect( mButtonBox, &QDialogButtonBox::helpRequested, this, [ = ]
+  {
+    QgsHelp::openHelp( QStringLiteral( "working_with_vector/attribute_table.html#defining-1-n-relation" ) );
+  } );
   connect( mRelationsTable->selectionModel(), &QItemSelectionModel::selectionChanged, this, &QgsDiscoverRelationsDialog::onSelectionChanged );
 
   mFoundRelations = QgsRelationManager::discoverRelations( existingRelations, layers );
-  for ( const QgsRelation &relation : qgis::as_const( mFoundRelations ) )
+  for ( const QgsRelation &relation : std::as_const( mFoundRelations ) )
     addRelation( relation );
 
   mRelationsTable->resizeColumnsToContents();

@@ -59,7 +59,7 @@
        <number>0</number>
       </property>
       <item row="0" column="0">
-       <widget class="QgsPhongMaterialWidget" name="widgetMaterial" native="true"/>
+       <widget class="QgsMaterialWidget" name="widgetMaterial" native="true"/>
       </item>
      </layout>
     </widget>
@@ -159,7 +159,7 @@
     </widget>
    </item>
    <item row="9" column="0" colspan="3">
-    <widget class="QGroupBox" name="groupEdges">
+    <widget class="QgsCollapsibleGroupBox" name="groupEdges">
      <property name="title">
       <string>Edges</string>
      </property>
@@ -181,7 +181,7 @@
        </widget>
       </item>
       <item row="0" column="1">
-       <widget class="QDoubleSpinBox" name="spinEdgeWidth">
+       <widget class="QgsDoubleSpinBox" name="spinEdgeWidth">
         <property name="sizePolicy">
          <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
           <horstretch>1</horstretch>
@@ -226,7 +226,7 @@
      </property>
     </widget>
    </item>
-   <item row="6" column="0">
+   <item row="6" column="0" colspan="2">
     <widget class="QCheckBox" name="chkAddBackFaces">
      <property name="text">
       <string>Add back faces</string>
@@ -239,19 +239,6 @@
       <string>Height</string>
      </property>
     </widget>
-   </item>
-   <item row="11" column="0" colspan="3">
-    <spacer name="verticalSpacer">
-     <property name="orientation">
-      <enum>Qt::Vertical</enum>
-     </property>
-     <property name="sizeHint" stdset="0">
-      <size>
-       <width>20</width>
-       <height>40</height>
-      </size>
-     </property>
-    </spacer>
    </item>
    <item row="5" column="0">
     <widget class="QLabel" name="label_8">
@@ -291,9 +278,9 @@
  </widget>
  <customwidgets>
   <customwidget>
-   <class>QgsPhongMaterialWidget</class>
-   <extends>QWidget</extends>
-   <header>qgsphongmaterialwidget.h</header>
+   <class>QgsCollapsibleGroupBox</class>
+   <extends>QGroupBox</extends>
+   <header>qgscollapsiblegroupbox.h</header>
    <container>1</container>
   </customwidget>
   <customwidget>
@@ -302,20 +289,20 @@
    <header>qgsdoublespinbox.h</header>
   </customwidget>
   <customwidget>
+   <class>QgsPropertyOverrideButton</class>
+   <extends>QToolButton</extends>
+   <header>qgspropertyoverridebutton.h</header>
+  </customwidget>
+  <customwidget>
    <class>QgsColorButton</class>
    <extends>QToolButton</extends>
    <header>qgscolorbutton.h</header>
    <container>1</container>
   </customwidget>
   <customwidget>
-   <class>QgsPropertyOverrideButton</class>
-   <extends>QToolButton</extends>
-   <header>qgspropertyoverridebutton.h</header>
-  </customwidget>
-  <customwidget>
-   <class>QgsCollapsibleGroupBox</class>
-   <extends>QGroupBox</extends>
-   <header>qgscollapsiblegroupbox.h</header>
+   <class>QgsMaterialWidget</class>
+   <extends>QWidget</extends>
+   <header>qgsmaterialwidget.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>
@@ -327,8 +314,12 @@
   <tabstop>cboAltClamping</tabstop>
   <tabstop>cboAltBinding</tabstop>
   <tabstop>cboCullingMode</tabstop>
+  <tabstop>cboRenderedFacade</tabstop>
   <tabstop>chkAddBackFaces</tabstop>
   <tabstop>chkInvertNormals</tabstop>
+  <tabstop>groupEdges</tabstop>
+  <tabstop>spinEdgeWidth</tabstop>
+  <tabstop>btnEdgeColor</tabstop>
  </tabstops>
  <resources/>
  <connections/>

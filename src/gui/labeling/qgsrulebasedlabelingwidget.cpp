@@ -31,6 +31,7 @@
 #include <QClipboard>
 #include <QMessageBox>
 
+const double ICON_PADDING_FACTOR = 0.16;
 
 static QList<QgsExpressionContextScope *> _globalProjectAtlasMapLayerScopes( QgsMapCanvas *mapCanvas, const QgsMapLayer *layer )
 {
@@ -93,7 +94,7 @@ QgsRuleBasedLabelingWidget::QgsRuleBasedLabelingWidget( QgsVectorLayer *layer, Q
   {
     // copy simple label settings to first rule
     mRootRule = new QgsRuleBasedLabeling::Rule( nullptr );
-    std::unique_ptr< QgsPalLayerSettings > newSettings = qgis::make_unique< QgsPalLayerSettings >( mLayer->labeling()->settings() );
+    std::unique_ptr< QgsPalLayerSettings > newSettings = std::make_unique< QgsPalLayerSettings >( mLayer->labeling()->settings() );
     newSettings->drawLabels = true; // otherwise we may be trying to copy a "blocking" setting to a rule - which is confusing for users!
     mRootRule->appendChild( new QgsRuleBasedLabeling::Rule( newSettings.release() ) );
   }
@@ -132,8 +133,7 @@ void QgsRuleBasedLabelingWidget::setDockMode( bool dockMode )
 
 void QgsRuleBasedLabelingWidget::addRule()
 {
-
-  QgsRuleBasedLabeling::Rule *newrule = new QgsRuleBasedLabeling::Rule( new QgsPalLayerSettings );
+  QgsRuleBasedLabeling::Rule *newrule = new QgsRuleBasedLabeling::Rule( new QgsPalLayerSettings( QgsAbstractVectorLayerLabeling::defaultSettingsForLayer( mLayer ) ) );
 
   QgsRuleBasedLabeling::Rule *current = currentRule();
   if ( current )
@@ -291,8 +291,8 @@ QVariant QgsRuleBasedLabelingModel::data( const QModelIndex &index, int role ) c
   }
   else if ( role == Qt::DecorationRole && index.column() == 0 && rule->settings() )
   {
-    // TODO return QgsSymbolLayerUtils::symbolPreviewIcon( rule->symbol(), QSize( 16, 16 ) );
-    return QVariant();
+    const int iconSize = QgsGuiUtils::scaleIconSize( 16 );
+    return QgsPalLayerSettings::labelSettingsPreviewPixmap( *rule->settings(), QSize( iconSize, iconSize ), QString(),  static_cast< int >( iconSize * ICON_PADDING_FACTOR ) );
   }
   else if ( role == Qt::TextAlignmentRole )
   {
@@ -602,6 +602,10 @@ QgsLabelingRulePropsWidget::QgsLabelingRulePropsWidget( QgsRuleBasedLabeling::Ru
   , mMapCanvas( mapCanvas )
 {
   setupUi( this );
+
+  QButtonGroup *radioGroup = new QButtonGroup( this );
+  radioGroup->addButton( mFilterRadio );
+  radioGroup->addButton( mElseRadio );
 
   mElseRadio->setChecked( mRule->isElse() );
   mFilterRadio->setChecked( !mRule->isElse() );

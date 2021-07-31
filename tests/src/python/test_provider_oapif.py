@@ -20,6 +20,7 @@ import tempfile
 
 from osgeo import gdal
 from qgis.PyQt.QtCore import QCoreApplication, Qt, QObject, QDateTime, QVariant
+from qgis.PyQt.QtTest import QSignalSpy
 
 from qgis.core import (
     QgsWkbTypes,
@@ -36,7 +37,8 @@ from qgis.core import (
     QgsExpressionContextUtils,
     QgsExpressionContext,
     QgsCoordinateReferenceSystem,
-    QgsBox3d
+    QgsBox3d,
+    QgsMessageLog
 )
 from qgis.testing import (start_app,
                           unittest
@@ -67,17 +69,25 @@ ACCEPT_COLLECTION = 'Accept=application/json'
 ACCEPT_ITEMS = 'Accept=application/geo+json, application/json'
 
 
-def create_landing_page_api_collection(endpoint):
+def create_landing_page_api_collection(endpoint, extraparam=''):
+
+    questionmark_extraparam = '?' + extraparam if extraparam else ''
+
+    def add_params(x, y):
+        if x:
+            return x + '&' + y
+        return y
+
     # Landing page
-    with open(sanitize(endpoint, '?' + ACCEPT_LANDING), 'wb') as f:
+    with open(sanitize(endpoint, '?' + add_params(extraparam, ACCEPT_LANDING)), 'wb') as f:
         f.write(json.dumps({
             "links": [
-                {"href": "http://" + endpoint + "/api", "rel": "service-desc"},
-                {"href": "http://" + endpoint + "/collections", "rel": "data"}
+                {"href": "http://" + endpoint + "/api" + questionmark_extraparam, "rel": "service-desc"},
+                {"href": "http://" + endpoint + "/collections" + questionmark_extraparam, "rel": "data"}
             ]}).encode('UTF-8'))
 
     # API
-    with open(sanitize(endpoint, '/api?' + ACCEPT_API), 'wb') as f:
+    with open(sanitize(endpoint, '/api?' + add_params(extraparam, ACCEPT_API)), 'wb') as f:
         f.write(json.dumps({
             "components": {
                 "parameters": {
@@ -92,7 +102,7 @@ def create_landing_page_api_collection(endpoint):
         }).encode('UTF-8'))
 
     # collection
-    with open(sanitize(endpoint, '/collections/mycollection?' + ACCEPT_COLLECTION), 'wb') as f:
+    with open(sanitize(endpoint, '/collections/mycollection?' + add_params(extraparam, ACCEPT_COLLECTION)), 'wb') as f:
         f.write(json.dumps({
             "id": "mycollection",
             "title": "my title",
@@ -672,10 +682,38 @@ class TestPyQgsOapifProvider(unittest.TestCase, ProviderTestCase):
             f.write(json.dumps(items).encode('UTF-8'))
         features = [f for f in vl.getFeatures()]
         os.unlink(filename)
-        if int(gdal.VersionInfo('VERSION_NUM')) < GDAL_COMPUTE_VERSION(2, 4, 0):
-            self.assertEqual(features[0]['my_stringlist_field'], '(2:a,b)')
-        else:
-            self.assertEqual(features[0]['my_stringlist_field'], ["a", "b"])
+        self.assertEqual(features[0]['my_stringlist_field'], ["a", "b"])
+
+    def testApikey(self):
+
+        endpoint = self.__class__.basetestpath + '/fake_qgis_http_endpoint_apikey'
+        create_landing_page_api_collection(endpoint, extraparam='apikey=mykey')
+
+        # first items
+        first_items = {
+            "type": "FeatureCollection",
+            "features": [
+                {"type": "Feature", "id": "feat.1", "properties": {"pk": 1, "cnt": 100},
+                 "geometry": {"type": "Point", "coordinates": [-70.332, 66.33]}}
+            ]
+        }
+
+        with open(sanitize(endpoint, '/collections/mycollection/items?limit=10&apikey=mykey&' + ACCEPT_ITEMS), 'wb') as f:
+            f.write(json.dumps(first_items).encode('UTF-8'))
+
+        with open(sanitize(endpoint, '/collections/mycollection/items?limit=1000&apikey=mykey&' + ACCEPT_ITEMS), 'wb') as f:
+            f.write(json.dumps(first_items).encode('UTF-8'))
+
+        app_log = QgsApplication.messageLog()
+
+        # signals should be emitted by application log
+        app_spy = QSignalSpy(app_log.messageReceived)
+
+        vl = QgsVectorLayer("url='http://" + endpoint + "?apikey=mykey' typename='mycollection'", 'test', 'OAPIF')
+        self.assertTrue(vl.isValid())
+        values = [f['id'] for f in vl.getFeatures()]
+        self.assertEqual(values, ['feat.1'])
+        self.assertEqual(len(app_spy), 0, list(app_spy))
 
 
 if __name__ == '__main__':

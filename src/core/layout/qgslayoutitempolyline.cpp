@@ -24,6 +24,8 @@
 #include "qgsreadwritecontext.h"
 #include "qgssvgcache.h"
 #include "qgsstyleentityvisitor.h"
+#include "qgslinesymbol.h"
+
 #include <QSvgRenderer>
 #include <limits>
 #include <QGraphicsPathItem>
@@ -40,6 +42,8 @@ QgsLayoutItemPolyline::QgsLayoutItemPolyline( const QPolygonF &polyline, QgsLayo
 {
   createDefaultPolylineStyleSymbol();
 }
+
+QgsLayoutItemPolyline::~QgsLayoutItemPolyline() = default;
 
 QgsLayoutItemPolyline *QgsLayoutItemPolyline::create( QgsLayout *layout )
 {
@@ -98,7 +102,7 @@ bool QgsLayoutItemPolyline::_removeNode( const int index )
 
 void QgsLayoutItemPolyline::createDefaultPolylineStyleSymbol()
 {
-  QgsStringMap properties;
+  QVariantMap properties;
   properties.insert( QStringLiteral( "color" ), QStringLiteral( "0,0,0,255" ) );
   properties.insert( QStringLiteral( "width" ), QStringLiteral( "0.3" ) );
   properties.insert( QStringLiteral( "capstyle" ), QStringLiteral( "square" ) );
@@ -109,10 +113,10 @@ void QgsLayoutItemPolyline::createDefaultPolylineStyleSymbol()
 
 void QgsLayoutItemPolyline::refreshSymbol()
 {
-  if ( layout() )
+  if ( auto *lLayout = layout() )
   {
-    QgsRenderContext rc = QgsLayoutUtils::createRenderContextForLayout( layout(), nullptr, layout()->renderContext().dpi() );
-    mMaxSymbolBleed = ( 25.4 / layout()->renderContext().dpi() ) * QgsSymbolLayerUtils::estimateMaxSymbolBleed( mPolylineStyleSymbol.get(), rc );
+    QgsRenderContext rc = QgsLayoutUtils::createRenderContextForLayout( lLayout, nullptr, lLayout->renderContext().dpi() );
+    mMaxSymbolBleed = ( 25.4 / lLayout->renderContext().dpi() ) * QgsSymbolLayerUtils::estimateMaxSymbolBleed( mPolylineStyleSymbol.get(), rc );
   }
 
   updateSceneRect();
@@ -332,6 +336,11 @@ QPainterPath QgsLayoutItemPolyline::shape() const
   QPainterPath strokedOutline = ps.createStroke( path );
 
   return strokedOutline;
+}
+
+QgsLineSymbol *QgsLayoutItemPolyline::symbol()
+{
+  return mPolylineStyleSymbol.get();
 }
 
 void QgsLayoutItemPolyline::setStartSvgMarkerPath( const QString &path )

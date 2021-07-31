@@ -35,7 +35,7 @@ class QgsPropertyCollection;
 /**
  * \class QgsTextBufferSettings
   * \ingroup core
-  * Container for settings relating to a text buffer.
+  * \brief Container for settings relating to a text buffer.
   * \note QgsTextBufferSettings objects are implicitly shared.
   * \since QGIS 3.0
  */
@@ -215,7 +215,7 @@ class CORE_EXPORT QgsTextBufferSettings
      * \returns paint effect
      * \see setPaintEffect()
      */
-    QgsPaintEffect *paintEffect() const;
+    const QgsPaintEffect *paintEffect() const;
 
     /**
      * Sets the current paint \a effect for the buffer.

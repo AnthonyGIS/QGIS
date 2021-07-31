@@ -23,7 +23,7 @@
 #include "qgsprojectstorageguiprovider.h"
 #include "qgspostgresprojectstoragedialog.h"
 #include "qgspostgresdataitemguiprovider.h"
-
+#include "raster/qgspostgresrastertemporalsettingswidget.h"
 
 //! Provider for postgres source select
 class QgsPostgresSourceSelectProvider : public QgsSourceSelectProvider  //#spellok
@@ -74,6 +74,7 @@ class QgsPostgresProjectStorageGuiProvider : public QgsProjectStorageGuiProvider
 QgsPostgresProviderGuiMetadata::QgsPostgresProviderGuiMetadata():
   QgsProviderGuiMetadata( QgsPostgresProvider::POSTGRES_KEY )
 {
+  mRasterTemporalWidgetFactory = std::make_unique< QgsPostgresRasterTemporalSettingsConfigWidgetFactory>();
 }
 
 QList<QgsSourceSelectProvider *> QgsPostgresProviderGuiMetadata::sourceSelectProviders()
@@ -96,9 +97,9 @@ QList<QgsProjectStorageGuiProvider *> QgsPostgresProviderGuiMetadata::projectSto
   return providers;
 }
 
-void QgsPostgresProviderGuiMetadata::registerGui( QMainWindow *mainWindow )
+QList<const QgsMapLayerConfigWidgetFactory *> QgsPostgresProviderGuiMetadata::mapLayerConfigWidgetFactories()
 {
-  QgsPGRootItem::sMainWindow = mainWindow;
+  return { mRasterTemporalWidgetFactory.get() };
 }
 
 #ifndef HAVE_STATIC_PROVIDERS

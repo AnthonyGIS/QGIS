@@ -49,20 +49,7 @@ void QgsExpressionPreviewWidget::setCurrentFeature( const QgsFeature &feature )
 {
   // todo: update the combo box if it has been set externaly?
 
-  // force the feature to be valid, so it can evaluate an invalid feature but having its fields set
-  if ( !feature.isValid() )
-  {
-    QgsFeature validFeature( feature );
-    validFeature.setValid( true );
-    mExpressionContext.setFeature( validFeature );
-    mFeaturePickerWidget->setEnabled( false );
-    mFeaturePickerWidget->setToolTip( tr( "No feature was found on this layer to evaluate the expression." ) );
-  }
-  else
-  {
-    mExpressionContext.setFeature( feature );
-    mFeaturePickerWidget->setEnabled( true );
-  }
+  mExpressionContext.setFeature( feature );
   refreshPreview();
 }
 
@@ -101,14 +88,31 @@ void QgsExpressionPreviewWidget::refreshPreview()
     }
 
     QVariant value = mExpression.evaluate( &mExpressionContext );
+    QString preview = QgsExpression::formatPreviewString( value );
     if ( !mExpression.hasEvalError() )
     {
-      mPreviewLabel->setText( QgsExpression::formatPreviewString( value ) );
+      mPreviewLabel->setText( preview );
     }
 
     if ( mExpression.hasParserError() || mExpression.hasEvalError() )
     {
-      QString errorString = mExpression.parserErrorString().replace( "\n", "<br>" );
+      // if parser error was a result of missing feature, then skip the misleading parser error message
+      // and instead show a friendly message, and allow the user to accept the expression anyway
+      // refs https://github.com/qgis/QGIS/issues/42884
+      if ( !mExpressionContext.feature().isValid() )
+      {
+        if ( !mExpression.referencedColumns().isEmpty() || mExpression.needsGeometry() )
+        {
+          mPreviewLabel->setText( tr( "No feature was found on this layer to evaluate the expression." ) );
+          mPreviewLabel->setStyleSheet( QStringLiteral( "color: rgba(220, 125, 0, 255);" ) );
+          emit expressionParsed( true );
+          setParserError( false );
+          setEvalError( false );
+          return;
+        }
+      }
+
+      QString errorString = mExpression.parserErrorString().replace( QLatin1String( "\n" ), QLatin1String( "<br>" ) );
       QString tooltip;
       if ( mExpression.hasParserError() )
         tooltip = QStringLiteral( "<b>%1:</b>"
@@ -118,7 +122,7 @@ void QgsExpressionPreviewWidget::refreshPreview()
         tooltip += QStringLiteral( "<b>%1:</b> %2" ).arg( tr( "Eval Error" ), mExpression.evalErrorString() );
 
       mPreviewLabel->setText( tr( "Expression is invalid <a href=""more"">(more info)</a>" ) );
-      mPreviewLabel->setStyleSheet( QStringLiteral( "color: rgba(255, 6, 10,  255);" ) );
+      mPreviewLabel->setStyleSheet( QStringLiteral( "color: rgba(255, 6, 10, 255);" ) );
       setExpressionToolTip( tooltip );
       emit expressionParsed( false );
       setParserError( mExpression.hasParserError() );
@@ -127,7 +131,11 @@ void QgsExpressionPreviewWidget::refreshPreview()
     else
     {
       mPreviewLabel->setStyleSheet( QString() );
-      setExpressionToolTip( QString() );
+      QString longerPreview = QgsExpression::formatPreviewString( value, true, 255 );
+      if ( longerPreview != preview )
+        setExpressionToolTip( longerPreview );
+      else
+        setExpressionToolTip( QString() );
       emit expressionParsed( true );
       setParserError( false );
       setEvalError( false );

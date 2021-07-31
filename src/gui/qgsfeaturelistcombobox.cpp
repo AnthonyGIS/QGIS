@@ -61,6 +61,8 @@ QgsFeatureListComboBox::QgsFeatureListComboBox( QWidget *parent )
 
   connect( mLineEdit, &QgsFilterLineEdit::textEdited, this, &QgsFeatureListComboBox::onCurrentTextChanged );
 
+  connect( mModel, &QgsFeatureFilterModel::currentFeatureChanged, this, &QgsFeatureListComboBox::currentFeatureChanged );
+
   setToolTip( tr( "Just start typing what you are looking for." ) );
 }
 
@@ -286,7 +288,7 @@ QgsFeatureRequest QgsFeatureListComboBox::currentFeatureRequest() const
         filtersAttrs << QgsExpression::createFieldEqualityExpression( identifierFields.at( i ), values.at( i ) );
       }
     }
-    const QString expression = filtersAttrs.join( QStringLiteral( " AND " ) );
+    const QString expression = filtersAttrs.join( QLatin1String( " AND " ) );
     return QgsFeatureRequest().setFilterExpression( expression );
   }
 }

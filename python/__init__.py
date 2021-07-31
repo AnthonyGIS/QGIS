@@ -31,7 +31,7 @@ def setupenv():
     Set the environment for Windows based on the .vars files from the
     OSGeo4W package format.
     """
-    # If the prefix path is already set the we don't do any more path setup.
+    # If the prefix path is already set then we don't do any more path setup.
     if os.getenv('QGIS_PREFIX_PATH'):
         return
 
@@ -55,17 +55,25 @@ def setupenv():
 
     with open(envfile) as f:
         for line in f:
-            linedata = line.split("=")
-            name = linedata[0]
-            data = linedata[1]
-            os.environ[name] = data
+            line = line.rstrip("\n")
+            if line.startswith("#") or not line:
+                continue
+            try:
+                env_key, env_value = line.split("=", maxsplit=1)
+                os.environ[env_key] = env_value
+            except ValueError:
+                pass
 
 
 if os.name == 'nt':
-    # On windows we need to setup the paths before we can import
+    # On Windows we need to setup the paths before we can import
     # any of the QGIS modules or else it will error.
     setupenv()
 
+    if sys.version_info[0] > 3 or (sys.version_info[0] == 3 and sys.version_info[1] >= 9):
+        for p in os.getenv("PATH").split(";"):
+            if os.path.exists(p):
+                os.add_dll_directory(p)
 
 from qgis.PyQt import QtCore
 
@@ -77,7 +85,7 @@ from qgis.PyQt import QtCore
 try:
     import qgis.gui
     widget_list = dir(qgis.gui)
-    # remove widgets that are not allowed as customwidgets (they need to be manually promoted)
+    # remove widgets that are not allowed as custom widgets (they need to be manually promoted)
     skip_list = ['QgsScrollArea']
     for widget in widget_list:
         if widget.startswith('Qgs') and widget not in skip_list:

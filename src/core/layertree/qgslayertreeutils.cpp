@@ -16,11 +16,12 @@
 #include "qgslayertreeutils.h"
 #include "qgslayertree.h"
 #include "qgsvectorlayer.h"
+#include "qgsmeshlayer.h"
 #include "qgsproject.h"
 #include "qgslogger.h"
 
 #include <QDomElement>
-
+#include <QTextStream>
 
 static void _readOldLegendGroup( const QDomElement &groupElem, QgsLayerTreeGroup *parent );
 static void _readOldLegendLayer( const QDomElement &layerElem, QgsLayerTreeGroup *parent );
@@ -260,18 +261,16 @@ static void _readOldLegendLayer( const QDomElement &layerElem, QgsLayerTreeGroup
   parent->addChildNode( layerNode );
 }
 
-
-
 bool QgsLayerTreeUtils::layersEditable( const QList<QgsLayerTreeLayer *> &layerNodes )
 {
   const auto constLayerNodes = layerNodes;
   for ( QgsLayerTreeLayer *layerNode : constLayerNodes )
   {
-    QgsVectorLayer *vl = qobject_cast<QgsVectorLayer *>( layerNode->layer() );
-    if ( !vl )
+    QgsMapLayer *layer = layerNode->layer();
+    if ( !layer )
       continue;
 
-    if ( vl->isEditable() )
+    if ( layer->isEditable() )
       return true;
   }
   return false;
@@ -282,11 +281,11 @@ bool QgsLayerTreeUtils::layersModified( const QList<QgsLayerTreeLayer *> &layerN
   const auto constLayerNodes = layerNodes;
   for ( QgsLayerTreeLayer *layerNode : constLayerNodes )
   {
-    QgsVectorLayer *vl = qobject_cast<QgsVectorLayer *>( layerNode->layer() );
-    if ( !vl )
+    QgsMapLayer *layer = layerNode->layer();
+    if ( !layer )
       continue;
 
-    if ( vl->isEditable() && vl->isModified() )
+    if ( layer->isEditable() && layer->isModified() )
       return true;
   }
   return false;
@@ -314,9 +313,8 @@ void QgsLayerTreeUtils::removeInvalidLayers( QgsLayerTreeGroup *group )
 
 void QgsLayerTreeUtils::storeOriginalLayersProperties( QgsLayerTreeGroup *group,  const QDomDocument *doc )
 {
-  const QDomNodeList mlNodeList( doc->documentElement()
-                                 .firstChildElement( QStringLiteral( "projectlayers" ) )
-                                 .elementsByTagName( QStringLiteral( "maplayer" ) ) );
+
+  const QDomElement projectLayersElement { doc->documentElement().firstChildElement( QStringLiteral( "projectlayers" ) ) };
 
   std::function<void ( QgsLayerTreeNode * )> _store = [ & ]( QgsLayerTreeNode * node )
   {
@@ -325,22 +323,19 @@ void QgsLayerTreeUtils::storeOriginalLayersProperties( QgsLayerTreeGroup *group,
       QgsMapLayer *l( QgsLayerTree::toLayer( node )->layer() );
       if ( l )
       {
-        for ( int i = 0; i < mlNodeList.count(); i++ )
+        QDomElement layerElement { projectLayersElement.firstChildElement( QStringLiteral( "maplayer" ) ) };
+        while ( ! layerElement.isNull() )
         {
-          QDomNode mlNode( mlNodeList.at( i ) );
-          QString id( mlNode.firstChildElement( QStringLiteral( "id" ) ).firstChild().nodeValue() );
+          const QString id( layerElement.firstChildElement( QStringLiteral( "id" ) ).firstChild().nodeValue() );
           if ( id == l->id() )
           {
-            QDomImplementation DomImplementation;
-            QDomDocumentType documentType = DomImplementation.createDocumentType( QStringLiteral( "qgis" ), QStringLiteral( "http://mrcc.com/qgis.dtd" ), QStringLiteral( "SYSTEM" ) );
-            QDomDocument document( documentType );
-            QDomElement element = mlNode.toElement();
-            document.appendChild( element );
             QString str;
             QTextStream stream( &str );
-            document.save( stream, 4 /*indent*/ );
-            l->setOriginalXmlProperties( str );
+            layerElement.save( stream, 4 /*indent*/ );
+            l->setOriginalXmlProperties( QStringLiteral( "<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>\n%1" ).arg( str ) );
+            break;
           }
+          layerElement = layerElement.nextSiblingElement( );
         }
       }
     }
@@ -429,14 +424,15 @@ void QgsLayerTreeUtils::updateEmbeddedGroupsProjectPath( QgsLayerTreeGroup *grou
 void QgsLayerTreeUtils::setLegendFilterByExpression( QgsLayerTreeLayer &layer, const QString &expr, bool enabled )
 {
   layer.setCustomProperty( QStringLiteral( "legend/expressionFilter" ), expr );
-  layer.setCustomProperty( QStringLiteral( "legend/expressionFilterEnabled" ), enabled );
+  layer.setCustomProperty( QStringLiteral( "legend/expressionFilterEnabled" ), enabled && !expr.isEmpty() );
 }
 
 QString QgsLayerTreeUtils::legendFilterByExpression( const QgsLayerTreeLayer &layer, bool *enabled )
 {
+  const QString expression = layer.customProperty( QStringLiteral( "legend/expressionFilter" ), QString() ).toString();
   if ( enabled )
-    *enabled = layer.customProperty( QStringLiteral( "legend/expressionFilterEnabled" ), "" ).toBool();
-  return layer.customProperty( QStringLiteral( "legend/expressionFilter" ), "" ).toString();
+    *enabled = !expression.isEmpty() && layer.customProperty( QStringLiteral( "legend/expressionFilterEnabled" ), QString() ).toBool();
+  return expression;
 }
 
 bool QgsLayerTreeUtils::hasLegendFilterExpression( const QgsLayerTreeGroup &group )

@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>221</width>
+    <width>224</width>
     <height>285</height>
    </rect>
   </property>
@@ -66,7 +66,7 @@
     </widget>
    </item>
    <item row="0" column="1">
-    <widget class="QSpinBox" name="mDecimalsSpinBox">
+    <widget class="QgsSpinBox" name="mDecimalsSpinBox">
      <property name="value">
       <number>6</number>
      </property>
@@ -120,17 +120,32 @@
  </widget>
  <customwidgets>
   <customwidget>
-   <class>QgsPanelWidget</class>
-   <extends>QWidget</extends>
-   <header>qgspanelwidget.h</header>
-   <container>1</container>
+   <class>QgsSpinBox</class>
+   <extends>QSpinBox</extends>
+   <header>qgsspinbox.h</header>
   </customwidget>
   <customwidget>
    <class>QgsFilterLineEdit</class>
    <extends>QLineEdit</extends>
    <header>qgsfilterlineedit.h</header>
   </customwidget>
+  <customwidget>
+   <class>QgsPanelWidget</class>
+   <extends>QWidget</extends>
+   <header>qgspanelwidget.h</header>
+   <container>1</container>
+  </customwidget>
  </customwidgets>
+ <tabstops>
+  <tabstop>mDecimalsSpinBox</tabstop>
+  <tabstop>mRadDecimalPlaces</tabstop>
+  <tabstop>mRadSignificantFigures</tabstop>
+  <tabstop>mShowThousandsCheckBox</tabstop>
+  <tabstop>mShowPlusCheckBox</tabstop>
+  <tabstop>mShowTrailingZerosCheckBox</tabstop>
+  <tabstop>mThousandsLineEdit</tabstop>
+  <tabstop>mDecimalLineEdit</tabstop>
+ </tabstops>
  <resources/>
  <connections/>
 </ui>

@@ -45,15 +45,22 @@ QgsCachedFeatureIterator::QgsCachedFeatureIterator( QgsVectorLayerCache *vlCache
   switch ( featureRequest.filterType() )
   {
     case QgsFeatureRequest::FilterFids:
-      mFeatureIds = featureRequest.filterFids();
+      mFeatureIds = QList< QgsFeatureId >( qgis::setToList( featureRequest.filterFids() ) );
       break;
 
     case QgsFeatureRequest::FilterFid:
-      mFeatureIds = QgsFeatureIds() << featureRequest.filterFid();
+      mFeatureIds = QList< QgsFeatureId >() << featureRequest.filterFid();
       break;
 
     default:
-      mFeatureIds = qgis::listToSet( mVectorLayerCache->mCache.keys() );
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
+      mFeatureIds.clear();
+      mFeatureIds.reserve( static_cast< int >( mVectorLayerCache->mCacheOrderedKeys.size() ) );
+      for ( auto it = mVectorLayerCache->mCacheOrderedKeys.begin(); it != mVectorLayerCache->mCacheOrderedKeys.end(); ++it )
+        mFeatureIds << *it;
+#else
+      mFeatureIds = QList( mVectorLayerCache->mCacheOrderedKeys.begin(), mVectorLayerCache->mCacheOrderedKeys.end() );
+#endif
       break;
   }
 

@@ -16,7 +16,6 @@
 
 #include "qgsmimedatautils.h"
 
-#include "qgsdataitem.h"
 #include "qgslayertree.h"
 #include "qgslogger.h"
 #include "qgspluginlayer.h"
@@ -25,6 +24,8 @@
 #include "qgsvectordataprovider.h"
 #include "qgsvectorlayer.h"
 #include "qgsmeshlayer.h"
+
+#include <QRegularExpression>
 
 static const char *QGIS_URILIST_MIMETYPE = "application/x-vnd.qgis.qgis.uri";
 
@@ -90,7 +91,11 @@ QgsMimeDataUtils::Uri::Uri( QgsMapLayer *layer )
       layerType = QStringLiteral( "mesh" );
       break;
     }
-
+    case QgsMapLayerType::PointCloudLayer:
+    {
+      layerType = QStringLiteral( "pointcloud" );
+      break;
+    }
     case QgsMapLayerType::VectorTileLayer:
     {
       layerType = QStringLiteral( "vector-tile" );
@@ -98,6 +103,7 @@ QgsMimeDataUtils::Uri::Uri( QgsMapLayer *layer )
     }
 
     case QgsMapLayerType::PluginLayer:
+    case QgsMapLayerType::AnnotationLayer:
     {
       // plugin layers do not have a standard way of storing their URI...
       return;
@@ -272,7 +278,7 @@ QString QgsMimeDataUtils::encode( const QStringList &items )
   for ( const QString &item : constItems )
   {
     QString str = item;
-    str.replace( '\\', QStringLiteral( "\\\\" ) );
+    str.replace( '\\', QLatin1String( "\\\\" ) );
     str.replace( re, QStringLiteral( "\\:" ) );
     encoded += str + ':';
   }

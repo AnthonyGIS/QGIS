@@ -31,6 +31,7 @@
 #include "qgsfeature3dhandler_p.h"
 #include "qgschunkedentity_p.h"
 #include "qgsrulebased3drenderer.h"
+#include <QFutureWatcher>
 
 #define SIP_NO_FILE
 
@@ -40,19 +41,23 @@ class QgsVectorLayerFeatureSource;
 class QgsAbstract3DSymbol;
 class QgsFeature3DHandler;
 
+namespace Qt3DCore
+{
+  class QTransform;
+}
 
 /**
  * \ingroup 3d
- * This loader factory is responsible for creation of loaders for individual tiles
+ * \brief This loader factory is responsible for creation of loaders for individual tiles
  * of QgsRuleBasedChunkedEntity whenever a new tile is requested by the entity.
  *
  * \since QGIS 3.12
  */
-class QgsRuleBasedChunkLoaderFactory : public QgsChunkLoaderFactory
+class QgsRuleBasedChunkLoaderFactory : public QgsQuadtreeChunkLoaderFactory
 {
   public:
     //! Constructs the factory (vl and rootRule must not be null)
-    QgsRuleBasedChunkLoaderFactory( const Qgs3DMapSettings &map, QgsVectorLayer *vl, QgsRuleBased3DRenderer::Rule *rootRule, int leafLevel );
+    QgsRuleBasedChunkLoaderFactory( const Qgs3DMapSettings &map, QgsVectorLayer *vl, QgsRuleBased3DRenderer::Rule *rootRule, int leafLevel, double zMin, double zMax );
     ~QgsRuleBasedChunkLoaderFactory() override;
 
     //! Creates loader for the given chunk node. Ownership of the returned is passed to the caller.
@@ -67,7 +72,7 @@ class QgsRuleBasedChunkLoaderFactory : public QgsChunkLoaderFactory
 
 /**
  * \ingroup 3d
- * This loader class is responsible for async loading of data for a single tile
+ * \brief This loader class is responsible for async loading of data for a single tile
  * of QgsRuleBasedChunkedEntity and creation of final 3D entity from the data
  * previously prepared in a worker thread.
  *
@@ -96,7 +101,7 @@ class QgsRuleBasedChunkLoader : public QgsChunkLoader
 
 /**
  * \ingroup 3d
- * 3D entity used for rendering of vector layers using a hierarchy of rules (just like
+ * \brief 3D entity used for rendering of vector layers using a hierarchy of rules (just like
  * in case of 2D rule-based rendering or labeling).
  *
  * It is implemented using tiling approach with QgsChunkedEntity. Internally it uses
@@ -113,6 +118,10 @@ class QgsRuleBasedChunkedEntity : public QgsChunkedEntity
     explicit QgsRuleBasedChunkedEntity( QgsVectorLayer *vl, double zMin, double zMax, const QgsVectorLayer3DTilingSettings &tilingSettings, QgsRuleBased3DRenderer::Rule *rootRule, const Qgs3DMapSettings &map );
 
     ~QgsRuleBasedChunkedEntity();
+  private slots:
+    void onTerrainElevationOffsetChanged( float newOffset );
+  private:
+    Qt3DCore::QTransform *mTransform = nullptr;
 };
 
 /// @endcond

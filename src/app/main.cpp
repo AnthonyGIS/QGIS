@@ -33,6 +33,7 @@
 #include <QDesktopWidget>
 #include <QImageReader>
 #include <QMessageBox>
+#include <QStandardPaths>
 
 #include <cstdio>
 #include <cstdlib>
@@ -386,6 +387,11 @@ void myMessageOutput( QtMsgType type, const QMessageLogContext &, const QString 
       break;
     case QtCriticalMsg:
       myPrint( "Critical: %s\n", msg.toLocal8Bit().constData() );
+
+#ifdef QGISDEBUG
+      dumpBacktrace( 20 );
+#endif
+
       break;
     case QtWarningMsg:
     {
@@ -395,7 +401,8 @@ void myMessageOutput( QtMsgType type, const QMessageLogContext &, const QString 
        * - QtSVG warnings with regards to lack of implementation beyond Tiny SVG 1.2
        */
       if ( msg.startsWith( QLatin1String( "libpng warning: iCCP: known incorrect sRGB profile" ), Qt::CaseInsensitive ) ||
-           msg.contains( QLatin1String( "Could not add child element to parent element because the types are incorrect" ), Qt::CaseInsensitive ) )
+           msg.contains( QLatin1String( "Could not add child element to parent element because the types are incorrect" ), Qt::CaseInsensitive ) ||
+           msg.contains( QLatin1String( "OpenType support missing for" ), Qt::CaseInsensitive ) )
         break;
 
       myPrint( "Warning: %s\n", msg.toLocal8Bit().constData() );
@@ -880,16 +887,14 @@ int main( int argc, char *argv[] )
   QCoreApplication::setOrganizationDomain( QgsApplication::QGIS_ORGANIZATION_DOMAIN );
   QCoreApplication::setApplicationName( QgsApplication::QGIS_APPLICATION_NAME );
   QCoreApplication::setAttribute( Qt::AA_DontShowIconsInMenus, false );
-#if QT_VERSION >= QT_VERSION_CHECK(5, 10, 0)
   QCoreApplication::setAttribute( Qt::AA_DisableWindowContextHelpButton, true );
-#endif
 
   // Set up an OpenGL Context to be shared between threads beforehand
   // for plugins that depend on Qt WebEngine module.
   // As suggested by Qt documentation at:
   //   - https://doc.qt.io/qt-5/qtwebengine.html
   //   - https://code.qt.io/cgit/qt/qtwebengine.git/plain/src/webenginewidgets/api/qtwebenginewidgetsglobal.cpp
-#if defined(QT_OS_WIN) && !defined(QT_NO_OPENGL) && (QT_VERSION >= QT_VERSION_CHECK(5, 4, 0) )
+#if defined(QT_OS_WIN) && !defined(QT_NO_OPENGL)
   QCoreApplication::setAttribute( Qt::AA_ShareOpenGLContexts, true );
 #endif
 
@@ -961,20 +966,18 @@ int main( int argc, char *argv[] )
   delete profile;
 
   {
-    QgsSettings settings;
-
     /* Translation file for QGIS.
     */
-    QString myUserTranslation = settings.value( QStringLiteral( "locale/userLocale" ), "" ).toString();
-    QString myGlobalLocale = settings.value( QStringLiteral( "locale/globalLocale" ), "" ).toString();
+    QString myUserTranslation = QgsApplication::settingsLocaleUserLocale.value();
+    QString myGlobalLocale = QgsApplication::settingsLocaleGlobalLocale.value();
     bool myShowGroupSeparatorFlag = false; // Default to false
-    bool myLocaleOverrideFlag = settings.value( QStringLiteral( "locale/overrideFlag" ), false ).toBool();
+    bool myLocaleOverrideFlag = QgsApplication::settingsLocaleOverrideFlag.value();
 
     // Override Show Group Separator if the global override flag is set
     if ( myLocaleOverrideFlag )
     {
       // Default to false again
-      myShowGroupSeparatorFlag = settings.value( QStringLiteral( "locale/showGroupSeparator" ), false ).toBool();
+      myShowGroupSeparatorFlag = QgsApplication::settingsLocaleShowGroupSeparator.value();
     }
 
     //
@@ -988,7 +991,7 @@ int main( int argc, char *argv[] )
     //
     if ( !translationCode.isNull() && !translationCode.isEmpty() )
     {
-      settings.setValue( QStringLiteral( "locale/userLocale" ), translationCode );
+      QgsApplication::settingsLocaleUserLocale.setValue( translationCode );
     }
     else
     {
@@ -997,7 +1000,7 @@ int main( int argc, char *argv[] )
         translationCode = QLocale().name();
         //setting the locale/userLocale when the --lang= option is not set will allow third party
         //plugins to always use the same locale as the QGIS, otherwise they can be out of sync
-        settings.setValue( QStringLiteral( "locale/userLocale" ), translationCode );
+        QgsApplication::settingsLocaleUserLocale.setValue( translationCode );
       }
       else
       {
@@ -1030,7 +1033,7 @@ int main( int argc, char *argv[] )
   QgsApplication myApp( argc, argv, myUseGuiFlag );
 
   //write the log messages written before creating QgsApplication
-  for ( const QString &preApplicationLogMessage : qgis::as_const( preApplicationLogMessages ) )
+  for ( const QString &preApplicationLogMessage : std::as_const( preApplicationLogMessages ) )
     QgsMessageLog::logMessage( preApplicationLogMessage );
 
   // Settings migration is only supported on the default profile for now.
@@ -1038,31 +1041,30 @@ int main( int argc, char *argv[] )
   {
     // Note: this flag is ka version number so that we can reset it once we change the version.
     // Note2: Is this a good idea can we do it better.
-
-    QgsSettings migSettings;
-    int firstRunVersion = migSettings.value( QStringLiteral( "migration/firstRunVersionFlag" ), 0 ).toInt();
-    bool showWelcome = ( firstRunVersion == 0  || Qgis::versionInt() > firstRunVersion );
-
-    std::unique_ptr< QgsVersionMigration > migration( QgsVersionMigration::canMigrate( 20000, Qgis::versionInt() ) );
-    if ( migration && ( settingsMigrationForce || migration->requiresMigration() ) )
+    // Note3: Updated to only show if we have a migration from QGIS 2 - see https://github.com/qgis/QGIS/pull/38616
+    QString path = QSettings( "QGIS", "QGIS2" ).fileName() ;
+    if ( QFile::exists( path ) )
     {
-      bool runMigration = true;
-      if ( !settingsMigrationForce && showWelcome )
+      QgsSettings migSettings;
+      int firstRunVersion = migSettings.value( QStringLiteral( "migration/firstRunVersionFlag" ), 0 ).toInt();
+      bool showWelcome = ( firstRunVersion == 0  || Qgis::versionInt() > firstRunVersion );
+      std::unique_ptr< QgsVersionMigration > migration( QgsVersionMigration::canMigrate( 20000, Qgis::versionInt() ) );
+      if ( migration && ( settingsMigrationForce || migration->requiresMigration() ) )
       {
-        QgsFirstRunDialog dlg;
-        if ( ! QFile::exists( QSettings( "QGIS", "QGIS2" ).fileName() ) )
+        bool runMigration = true;
+        if ( !settingsMigrationForce && showWelcome )
         {
-          dlg.hideMigration();
+          QgsFirstRunDialog dlg;
+          dlg.exec();
+          runMigration = dlg.migrateSettings();
+          migSettings.setValue( QStringLiteral( "migration/firstRunVersionFlag" ), Qgis::versionInt() );
         }
-        dlg.exec();
-        runMigration = dlg.migrateSettings();
-        migSettings.setValue( QStringLiteral( "migration/firstRunVersionFlag" ), Qgis::versionInt() );
-      }
 
-      if ( runMigration )
-      {
-        QgsDebugMsg( QStringLiteral( "RUNNING MIGRATION" ) );
-        migration->runMigration();
+        if ( runMigration )
+        {
+          QgsDebugMsg( QStringLiteral( "RUNNING MIGRATION" ) );
+          migration->runMigration();
+        }
       }
     }
   }
@@ -1193,22 +1195,24 @@ int main( int argc, char *argv[] )
   QgsCustomization::instance()->loadDefault();
 
 #ifdef Q_OS_MACX
-  // If the GDAL plugins are bundled with the application and GDAL_DRIVER_PATH
-  // is not already defined, use the GDAL plugins in the application bundle.
-  QString gdalPlugins( QCoreApplication::applicationDirPath().append( "/lib/gdalplugins" ) );
-  if ( QFile::exists( gdalPlugins ) && !getenv( "GDAL_DRIVER_PATH" ) )
+  if ( !getenv( "GDAL_DRIVER_PATH" ) )
   {
-    setenv( "GDAL_DRIVER_PATH", gdalPlugins.toUtf8(), 1 );
+    // If the GDAL plugins are bundled with the application and GDAL_DRIVER_PATH
+    // is not already defined, use the GDAL plugins in the application bundle.
+    QString gdalPlugins( QCoreApplication::applicationDirPath().append( "/lib/gdalplugins" ) );
+    if ( QFile::exists( gdalPlugins ) )
+    {
+      setenv( "GDAL_DRIVER_PATH", gdalPlugins.toUtf8(), 1 );
+    }
   }
 
   // Point GDAL_DATA at any GDAL share directory embedded in the app bundle
   if ( !getenv( "GDAL_DATA" ) )
   {
     QStringList gdalShares;
-    QString appResources( QDir::cleanPath( QgsApplication::pkgDataPath() ) );
     gdalShares << QCoreApplication::applicationDirPath().append( "/share/gdal" )
-               << appResources.append( "/share/gdal" )
-               << appResources.append( "/gdal" );
+               << QDir::cleanPath( QgsApplication::pkgDataPath() ).append( "/share/gdal" )
+               << QDir::cleanPath( QgsApplication::pkgDataPath() ).append( "/gdal" );
     const auto constGdalShares = gdalShares;
     for ( const QString &gdalShare : constGdalShares )
     {
@@ -1217,6 +1221,15 @@ int main( int argc, char *argv[] )
         setenv( "GDAL_DATA", gdalShare.toUtf8().constData(), 1 );
         break;
       }
+    }
+  }
+
+  // Point PYTHONHOME to embedded interpreter if present in the bundle
+  if ( !getenv( "PYTHONHOME" ) )
+  {
+    if ( QFile::exists( QCoreApplication::applicationDirPath().append( "/bin/python3" ) ) )
+    {
+      setenv( "PYTHONHOME", QCoreApplication::applicationDirPath().toUtf8().constData(), 1 );
     }
   }
 #endif
@@ -1375,13 +1388,16 @@ int main( int argc, char *argv[] )
   /////////////////////////////////////////////////////////////////////
   if ( ! sProjectFileName.isEmpty() )
   {
+    // in case the project contains broken layers, interactive
+    // "Handle Bad Layers" is displayed that could be blocked by splash screen
+    mypSplash->hide();
     qgis->openProject( sProjectFileName );
   }
 
   /////////////////////////////////////////////////////////////////////
   // autoload any file names that were passed in on the command line
   /////////////////////////////////////////////////////////////////////
-  for ( const QString &layerName : qgis::as_const( sFileList ) )
+  for ( const QString &layerName : std::as_const( sFileList ) )
   {
     QgsDebugMsg( QStringLiteral( "Trying to load file : %1" ).arg( layerName ) );
     // don't load anything with a .qgs extension - these are project files
@@ -1416,7 +1432,11 @@ int main( int argc, char *argv[] )
         break;
       }
 
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 2)
       coords[i] = myInitialExtent.midRef( posOld, pos - posOld ).toDouble( &ok );
+#else
+      coords[i] = QStringView {myInitialExtent}.mid( posOld, pos - posOld ).toDouble( &ok );
+#endif
       if ( !ok )
         break;
 
@@ -1425,7 +1445,13 @@ int main( int argc, char *argv[] )
 
     // parse last coordinate
     if ( ok )
+    {
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 2)
       coords[3] = myInitialExtent.midRef( posOld ).toDouble( &ok );
+#else
+      coords[3] = QStringView {myInitialExtent}.mid( posOld ).toDouble( &ok );
+#endif
+    }
 
     if ( !ok )
     {

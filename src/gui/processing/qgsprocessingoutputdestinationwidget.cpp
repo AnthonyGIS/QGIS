@@ -31,6 +31,7 @@
 #include <QFileDialog>
 #include <QInputDialog>
 #include <QCheckBox>
+#include <QUrl>
 
 ///@cond NOT_STABLE
 
@@ -55,7 +56,7 @@ QgsProcessingLayerOutputDestinationWidget::QgsProcessingLayerOutputDestinationWi
   QgsSettings settings;
   mEncoding = settings.value( QStringLiteral( "/Processing/encoding" ), QStringLiteral( "System" ) ).toString();
 
-  if ( !mParameter->defaultValue().isValid() )
+  if ( !mParameter->defaultValueForGui().isValid() )
   {
     // no default value -- we default to either skipping the output or a temporary output, depending on the createByDefault value
     if ( mParameter->flags() & QgsProcessingParameterDefinition::FlagOptional && !mParameter->createByDefault() )
@@ -65,7 +66,7 @@ QgsProcessingLayerOutputDestinationWidget::QgsProcessingLayerOutputDestinationWi
   }
   else
   {
-    setValue( mParameter->defaultValue() );
+    setValue( mParameter->defaultValueForGui() );
   }
 
   setToolTip( mParameter->toolTip() );
@@ -92,14 +93,14 @@ void QgsProcessingLayerOutputDestinationWidget::setValue( const QVariant &value 
   }
   else
   {
-    if ( value.toString() == QStringLiteral( "memory:" ) || value.toString() == QgsProcessing::TEMPORARY_OUTPUT )
+    if ( value.toString() == QLatin1String( "memory:" ) || value.toString() == QgsProcessing::TEMPORARY_OUTPUT )
     {
       saveToTemporary();
     }
     else if ( value.canConvert< QgsProcessingOutputLayerDefinition >() )
     {
       const QgsProcessingOutputLayerDefinition def = value.value< QgsProcessingOutputLayerDefinition >();
-      if ( def.sink.staticValue().toString() == QStringLiteral( "memory:" ) || def.sink.staticValue().toString() == QgsProcessing::TEMPORARY_OUTPUT || def.sink.staticValue().toString().isEmpty() )
+      if ( def.sink.staticValue().toString() == QLatin1String( "memory:" ) || def.sink.staticValue().toString() == QgsProcessing::TEMPORARY_OUTPUT || def.sink.staticValue().toString().isEmpty() )
       {
         saveToTemporary();
       }
@@ -282,7 +283,7 @@ void QgsProcessingLayerOutputDestinationWidget::menuAboutToShow()
     connect( actionSaveToDatabase, &QAction::triggered, this, &QgsProcessingLayerOutputDestinationWidget::saveToDatabase );
     mMenu->addAction( actionSaveToDatabase );
 
-    if ( mParameter->algorithm() && dynamic_cast< const QgsProcessingParameterFeatureSink * >( mParameter )->supportsAppend() )
+    if ( mParameter->algorithm() && qgis::down_cast< const QgsProcessingParameterFeatureSink * >( mParameter )->supportsAppend() )
     {
       mMenu->addSeparator();
       QAction *actionAppendToLayer = new QAction( tr( "Append to Layer…" ), this );
@@ -406,7 +407,7 @@ void QgsProcessingLayerOutputDestinationWidget::selectFile()
 
   const bool dontConfirmOverwrite = mParameter->metadata().value( QStringLiteral( "widget_wrapper" ) ).toMap().value( QStringLiteral( "dontconfirmoverwrite" ), false ).toBool();
 
-  QString filename = QFileDialog::getSaveFileName( this, tr( "Save file" ), path, fileFilter, &lastFilter, dontConfirmOverwrite ? QFileDialog::Options( QFileDialog::DontConfirmOverwrite ) : nullptr );
+  QString filename = QFileDialog::getSaveFileName( this, tr( "Save file" ), path, fileFilter, &lastFilter, dontConfirmOverwrite ? QFileDialog::Options( QFileDialog::DontConfirmOverwrite ) : QFileDialog::Options() );
   if ( !filename.isEmpty() )
   {
     mUseTemporary = false;
@@ -472,6 +473,7 @@ void QgsProcessingLayerOutputDestinationWidget::saveToDatabase()
     QgsNewDatabaseTableNameWidget *widget = new QgsNewDatabaseTableNameWidget( mBrowserModel, QStringList() << QStringLiteral( "postgres" )
         << QStringLiteral( "mssql" )
         << QStringLiteral( "ogr" )
+        << QStringLiteral( "hana" )
         << QStringLiteral( "spatialite" ), this );
     widget->setPanelTitle( tr( "Save “%1” to Database Table" ).arg( mParameter->description() ) );
     widget->setAcceptButtonVisible( true );
@@ -541,7 +543,7 @@ void QgsProcessingLayerOutputDestinationWidget::appendToLayer()
       else
       {
         // get fields for destination
-        std::unique_ptr< QgsVectorLayer > dest = qgis::make_unique< QgsVectorLayer >( widget->uri().uri, QString(), widget->uri().providerKey );
+        std::unique_ptr< QgsVectorLayer > dest = std::make_unique< QgsVectorLayer >( widget->uri().uri, QString(), widget->uri().providerKey );
         if ( widget->uri().providerKey == QLatin1String( "ogr" ) )
           setAppendDestination( widget->uri().uri, dest->fields() );
         else
@@ -655,7 +657,7 @@ QString QgsProcessingLayerOutputDestinationWidget::mimeDataToPath( const QMimeDa
   if ( !data->text().isEmpty() && !rawPaths.contains( data->text() ) )
     rawPaths.append( data->text() );
 
-  for ( const QString &path : qgis::as_const( rawPaths ) )
+  for ( const QString &path : std::as_const( rawPaths ) )
   {
     QFileInfo file( path );
     if ( file.isFile() && ( mParameter->type() == QgsProcessingParameterFeatureSink::typeName()

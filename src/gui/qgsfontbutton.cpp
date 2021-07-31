@@ -54,11 +54,7 @@ QgsFontButton::QgsFontButton( QWidget *parent, const QString &dialogTitle )
   //make sure height of button looks good under different platforms
   QSize size = QToolButton::minimumSizeHint();
   int fontHeight = Qgis::UI_SCALE_FACTOR * fontMetrics().height() * 1.4;
-#if QT_VERSION < QT_VERSION_CHECK(5, 11, 0)
-  int minWidth = Qgis::UI_SCALE_FACTOR * fontMetrics().width( 'X' ) * 20;
-#else
   int minWidth = Qgis::UI_SCALE_FACTOR * fontMetrics().horizontalAdvance( 'X' ) * 20;
-#endif
   mSizeHint = QSize( std::max( minWidth, size.width() ), std::max( size.height(), fontHeight ) );
 }
 
@@ -94,12 +90,12 @@ void QgsFontButton::showSettingsDialog()
       QgsPanelWidget *panel = QgsPanelWidget::findParentPanel( this );
       if ( panel && panel->dockMode() )
       {
-        QgsTextFormatPanelWidget *formatWidget = new QgsTextFormatPanelWidget( mFormat, mMapCanvas, this, mLayer.data() );
-        formatWidget->setPanelTitle( mDialogTitle );
-        formatWidget->setContext( symbolContext );
+        mActivePanel = new QgsTextFormatPanelWidget( mFormat, mMapCanvas, this, mLayer.data() );
+        mActivePanel->setPanelTitle( mDialogTitle );
+        mActivePanel->setContext( symbolContext );
 
-        connect( formatWidget, &QgsTextFormatPanelWidget::widgetChanged, this, [ this, formatWidget ] { this->setTextFormat( formatWidget->format() ); } );
-        panel->openPanel( formatWidget );
+        connect( mActivePanel, &QgsTextFormatPanelWidget::widgetChanged, this, [ this ] { setTextFormat( mActivePanel->format() ); } );
+        panel->openPanel( mActivePanel );
         return;
       }
 
@@ -154,8 +150,14 @@ QgsMessageBar *QgsFontButton::messageBar() const
 
 void QgsFontButton::setTextFormat( const QgsTextFormat &format )
 {
+  if ( mActivePanel && !format.isValid() )
+    mActivePanel->acceptPanel();
+
   mFormat = format;
   updatePreview();
+
+  if ( mActivePanel && format.isValid() )
+    mActivePanel->setFormat( format );
   emit changed();
 }
 
@@ -387,7 +389,7 @@ void QgsFontButton::wheelEvent( QWheelEvent *event )
   }
 
   double increment = ( event->modifiers() & Qt::ControlModifier ) ? 0.1 : 1;
-  if ( event->delta() > 0 )
+  if ( event->angleDelta().y() > 0 )
   {
     size += increment;
   }
@@ -546,7 +548,6 @@ void QgsFontButton::prepareMenu()
   QWidgetAction *sizeAction = new QWidgetAction( mMenu );
   QWidget *sizeWidget = new QWidget();
   QVBoxLayout *sizeLayout = new QVBoxLayout();
-  sizeLayout->setMargin( 0 );
   sizeLayout->setContentsMargins( 0, 0, 0, 3 );
   sizeLayout->setSpacing( 2 );
 
@@ -588,7 +589,6 @@ void QgsFontButton::prepareMenu()
     emit changed();
   } );
   QHBoxLayout *spinLayout = new QHBoxLayout();
-  spinLayout->setMargin( 0 );
   spinLayout->setContentsMargins( 4, 0, 4, 0 );
   spinLayout->addWidget( sizeSpin );
   sizeLayout->addLayout( spinLayout );

@@ -28,7 +28,9 @@ from qgis.core import (
     QgsCoordinateReferenceSystem,
     QgsProject,
     QgsProcessingException,
-    QgsVectorLayer
+    QgsVectorLayer,
+    QgsFeatureSink,
+    QgsProperty
 )
 from processing.core.Processing import Processing
 from processing.core.ProcessingConfig import ProcessingConfig
@@ -250,7 +252,7 @@ class TestQgsProcessingInPlace(unittest.TestCase):
         self._make_compatible_tester('MultiPoint((1 3), (2 2))', 'MultiPoint')
 
         self._make_compatible_tester('Polygon((1 1, 2 2, 3 3, 1 1))', 'Polygon')
-        self._make_compatible_tester('Polygon((1 1, 2 2, 3 3, 1 1)', 'Polygon', [1, 'nope'])
+        self._make_compatible_tester('Polygon((1 1, 2 2, 3 3, 1 1))', 'Polygon', [1, 'nope'])
         self._make_compatible_tester('Polygon z ((1 1 1, 2 2 2, 3 3 3, 1 1 1))', 'Polygon')
         self._make_compatible_tester('Polygon z ((1 1 1, 2 2 2, 3 3 3, 1 1 1))', 'PolygonZ')
 
@@ -273,22 +275,22 @@ class TestQgsProcessingInPlace(unittest.TestCase):
         self._make_compatible_tester('Polygon((1 1, 2 2, 3 3, 1 1))', 'MultiPolygon')
         self._make_compatible_tester('MultiPolygon(((1 1, 2 2, 3 3, 1 1)), ((1 1, 2 2, 3 3, 1 1)))', 'MultiPolygon')
 
-        self._make_compatible_tester('LineString((1 1, 2 2, 3 3, 1 1))', 'LineString')
-        self._make_compatible_tester('LineString((1 1, 2 2, 3 3, 1 1)', 'LineString', [1, 'nope'])
-        self._make_compatible_tester('LineString z ((1 1 1, 2 2 2, 3 3 3, 1 1 1))', 'LineString')
-        self._make_compatible_tester('LineString z ((1 1 1, 2 2 2, 3 3 3, 1 1 1))', 'LineStringZ')
-        self._make_compatible_tester('LineString m ((1 1 1, 2 2 2, 3 3 3, 1 1 1))', 'LineString')
-        self._make_compatible_tester('LineString m ((1 1 1, 2 2 2, 3 3 3, 1 1 1))', 'LineStringM')
+        self._make_compatible_tester('LineString(1 1, 2 2, 3 3, 1 1)', 'LineString')
+        self._make_compatible_tester('LineString(1 1, 2 2, 3 3, 1 1)', 'LineString', [1, 'nope'])
+        self._make_compatible_tester('LineString z (1 1 1, 2 2 2, 3 3 3, 1 1 1)', 'LineString')
+        self._make_compatible_tester('LineString z (1 1 1, 2 2 2, 3 3 3, 1 1 1)', 'LineStringZ')
+        self._make_compatible_tester('LineString m (1 1 1, 2 2 2, 3 3 3, 1 1 1)', 'LineString')
+        self._make_compatible_tester('LineString m (1 1 1, 2 2 2, 3 3 3, 1 1 1)', 'LineStringM')
 
         # Adding Z back
-        l, f = self._make_compatible_tester('LineString (1 1, 2 2, 3 3, 1 1))', 'LineStringZ')
+        l, f = self._make_compatible_tester('LineString (1 1, 2 2, 3 3, 1 1)', 'LineStringZ')
         g = f[0].geometry()
         g2 = g.constGet()
         for v in g2.vertices():
             self.assertEqual(v.z(), 0)
 
         # Adding M back
-        l, f = self._make_compatible_tester('LineString (1 1, 2 2, 3 3, 1 1))', 'LineStringM')
+        l, f = self._make_compatible_tester('LineString (1 1, 2 2, 3 3, 1 1)', 'LineStringM')
         g = f[0].geometry()
         g2 = g.constGet()
         for v in g2.vertices():
@@ -491,7 +493,7 @@ class TestQgsProcessingInPlace(unittest.TestCase):
         self.assertEqual(len(new_features), 1)
         self.assertEqual(new_features[0].geometry().asWkt(), '')
 
-    def _alg_tester(self, alg_name, input_layer, parameters, invalid_geometry_policy=QgsFeatureRequest.GeometryNoCheck):
+    def _alg_tester(self, alg_name, input_layer, parameters, invalid_geometry_policy=QgsFeatureRequest.GeometryNoCheck, retain_selection=False):
 
         alg = self.registry.createAlgorithmById(alg_name)
 
@@ -500,9 +502,11 @@ class TestQgsProcessingInPlace(unittest.TestCase):
         parameters['OUTPUT'] = 'memory:'
 
         old_features = [f for f in input_layer.getFeatures()]
-        input_layer.selectByIds([old_features[0].id()])
-        # Check selected
-        self.assertEqual(input_layer.selectedFeatureIds(), [old_features[0].id()], alg_name)
+
+        if not retain_selection:
+            input_layer.selectByIds([old_features[0].id()])
+            # Check selected
+            self.assertEqual(input_layer.selectedFeatureIds(), [old_features[0].id()], alg_name)
 
         context = QgsProcessingContext()
         context.setInvalidGeometryCheck(invalid_geometry_policy)
@@ -911,6 +915,62 @@ class TestQgsProcessingInPlace(unittest.TestCase):
             pks.add(f.attribute(0))
 
         self.assertTrue(gpkg_layer.commitChanges())
+
+    def test_regenerate_fid(self):
+        """Test RegeneratePrimaryKey flag"""
+
+        temp_dir = QTemporaryDir()
+        temp_path = temp_dir.path()
+        gpkg_name = 'bug_31634_Multi_to_Singleparts_FID.gpkg'
+        gpkg_path = os.path.join(temp_path, gpkg_name)
+        shutil.copyfile(os.path.join(unitTestDataPath(), gpkg_name), gpkg_path)
+
+        gpkg_layer = QgsVectorLayer(gpkg_path + '|layername=Multi_to_Singleparts_FID_bug', 'lyr', 'ogr')
+        self.assertTrue(gpkg_layer.isValid())
+
+        f = next(gpkg_layer.getFeatures())
+        self.assertEqual(f['fid'], 1)
+        res = QgsVectorLayerUtils.makeFeatureCompatible(f, gpkg_layer)
+        self.assertEqual([ff['fid'] for ff in res], [1])
+
+        # if RegeneratePrimaryKey set then we should discard fid field
+        res = QgsVectorLayerUtils.makeFeatureCompatible(f, gpkg_layer, QgsFeatureSink.RegeneratePrimaryKey)
+        self.assertEqual([ff['fid'] for ff in res], [None])
+
+    def test_datadefinedvalue(self):
+        """Check that data defined parameters work correctly"""
+
+        polygon_layer = self._make_layer('Polygon')
+        f1 = QgsFeature(polygon_layer.fields())
+        f1.setAttributes([1])
+        f1.setGeometry(QgsGeometry.fromWkt('POLYGON((1.2 1.2, 1.2 2.2, 2.2 2.2, 2.2 1.2, 1.2 1.2))'))
+        f2 = QgsFeature(polygon_layer.fields())
+        f2.setAttributes([2])
+        f2.setGeometry(QgsGeometry.fromWkt('POLYGON((1.1 1.1, 1.1 2.1, 2.1 2.1, 2.1 1.1, 1.1 1.1))'))
+        self.assertTrue(f2.isValid())
+        self.assertTrue(polygon_layer.startEditing())
+        self.assertTrue(polygon_layer.addFeatures([f1, f2]))
+        self.assertEqual(polygon_layer.featureCount(), 2)
+        polygon_layer.commitChanges()
+        self.assertEqual(polygon_layer.featureCount(), 2)
+        QgsProject.instance().addMapLayers([polygon_layer])
+
+        polygon_layer.selectAll()
+        self.assertEqual(polygon_layer.selectedFeatureCount(), 2)
+
+        old_features, new_features = self._alg_tester(
+            'native:densifygeometries',
+            polygon_layer,
+            {
+                'VERTICES': QgsProperty.fromField('int_f'),
+            }, retain_selection=True
+        )
+
+        geometries = [f.geometry() for f in new_features]
+        self.assertEqual(geometries[0].asWkt(2), 'Polygon ((1.2 1.2, 1.2 1.7, 1.2 2.2, 1.7 2.2, 2.2 2.2, 2.2 1.7, 2.2 1.2, 1.7 1.2, 1.2 1.2))')
+        self.assertEqual(geometries[1].asWkt(2), 'Polygon ((1.1 1.1, 1.1 1.43, 1.1 1.77, 1.1 2.1, 1.43 2.1, 1.77 2.1, 2.1 2.1, 2.1 1.77, 2.1 1.43, 2.1 1.1, 1.77 1.1, 1.43 1.1, 1.1 1.1))')
+        # Check selected
+        self.assertCountEqual(polygon_layer.selectedFeatureIds(), [1, 2])
 
 
 if __name__ == '__main__':

@@ -123,7 +123,7 @@ class GUI_EXPORT QgsRelationReferenceWidget : public QWidget
     bool embedForm() { return mEmbedForm; }
     void setEmbedForm( bool display );
 
-    //! determines if the foreign key is shown in a combox box or a read-only line edit
+    //! determines if the drop-down is enabled
     bool readOnlySelector() { return mReadOnlySelector; }
     void setReadOnlySelector( bool readOnly );
 
@@ -156,6 +156,17 @@ class GUI_EXPORT QgsRelationReferenceWidget : public QWidget
      * \param chainFilters If chaining should be enabled
      */
     void setChainFilters( bool chainFilters );
+
+    /**
+     * Returns the currently set filter expression.
+     */
+    QString filterExpression() const { return mFilterExpression; };
+
+    /**
+     * If not empty, will be used as filter expression.
+     * Only if this evaluates to TRUE, the value will be shown.
+     */
+    void setFilterExpression( const QString &filterExpression );
 
     /**
      * Returns the related feature (from the referenced layer)
@@ -276,7 +287,7 @@ class GUI_EXPORT QgsRelationReferenceWidget : public QWidget
   private slots:
     void highlightActionTriggered( QAction *action );
     void deleteHighlight();
-    void comboReferenceChanged( int index );
+    void comboReferenceChanged();
     void featureIdentified( const QgsFeature &feature );
     void setMapTool( QgsMapTool *mapTool );
     void unsetMapTool();
@@ -313,6 +324,7 @@ class GUI_EXPORT QgsRelationReferenceWidget : public QWidget
     QgsVectorLayer *mReferencingLayer = nullptr;
     QgsFeatureListComboBox *mComboBox = nullptr;
     QList<QComboBox *> mFilterComboBoxes;
+    QString mFilterExpression;
     QWidget *mWindowWidget = nullptr;
     bool mShown = false;
     QgsRelation mRelation;
@@ -349,7 +361,6 @@ class GUI_EXPORT QgsRelationReferenceWidget : public QWidget
     QHBoxLayout *mFilterLayout = nullptr;
     QgsCollapsibleGroupBox *mAttributeEditorFrame = nullptr;
     QVBoxLayout *mAttributeEditorLayout = nullptr;
-    QLineEdit *mLineEdit = nullptr;
     QLabel *mInvalidLabel = nullptr;
 
     friend class TestQgsRelationReferenceWidget;

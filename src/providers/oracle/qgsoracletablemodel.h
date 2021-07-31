@@ -25,8 +25,10 @@ class QIcon;
 
 /**
  * A model that holds the tables of a database in a hierarchy where the
-schemas are the root elements that contain the individual tables as children.
-The tables have the following columns: Type, Owner, Tablename, Geometry Column, Sql*/
+ * schemas are the root elements that contain the individual tables as children.
+ *
+ * The tables have the following columns: Type, Owner, Tablename, Geometry Column, Sql
+*/
 class QgsOracleTableModel : public QStandardItemModel
 {
     Q_OBJECT
@@ -58,8 +60,6 @@ class QgsOracleTableModel : public QStandardItemModel
     bool setData( const QModelIndex &index, const QVariant &value, int role = Qt::EditRole ) override;
 
     QString layerURI( const QModelIndex &index, const QgsDataSourceUri &connInfo );
-
-    static QIcon iconForWkbType( QgsWkbTypes::Type type );
 
   private:
     //! Number of tables in the model

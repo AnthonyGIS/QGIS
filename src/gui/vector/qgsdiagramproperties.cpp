@@ -44,11 +44,13 @@
 #include "qgsexpressioncontextutils.h"
 #include "qgspropertytransformer.h"
 #include "qgspainteffectregistry.h"
+#include "qgspainteffect.h"
+#include "qgslinesymbol.h"
 
 #include <QList>
 #include <QMessageBox>
 #include <QStyledItemDelegate>
-
+#include <QRandomGenerator>
 
 class EditBlockerDelegate: public QStyledItemDelegate
 {
@@ -118,7 +120,7 @@ QgsDiagramProperties::QgsDiagramProperties( QgsVectorLayer *layer, QWidget *pare
   mDiagramTypeComboBox->addItem( pix, tr( "Stacked Bars" ), DIAGRAM_NAME_STACKED );
   mDiagramTypeComboBox->blockSignals( false );
 
-  mAxisLineStyleButton->setSymbolType( QgsSymbol::Line );
+  mAxisLineStyleButton->setSymbolType( Qgis::SymbolType::Line );
   mAxisLineStyleButton->setDialogTitle( tr( "Axis Line Symbol" ) );
 
   mScaleRangeWidget->setMapCanvas( mMapCanvas );
@@ -141,11 +143,7 @@ QgsDiagramProperties::QgsDiagramProperties( QgsVectorLayer *layer, QWidget *pare
   mDiagramAttributesTreeWidget->setItemDelegateForColumn( ColumnAttributeExpression, new EditBlockerDelegate( this ) );
   mDiagramAttributesTreeWidget->setItemDelegateForColumn( ColumnColor, new QgsColorSwatchDelegate( this ) );
 
-#if QT_VERSION < QT_VERSION_CHECK(5, 11, 0)
-  mDiagramAttributesTreeWidget->setColumnWidth( ColumnColor, Qgis::UI_SCALE_FACTOR * fontMetrics().width( 'X' ) * 6.6 );
-#else
   mDiagramAttributesTreeWidget->setColumnWidth( ColumnColor, Qgis::UI_SCALE_FACTOR * fontMetrics().horizontalAdvance( 'X' ) * 6.6 );
-#endif
 
   connect( mFixedSizeRadio, &QRadioButton::toggled, this, &QgsDiagramProperties::scalingTypeChanged );
   connect( mAttributeBasedScalingRadio, &QRadioButton::toggled, this, &QgsDiagramProperties::scalingTypeChanged );
@@ -189,14 +187,14 @@ QgsDiagramProperties::QgsDiagramProperties( QgsVectorLayer *layer, QWidget *pare
   mPlacePointBtnGrp->addButton( radAroundPoint );
   mPlacePointBtnGrp->addButton( radOverPoint );
   mPlacePointBtnGrp->setExclusive( true );
-  connect( mPlacePointBtnGrp, static_cast<void ( QButtonGroup::* )( int )>( &QButtonGroup::buttonClicked ), this, &QgsDiagramProperties::updatePlacementWidgets );
+  connect( mPlacePointBtnGrp, qOverload< QAbstractButton * >( &QButtonGroup::buttonClicked ), this, &QgsDiagramProperties::updatePlacementWidgets );
 
   // setup line placement button group
   mPlaceLineBtnGrp = new QButtonGroup( this );
   mPlaceLineBtnGrp->addButton( radAroundLine );
   mPlaceLineBtnGrp->addButton( radOverLine );
   mPlaceLineBtnGrp->setExclusive( true );
-  connect( mPlaceLineBtnGrp, static_cast<void ( QButtonGroup::* )( int )>( &QButtonGroup::buttonClicked ), this, &QgsDiagramProperties::updatePlacementWidgets );
+  connect( mPlaceLineBtnGrp, qOverload< QAbstractButton * >( &QButtonGroup::buttonClicked ), this, &QgsDiagramProperties::updatePlacementWidgets );
 
   // setup polygon placement button group
   mPlacePolygonBtnGrp = new QButtonGroup( this );
@@ -205,8 +203,7 @@ QgsDiagramProperties::QgsDiagramProperties( QgsVectorLayer *layer, QWidget *pare
   mPlacePolygonBtnGrp->addButton( radPolygonPerimeter );
   mPlacePolygonBtnGrp->addButton( radInsidePolygon );
   mPlacePolygonBtnGrp->setExclusive( true );
-  connect( mPlacePolygonBtnGrp, static_cast<void ( QButtonGroup::* )( int )>( &QButtonGroup::buttonClicked ), this, &QgsDiagramProperties::updatePlacementWidgets );
-
+  connect( mPlacePolygonBtnGrp, qOverload< QAbstractButton * >( &QButtonGroup::buttonClicked ), this, &QgsDiagramProperties::updatePlacementWidgets );
 
   mLabelPlacementComboBox->addItem( tr( "Height" ), QgsDiagramSettings::Height );
   mLabelPlacementComboBox->addItem( tr( "x-height" ), QgsDiagramSettings::XHeight );
@@ -261,7 +258,30 @@ QgsDiagramProperties::QgsDiagramProperties( QgsVectorLayer *layer, QWidget *pare
   mPaintEffect.reset( QgsPaintEffectRegistry::defaultStack() );
   mPaintEffect->setEnabled( false );
 
-  const QgsDiagramRenderer *dr = layer->diagramRenderer();
+  syncToLayer();
+
+  connect( mAddAttributeExpression, &QPushButton::clicked, this, &QgsDiagramProperties::showAddAttributeExpressionDialog );
+  registerDataDefinedButton( mBackgroundColorDDBtn, QgsDiagramLayerSettings::BackgroundColor );
+  registerDataDefinedButton( mLineColorDDBtn, QgsDiagramLayerSettings::StrokeColor );
+  registerDataDefinedButton( mLineWidthDDBtn, QgsDiagramLayerSettings::StrokeWidth );
+  registerDataDefinedButton( mCoordXDDBtn, QgsDiagramLayerSettings::PositionX );
+  registerDataDefinedButton( mCoordYDDBtn, QgsDiagramLayerSettings::PositionY );
+  registerDataDefinedButton( mDistanceDDBtn, QgsDiagramLayerSettings::Distance );
+  registerDataDefinedButton( mPriorityDDBtn, QgsDiagramLayerSettings::Priority );
+  registerDataDefinedButton( mZOrderDDBtn, QgsDiagramLayerSettings::ZIndex );
+  registerDataDefinedButton( mShowDiagramDDBtn, QgsDiagramLayerSettings::Show );
+  registerDataDefinedButton( mAlwaysShowDDBtn, QgsDiagramLayerSettings::AlwaysShow );
+  registerDataDefinedButton( mIsObstacleDDBtn, QgsDiagramLayerSettings::IsObstacle );
+  registerDataDefinedButton( mStartAngleDDBtn, QgsDiagramLayerSettings::StartAngle );
+
+  connect( mButtonSizeLegendSettings, &QPushButton::clicked, this, &QgsDiagramProperties::showSizeLegendDialog );
+}
+
+void QgsDiagramProperties::syncToLayer()
+{
+  mDiagramAttributesTreeWidget->clear();
+
+  const QgsDiagramRenderer *dr = mLayer->diagramRenderer();
   if ( !dr ) //no diagram renderer yet, insert reasonable default
   {
     mDiagramTypeComboBox->blockSignals( true );
@@ -277,12 +297,12 @@ QgsDiagramProperties::QgsDiagramProperties( QgsVectorLayer *layer, QWidget *pare
     mIncreaseMinimumSizeSpinBox->setEnabled( false );
     mIncreaseMinimumSizeLabel->setEnabled( false );
     mBarWidthSpinBox->setValue( 5 );
-    mScaleVisibilityGroupBox->setChecked( layer->hasScaleBasedVisibility() );
-    mScaleRangeWidget->setScaleRange( layer->minimumScale(), layer->maximumScale() );
+    mScaleVisibilityGroupBox->setChecked( mLayer->hasScaleBasedVisibility() );
+    mScaleRangeWidget->setScaleRange( mLayer->minimumScale(), mLayer->maximumScale() );
     mShowAllCheckBox->setChecked( true );
     mCheckBoxAttributeLegend->setChecked( true );
 
-    switch ( layerType )
+    switch ( mLayer->geometryType() )
     {
       case QgsWkbTypes::PointGeometry:
         radAroundPoint->setChecked( true );
@@ -339,8 +359,8 @@ QgsDiagramProperties::QgsDiagramProperties( QgsVectorLayer *layer, QWidget *pare
       mDiagramPenColorButton->setColor( settingList.at( 0 ).penColor );
       mPenWidthSpinBox->setValue( settingList.at( 0 ).penWidth );
       mDiagramSizeSpinBox->setValue( ( size.width() + size.height() ) / 2.0 );
-      mScaleRangeWidget->setScaleRange( ( settingList.at( 0 ).minimumScale > 0 ? settingList.at( 0 ).minimumScale : layer->minimumScale() ),
-                                        ( settingList.at( 0 ).maximumScale > 0 ? settingList.at( 0 ).maximumScale : layer->maximumScale() ) );
+      mScaleRangeWidget->setScaleRange( ( settingList.at( 0 ).minimumScale > 0 ? settingList.at( 0 ).minimumScale : mLayer->minimumScale() ),
+                                        ( settingList.at( 0 ).maximumScale > 0 ? settingList.at( 0 ).maximumScale : mLayer->maximumScale() ) );
       mScaleVisibilityGroupBox->setChecked( settingList.at( 0 ).scaleBasedVisibility );
       mDiagramUnitComboBox->setUnit( settingList.at( 0 ).sizeType );
       mDiagramUnitComboBox->setMapUnitScale( settingList.at( 0 ).sizeScale );
@@ -451,7 +471,7 @@ QgsDiagramProperties::QgsDiagramProperties( QgsVectorLayer *layer, QWidget *pare
       }
     }
 
-    const QgsDiagramLayerSettings *dls = layer->diagramLayerSettings();
+    const QgsDiagramLayerSettings *dls = mLayer->diagramLayerSettings();
     if ( dls )
     {
       mDiagramDistanceSpinBox->setValue( dls->distance() );
@@ -514,22 +534,6 @@ QgsDiagramProperties::QgsDiagramProperties( QgsVectorLayer *layer, QWidget *pare
     }
   }
   mPaintEffectWidget->setPaintEffect( mPaintEffect.get() );
-
-  connect( mAddAttributeExpression, &QPushButton::clicked, this, &QgsDiagramProperties::showAddAttributeExpressionDialog );
-  registerDataDefinedButton( mBackgroundColorDDBtn, QgsDiagramLayerSettings::BackgroundColor );
-  registerDataDefinedButton( mLineColorDDBtn, QgsDiagramLayerSettings::StrokeColor );
-  registerDataDefinedButton( mLineWidthDDBtn, QgsDiagramLayerSettings::StrokeWidth );
-  registerDataDefinedButton( mCoordXDDBtn, QgsDiagramLayerSettings::PositionX );
-  registerDataDefinedButton( mCoordYDDBtn, QgsDiagramLayerSettings::PositionY );
-  registerDataDefinedButton( mDistanceDDBtn, QgsDiagramLayerSettings::Distance );
-  registerDataDefinedButton( mPriorityDDBtn, QgsDiagramLayerSettings::Priority );
-  registerDataDefinedButton( mZOrderDDBtn, QgsDiagramLayerSettings::ZIndex );
-  registerDataDefinedButton( mShowDiagramDDBtn, QgsDiagramLayerSettings::Show );
-  registerDataDefinedButton( mAlwaysShowDDBtn, QgsDiagramLayerSettings::AlwaysShow );
-  registerDataDefinedButton( mIsObstacleDDBtn, QgsDiagramLayerSettings::IsObstacle );
-  registerDataDefinedButton( mStartAngleDDBtn, QgsDiagramLayerSettings::StartAngle );
-
-  connect( mButtonSizeLegendSettings, &QPushButton::clicked, this, &QgsDiagramProperties::showSizeLegendDialog );
 }
 
 QgsDiagramProperties::~QgsDiagramProperties()
@@ -665,9 +669,10 @@ void QgsDiagramProperties::addAttribute( QTreeWidgetItem *item )
   newItem->setFlags( ( newItem->flags() | Qt::ItemIsEditable ) & ~Qt::ItemIsDropEnabled );
 
   //set initial color for diagram category
-  int red = 1 + ( int )( 255.0 * qrand() / ( RAND_MAX + 1.0 ) );
-  int green = 1 + ( int )( 255.0 * qrand() / ( RAND_MAX + 1.0 ) );
-  int blue = 1 + ( int )( 255.0 * qrand() / ( RAND_MAX + 1.0 ) );
+  QRandomGenerator colorGenerator;
+  const int red = colorGenerator.bounded( 1, 256 );
+  const int green = colorGenerator.bounded( 1, 256 );
+  const int blue = colorGenerator.bounded( 1, 256 );
   QColor randomColor( red, green, blue );
   newItem->setData( ColumnColor, Qt::EditRole, randomColor );
   mDiagramAttributesTreeWidget->addTopLevelItem( newItem );
@@ -798,19 +803,19 @@ void QgsDiagramProperties::apply()
 
   if ( mDiagramType == DIAGRAM_NAME_TEXT )
   {
-    diagram = qgis::make_unique< QgsTextDiagram >();
+    diagram = std::make_unique< QgsTextDiagram >();
   }
   else if ( mDiagramType == DIAGRAM_NAME_PIE )
   {
-    diagram = qgis::make_unique< QgsPieDiagram >();
+    diagram = std::make_unique< QgsPieDiagram >();
   }
   else if ( mDiagramType == DIAGRAM_NAME_STACKED )
   {
-    diagram = qgis::make_unique< QgsStackedBarDiagram >();
+    diagram = std::make_unique< QgsStackedBarDiagram >();
   }
   else // if ( diagramType == DIAGRAM_NAME_HISTOGRAM )
   {
-    diagram = qgis::make_unique< QgsHistogramDiagram >();
+    diagram = std::make_unique< QgsHistogramDiagram >();
   }
 
   QgsDiagramSettings ds;
@@ -875,7 +880,7 @@ void QgsDiagramProperties::apply()
   ds.setSpacingUnit( mBarSpacingUnitComboBox->unit() );
   ds.setSpacingMapUnitScale( mBarSpacingUnitComboBox->getMapUnitScale() );
 
-  if ( mPaintEffect && !QgsPaintEffectRegistry::isDefaultStack( mPaintEffect.get() ) )
+  if ( mPaintEffect && ( !QgsPaintEffectRegistry::isDefaultStack( mPaintEffect.get() ) || mPaintEffect->enabled() ) )
     ds.setPaintEffect( mPaintEffect->clone() );
   else
     ds.setPaintEffect( nullptr );
@@ -1016,9 +1021,11 @@ void QgsDiagramProperties::showAddAttributeExpressionDialog()
     newItem->setFlags( ( newItem->flags() | Qt::ItemIsEditable ) & ~Qt::ItemIsDropEnabled );
 
     //set initial color for diagram category
-    int red = 1 + ( int )( 255.0 * qrand() / ( RAND_MAX + 1.0 ) );
-    int green = 1 + ( int )( 255.0 * qrand() / ( RAND_MAX + 1.0 ) );
-    int blue = 1 + ( int )( 255.0 * qrand() / ( RAND_MAX + 1.0 ) );
+    QRandomGenerator colorGenerator;
+    const int red = colorGenerator.bounded( 1, 256 );
+    const int green = colorGenerator.bounded( 1, 256 );
+    const int blue = colorGenerator.bounded( 1, 256 );
+
     QColor randomColor( red, green, blue );
     newItem->setData( ColumnColor, Qt::EditRole, randomColor );
     mDiagramAttributesTreeWidget->addTopLevelItem( newItem );

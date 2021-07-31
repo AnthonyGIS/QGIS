@@ -32,7 +32,7 @@ import osgeo.gdal  # NOQA
 
 from test_qgsserver import QgsServerTestBase
 from utilities import unitTestDataPath
-from qgis.core import QgsProject
+from qgis.core import QgsProject, QgsVectorLayer
 
 # Strip path and content length because path may vary
 RE_STRIP_UNCHECKABLE = br'MAP=[^"]+|Content-Length: \d+'
@@ -1635,7 +1635,7 @@ class TestQgsServerWMSGetMap(QgsServerTestBase):
 
         self.assertTrue('ServerException' in str(r))
 
-    @unittest.skipIf(os.environ.get('TRAVIS', '') == 'true',
+    @unittest.skipIf(os.environ.get('QGIS_CONTINUOUS_INTEGRATION_RUN', 'true'),
                      'Can\'t rely on external resources for continuous integration')
     def test_wms_getmap_external(self):
         # 1 bits
@@ -1643,7 +1643,8 @@ class TestQgsServerWMSGetMap(QgsServerTestBase):
             "MAP": urllib.parse.quote(self.projectPath),
             "SERVICE": "WMS",
             "REQUEST": "GetMap",
-            "LAYERS": "EXTERNAL_WMS:landsat",
+            "LAYERS": "EXTERNAL_WMS:landsat,Country",
+            "OPACITIES": "255,150",
             "landsat:layers": "GEBCO_LATEST",
             "landsat:dpiMode": "7",
             "landsat:url": "https://www.gebco.net/data_and_products/gebco_web_services/web_map_service/mapserv",
@@ -1767,6 +1768,45 @@ class TestQgsServerWMSGetMap(QgsServerTestBase):
         r, h = self._result(self._execute_request(qs))
         self._img_diff_error(r, h, "WMS_GetMap_Tiled_True")
 
+        # Check with labels and tiled=false
+        qs = "?" + "&".join(["%s=%s" % i for i in list({
+            "MAP": urllib.parse.quote(
+                os.path.join(self.testdata_path, 'wms_tile_buffer.qgs')),
+            "SERVICE": "WMS",
+            "VERSION": "1.3.0",
+            "REQUEST": "GetMap",
+            "BBOX": "310187,6163153,324347,6177313",
+            "CRS": "EPSG:3857",
+            "WIDTH": "512",
+            "HEIGHT": "512",
+            "LAYERS": "wms_tile_buffer_labels",
+            "FORMAT": "image/png",
+            "TILED": "false"
+        }.items())])
+
+        r, h = self._result(self._execute_request(qs))
+        self._img_diff_error(r, h, "WMS_GetMap_Tiled_Labels_False")
+
+        # Check with labels and tiled=true
+        qs = "?" + "&".join(["%s=%s" % i for i in list({
+            "MAP": urllib.parse.quote(
+                os.path.join(self.testdata_path, 'wms_tile_buffer.qgs')),
+            "SERVICE": "WMS",
+            "VERSION": "1.3.0",
+            "REQUEST": "GetMap",
+            "BBOX": "310187,6163153,324347,6177313",
+            "CRS": "EPSG:3857",
+            "WIDTH": "512",
+            "HEIGHT": "512",
+            "LAYERS": "wms_tile_buffer_labels",
+            "FORMAT": "image/png",
+            "TILED": "true"
+        }.items())])
+
+        r, h = self._result(self._execute_request(qs))
+        self._img_diff_error(r, h, "WMS_GetMap_Tiled_Labels_True")
+
+    @unittest.skipIf(os.getenv('QGIS_CONTINUOUS_INTEGRATION_RUN'), "This tests fails on GH workflow")
     def test_mode8bit_with_transparency(self):
         # 8 bits
         qs = "?" + "&".join(["%s=%s" % i for i in list({
@@ -1809,6 +1849,69 @@ class TestQgsServerWMSGetMap(QgsServerTestBase):
 
         r, h = self._result(self._execute_request(qs))
         self._img_diff_error(r, h, "WMS_GetMap_DuplicateNames")
+
+    def test_wms_getmap_plus_sign(self):
+        """Test issue GH #41116"""
+
+        vl = QgsVectorLayer('Point?crs=epsg:4326&field=int:integer', 'test+plus', 'memory')
+        p = QgsProject()
+        p.addMapLayers([vl])
+        qs = "?" + "&".join(["%s=%s" % i for i in list({
+            "SERVICE": "WMS",
+            "VERSION": "1.1.1",
+            "REQUEST": "GetMap",
+            "LAYERS": urllib.parse.quote('test+plus'),
+            "STYLES": "",
+            "FORMAT": "image/png",
+            "BBOX": "-170,-80,170,80",
+            "HEIGHT": "500",
+            "WIDTH": "500",
+            "CRS": "EPSG:4326"
+        }.items())])
+
+        r, h = self._result(self._execute_request_project(qs, p))
+        # No exceptions
+        self.assertEqual(h['Content-Type'], 'image/png')
+        self.assertFalse(b"The layer 'test plus' does not exist" in r)
+
+        # + literal: we get an exception
+        qs = "?" + "&".join(["%s=%s" % i for i in list({
+            "SERVICE": "WMS",
+            "VERSION": "1.1.1",
+            "REQUEST": "GetMap",
+            "LAYERS": 'test+plus',
+            "STYLES": "",
+            "FORMAT": "image/png",
+            "BBOX": "-170,-80,170,80",
+            "HEIGHT": "500",
+            "WIDTH": "500",
+            "CRS": "EPSG:4326"
+        }.items())])
+
+        r, h = self._result(self._execute_request_project(qs, p))
+        self.assertTrue(b"The layer 'test plus' does not exist" in r)
+
+    def test_wms_annotation_item(self):
+        qs = "?" + "&".join(["%s=%s" % i for i in list({
+            "MAP": urllib.parse.quote(os.path.join(self.testdata_path,
+                                                   'test_project_annotation_item.qgz')),
+            "SERVICE": "WMS",
+            "VERSION": "1.3.0",
+            "REQUEST": "GetMap",
+            "BBOX": "44.9014,8.20346,44.9015,8.20364",
+            "CRS": "EPSG:4326",
+            "WIDTH": "800",
+            "HEIGHT": "400",
+            "LAYERS": "points",
+            "STYLES": ",",
+            "FORMAT": "image/png",
+            "DPI": "96",
+            "MAP_RESOLUTION": "96",
+            "FORMAT_OPTIONS": "dpi:96"
+        }.items())])
+
+        r, h = self._result(self._execute_request(qs))
+        self._img_diff_error(r, h, "WMS_GetMap_AnnotationItem")
 
 
 if __name__ == '__main__':

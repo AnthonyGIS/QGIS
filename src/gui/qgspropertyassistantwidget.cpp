@@ -24,6 +24,8 @@
 #include "qgssymbollayerutils.h"
 #include "qgsexpressioncontextutils.h"
 #include "qgsstyle.h"
+#include "qgsmarkersymbol.h"
+#include "qgslinesymbol.h"
 
 QgsPropertyAssistantWidget::QgsPropertyAssistantWidget( QWidget *parent,
     const QgsPropertyDefinition &definition, const QgsProperty &initialState,
@@ -35,7 +37,6 @@ QgsPropertyAssistantWidget::QgsPropertyAssistantWidget( QWidget *parent,
   setupUi( this );
 
   layout()->setContentsMargins( 0, 0, 0, 0 );
-  layout()->setMargin( 0 );
 
   setPanelTitle( mDefinition.description() );
 
@@ -49,16 +50,16 @@ QgsPropertyAssistantWidget::QgsPropertyAssistantWidget( QWidget *parent,
   mExpressionWidget->setFilters( QgsFieldProxyModel::Numeric );
   mExpressionWidget->setField( initialState.propertyType() == QgsProperty::ExpressionBasedProperty ? initialState.expressionString() : initialState.field() );
 
-  if ( initialState.transformer() )
+  if ( auto *lTransformer = initialState.transformer() )
   {
-    minValueSpinBox->setValue( initialState.transformer()->minValue() );
-    maxValueSpinBox->setValue( initialState.transformer()->maxValue() );
+    minValueSpinBox->setValue( lTransformer->minValue() );
+    maxValueSpinBox->setValue( lTransformer->maxValue() );
 
-    if ( initialState.transformer()->curveTransform() )
+    if ( lTransformer->curveTransform() )
     {
       mTransformCurveCheckBox->setChecked( true );
       mTransformCurveCheckBox->setCollapsed( false );
-      mCurveEditor->setCurve( *initialState.transformer()->curveTransform() );
+      mCurveEditor->setCurve( *lTransformer->curveTransform() );
     }
   }
 
@@ -75,7 +76,6 @@ QgsPropertyAssistantWidget::QgsPropertyAssistantWidget( QWidget *parent,
   mLegendPreview->expandAll();
   mLegendVerticalFrame->setLayout( new QVBoxLayout() );
   mLegendVerticalFrame->layout()->setContentsMargins( 0, 0, 0, 0 );
-  mLegendVerticalFrame->layout()->setMargin( 0 );
   mLegendVerticalFrame->hide();
 
   switch ( definition.standardTemplate() )
@@ -230,7 +230,7 @@ void QgsPropertyAssistantWidget::updatePreview()
     const QSize minSize( node->minimumIconSize() );
     node->setIconSize( minSize );
     widthMax = std::max( minSize.width(), widthMax );
-    QStandardItem *item = new QStandardItem( node->data( Qt::DecorationRole ).value<QPixmap>(), QString::number( breaks[i] ) );
+    QStandardItem *item = new QStandardItem( node->data( Qt::DecorationRole ).value<QPixmap>(), QLocale().toString( breaks[i] ) );
     item->setEditable( false );
     mPreviewList.appendRow( item );
     delete node;
@@ -311,12 +311,16 @@ bool QgsPropertyAssistantWidget::computeValuesFromField( const QString &fieldNam
     return false;
   }
 
+  QVariant min;
+  QVariant max;
+  mLayer->minimumAndMaximumValue( fieldIndex, min, max );
+
   bool ok = false;
-  double minDouble = mLayer->minimumValue( fieldIndex ).toDouble( &ok );
+  double minDouble = min.toDouble( &ok );
   if ( !ok )
     return false;
 
-  double maxDouble = mLayer->maximumValue( fieldIndex ).toDouble( &ok );
+  double maxDouble = max.toDouble( &ok );
   if ( !ok )
     return false;
 
@@ -337,7 +341,6 @@ QgsPropertySizeAssistantWidget::QgsPropertySizeAssistantWidget( QWidget *parent,
   setupUi( this );
 
   layout()->setContentsMargins( 0, 0, 0, 0 );
-  layout()->setMargin( 0 );
 
   if ( definition.standardTemplate() == QgsPropertyDefinition::Size )
   {
@@ -404,11 +407,11 @@ QList< QgsSymbolLegendNode * > QgsPropertySizeAssistantWidget::generatePreviews(
   {
     if ( mDefinition.standardTemplate() == QgsPropertyDefinition::Size )
     {
-      tempSymbol.reset( QgsMarkerSymbol::createSimple( QgsStringMap() ) );
+      tempSymbol.reset( QgsMarkerSymbol::createSimple( QVariantMap() ) );
     }
     else if ( mDefinition.standardTemplate() == QgsPropertyDefinition::StrokeWidth )
     {
-      tempSymbol.reset( QgsLineSymbol::createSimple( QgsStringMap() ) );
+      tempSymbol.reset( QgsLineSymbol::createSimple( QVariantMap() ) );
     }
     legendSymbol = tempSymbol.get();
   }
@@ -454,7 +457,6 @@ QgsPropertyColorAssistantWidget::QgsPropertyColorAssistantWidget( QWidget *paren
   setupUi( this );
 
   layout()->setContentsMargins( 0, 0, 0, 0 );
-  layout()->setMargin( 0 );
 
   bool supportsAlpha = definition.standardTemplate() == QgsPropertyDefinition::ColorWithAlpha;
   mNullColorButton->setAllowOpacity( supportsAlpha );
@@ -502,7 +504,7 @@ QList<QgsSymbolLegendNode *> QgsPropertyColorAssistantWidget::generatePreviews( 
 
   if ( !legendSymbol )
   {
-    tempSymbol.reset( QgsMarkerSymbol::createSimple( QgsStringMap() ) );
+    tempSymbol.reset( QgsMarkerSymbol::createSimple( QVariantMap() ) );
     legendSymbol = tempSymbol.get();
   }
   if ( !legendSymbol )
@@ -530,32 +532,55 @@ QgsPropertyGenericNumericAssistantWidget::QgsPropertyGenericNumericAssistantWidg
   setupUi( this );
 
   layout()->setContentsMargins( 0, 0, 0, 0 );
-  layout()->setMargin( 0 );
 
   nullOutputSpinBox->setShowClearButton( false );
 
-  if ( definition.standardTemplate() == QgsPropertyDefinition::Rotation )
+  switch ( definition.standardTemplate() )
   {
-    // tweak dialog for rotation
-    minOutputSpinBox->setMaximum( 360.0 );
-    minOutputSpinBox->setValue( 0.0 );
-    minOutputSpinBox->setShowClearButton( true );
-    minOutputSpinBox->setClearValue( 0.0 );
-    minOutputSpinBox->setSuffix( tr( " °" ) );
-    maxOutputSpinBox->setMaximum( 360.0 );
-    maxOutputSpinBox->setValue( 360.0 );
-    maxOutputSpinBox->setShowClearButton( true );
-    maxOutputSpinBox->setClearValue( 360.0 );
-    maxOutputSpinBox->setSuffix( tr( " °" ) );
-    exponentSpinBox->hide();
-    mExponentLabel->hide();
-    mLabelMinOutput->setText( tr( "Angle from" ) );
-    mLabelNullOutput->setText( tr( "Angle when NULL" ) );
-  }
-  else
-  {
-    minOutputSpinBox->setShowClearButton( false );
-    maxOutputSpinBox->setShowClearButton( false );
+    case QgsPropertyDefinition::Rotation:
+    {
+      // tweak dialog for rotation
+      minOutputSpinBox->setMaximum( 360.0 );
+      minOutputSpinBox->setValue( 0.0 );
+      minOutputSpinBox->setShowClearButton( true );
+      minOutputSpinBox->setClearValue( 0.0 );
+      minOutputSpinBox->setSuffix( tr( " °" ) );
+      maxOutputSpinBox->setMaximum( 360.0 );
+      maxOutputSpinBox->setValue( 360.0 );
+      maxOutputSpinBox->setShowClearButton( true );
+      maxOutputSpinBox->setClearValue( 360.0 );
+      maxOutputSpinBox->setSuffix( tr( " °" ) );
+      exponentSpinBox->hide();
+      mExponentLabel->hide();
+      mLabelMinOutput->setText( tr( "Angle from" ) );
+      mLabelNullOutput->setText( tr( "Angle when NULL" ) );
+      break;
+    }
+
+    case QgsPropertyDefinition::Opacity:
+    {
+      // tweak dialog for opacity
+      minOutputSpinBox->setMaximum( 100.0 );
+      minOutputSpinBox->setValue( 0.0 );
+      minOutputSpinBox->setShowClearButton( true );
+      minOutputSpinBox->setClearValue( 0.0 );
+      minOutputSpinBox->setSuffix( tr( " %" ) );
+      maxOutputSpinBox->setMaximum( 100.0 );
+      maxOutputSpinBox->setValue( 100.0 );
+      maxOutputSpinBox->setShowClearButton( true );
+      maxOutputSpinBox->setClearValue( 100.0 );
+      maxOutputSpinBox->setSuffix( tr( " %" ) );
+      mLabelMinOutput->setText( tr( "Opacity from" ) );
+      mLabelNullOutput->setText( tr( "Opacity when NULL" ) );
+      break;
+    }
+
+    default:
+    {
+      minOutputSpinBox->setShowClearButton( false );
+      maxOutputSpinBox->setShowClearButton( false );
+      break;
+    }
   }
 
   if ( const QgsGenericNumericTransformer *transform = dynamic_cast< const QgsGenericNumericTransformer * >( initialState.transformer() ) )

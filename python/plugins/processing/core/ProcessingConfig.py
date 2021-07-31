@@ -62,6 +62,7 @@ class ProcessingConfig:
     DEFAULT_OUTPUT_RASTER_LAYER_EXT = 'DefaultOutputRasterLayerExt'
     DEFAULT_OUTPUT_VECTOR_LAYER_EXT = 'DefaultOutputVectorLayerExt'
     TEMP_PATH = 'TEMP_PATH2'
+    RESULTS_GROUP_NAME = 'RESULTS_GROUP_NAME'
 
     settings = {}
     settingIcons = {}
@@ -170,8 +171,18 @@ class ProcessingConfig:
         ProcessingConfig.addSetting(Setting(
             ProcessingConfig.tr('General'),
             ProcessingConfig.TEMP_PATH,
-            ProcessingConfig.tr('Override temporary output folder path (leave blank for default)'), None,
-            valuetype=Setting.FOLDER))
+            ProcessingConfig.tr('Override temporary output folder path'), None,
+            valuetype=Setting.FOLDER,
+            placeholder=ProcessingConfig.tr('Leave blank for default')))
+
+        ProcessingConfig.addSetting(Setting(
+            ProcessingConfig.tr('General'),
+            ProcessingConfig.RESULTS_GROUP_NAME,
+            ProcessingConfig.tr("Results group name"),
+            "",
+            valuetype=Setting.STRING,
+            placeholder=ProcessingConfig.tr("Leave blank to avoid loading results in a predetermined group")
+        ))
 
     @staticmethod
     def setGroupIcon(group, icon):
@@ -214,21 +225,19 @@ class ProcessingConfig:
 
     @staticmethod
     def getSetting(name, readable=False):
-        if name in list(ProcessingConfig.settings.keys()):
-            v = ProcessingConfig.settings[name].value
-            try:
-                if v == NULL:
-                    v = None
-            except:
-                pass
-            if ProcessingConfig.settings[name].valuetype == Setting.SELECTION:
-                if readable:
-                    return v
-                return ProcessingConfig.settings[name].options.index(v)
-            else:
-                return v
-        else:
+        if name not in list(ProcessingConfig.settings.keys()):
             return None
+        v = ProcessingConfig.settings[name].value
+        try:
+            if v == NULL:
+                v = None
+        except:
+            pass
+        if ProcessingConfig.settings[name].valuetype != Setting.SELECTION:
+            return v
+        if readable:
+            return v
+        return ProcessingConfig.settings[name].options.index(v)
 
     @staticmethod
     def setSettingValue(name, value):
@@ -258,7 +267,7 @@ class Setting:
     MULTIPLE_FOLDERS = 6
 
     def __init__(self, group, name, description, default, hidden=False, valuetype=None,
-                 validator=None, options=None):
+                 validator=None, options=None, placeholder=""):
         self.group = group
         self.name = name
         self.qname = "Processing/Configuration/" + self.name
@@ -267,6 +276,7 @@ class Setting:
         self.hidden = hidden
         self.valuetype = valuetype
         self.options = options
+        self.placeholder = placeholder
 
         if self.valuetype is None:
             if isinstance(default, int):

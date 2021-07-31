@@ -17,6 +17,7 @@
 #include <QString>
 #include <QStringList>
 #include <QApplication>
+#include <QTemporaryFile>
 
 #include "qgsvectorlayer.h" //defines QgsFieldMap
 #include "qgsvectorfilewriter.h" //logic for writing shpfiles
@@ -486,11 +487,11 @@ void TestQgsVectorFileWriter::prepareWriteAsVectorFormat()
   options.driverName = "GPKG";
   options.layerName = "test";
   QString newFilename;
-  QgsVectorFileWriter::WriterError error( QgsVectorFileWriter::writeAsVectorFormatV2(
+  QgsVectorFileWriter::WriterError error( QgsVectorFileWriter::writeAsVectorFormatV3(
       &ml,
       fileName,
       ml.transformContext(),
-      options,
+      options, nullptr,
       &newFilename ) );
 
   QCOMPARE( error, QgsVectorFileWriter::WriterError::NoError );
@@ -518,11 +519,11 @@ void TestQgsVectorFileWriter::testTextFieldLength()
   options.driverName = "GPKG";
   options.layerName = "test";
   QString newFilename;
-  QgsVectorFileWriter::WriterError error( QgsVectorFileWriter::writeAsVectorFormatV2(
+  QgsVectorFileWriter::WriterError error( QgsVectorFileWriter::writeAsVectorFormatV3(
       &vl,
       fileName,
       vl.transformContext(),
-      options,
+      options, nullptr,
       &newFilename ) );
   QCOMPARE( error, QgsVectorFileWriter::WriterError::NoError );
   QCOMPARE( newFilename, fileName );
@@ -546,11 +547,11 @@ void TestQgsVectorFileWriter::_testExportToGpx( const QString &geomTypeName,
   QString memLayerDef( geomTypeName );
   if ( inputLayerName == QLatin1String( "track_points" ) )
   {
-    memLayerDef += QStringLiteral( "?field=track_fid:int&field=track_seg_id:int" );
+    memLayerDef += QLatin1String( "?field=track_fid:int&field=track_seg_id:int" );
   }
   else if ( inputLayerName == QLatin1String( "route_points" ) )
   {
-    memLayerDef += QStringLiteral( "?field=route_fid:int" );
+    memLayerDef += QLatin1String( "?field=route_fid:int" );
   }
   QgsVectorLayer vl( memLayerDef, "test", "memory" );
   QgsFeature f { vl.fields() };
@@ -571,11 +572,11 @@ void TestQgsVectorFileWriter::_testExportToGpx( const QString &geomTypeName,
   options.layerName = inputLayerName;
   options.layerOptions = layerOptions;
   QString outLayerName;
-  QgsVectorFileWriter::WriterError error( QgsVectorFileWriter::writeAsVectorFormatV2(
+  QgsVectorFileWriter::WriterError error( QgsVectorFileWriter::writeAsVectorFormatV3(
       &vl,
       fileName,
       vl.transformContext(),
-      options,
+      options, nullptr,
       nullptr, // newFilename
       &outLayerName ) );
   QCOMPARE( error, QgsVectorFileWriter::WriterError::NoError );

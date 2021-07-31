@@ -24,6 +24,7 @@
 #include "qgsprovidermetadata.h"
 #include "qgsproviderregistry.h"
 #include "qgsabstractproviderconnection.h"
+#include "qgsdataitem.h"
 
 class TestQgsNewDatabaseTableNameWidget: public QObject
 {
@@ -80,7 +81,7 @@ void TestQgsNewDatabaseTableNameWidget::initTestCase()
                                  true,
                                  m,
                                  errCause,
-                                 &options ) == QgsVectorLayerExporter::ExportError::NoError );
+                                 &options ) == Qgis::VectorExportResult::Success );
   QVERIFY( errCause.isEmpty() );
   mGpkgConn.reset( md->createConnection( mDir.filePath( QStringLiteral( "test.gpkg" ) ), { } ) );
   md->saveConnection( mGpkgConn.get(), QStringLiteral( "GPKG_1" ) );
@@ -102,11 +103,11 @@ void TestQgsNewDatabaseTableNameWidget::cleanup()
 
 void TestQgsNewDatabaseTableNameWidget::testWidgetFilters()
 {
-  std::unique_ptr<QgsNewDatabaseTableNameWidget> w { qgis::make_unique<QgsNewDatabaseTableNameWidget>( nullptr, QStringList{ "NOT_EXISTS" } ) };
+  std::unique_ptr<QgsNewDatabaseTableNameWidget> w { std::make_unique<QgsNewDatabaseTableNameWidget>( nullptr, QStringList{ "NOT_EXISTS" } ) };
   QCOMPARE( w->mBrowserProxyModel.rowCount(), 0 );
-  std::unique_ptr<QgsNewDatabaseTableNameWidget> w2 { qgis::make_unique<QgsNewDatabaseTableNameWidget>( nullptr ) };
+  std::unique_ptr<QgsNewDatabaseTableNameWidget> w2 { std::make_unique<QgsNewDatabaseTableNameWidget>( nullptr ) };
   QVERIFY( w2->mBrowserProxyModel.rowCount() > 0 );
-  std::unique_ptr<QgsNewDatabaseTableNameWidget> w3 { qgis::make_unique<QgsNewDatabaseTableNameWidget>( nullptr, QStringList{ "postgres" } ) };
+  std::unique_ptr<QgsNewDatabaseTableNameWidget> w3 { std::make_unique<QgsNewDatabaseTableNameWidget>( nullptr, QStringList{ "postgres" } ) };
   QVERIFY( w3->mBrowserProxyModel.rowCount() > 0 );
 }
 
@@ -114,7 +115,7 @@ void TestQgsNewDatabaseTableNameWidget::testWidgetFilters()
 void TestQgsNewDatabaseTableNameWidget::testWidgetSignalsPostgres()
 {
 #ifdef ENABLE_PGTEST
-  std::unique_ptr<QgsNewDatabaseTableNameWidget> w { qgis::make_unique<QgsNewDatabaseTableNameWidget>( nullptr, QStringList{ "postgres" } ) };
+  std::unique_ptr<QgsNewDatabaseTableNameWidget> w { std::make_unique<QgsNewDatabaseTableNameWidget>( nullptr, QStringList{ "postgres" } ) };
 
   auto index = w->mBrowserModel->findPath( QStringLiteral( "pg:/PG_1" ) );
   QVERIFY( index.isValid() );
@@ -134,9 +135,17 @@ void TestQgsNewDatabaseTableNameWidget::testWidgetSignalsPostgres()
   QCOMPARE( w->mBrowserModel->data( index, Qt::DisplayRole ).toString(), QString( "PostGIS" ) );
   QRect rect = w->mBrowserTreeView->visualRect( w->mBrowserProxyModel.mapFromSource( index ) );
   QVERIFY( rect.isValid() );
-  QTest::mouseClick( w->mBrowserTreeView->viewport(), Qt::LeftButton, 0, rect.topLeft() );
+  QTest::mouseClick( w->mBrowserTreeView->viewport(), Qt::LeftButton, Qt::KeyboardModifiers(), rect.topLeft() );
 
   QVERIFY( ! w->isValid() );
+
+  /*
+  QDialog d;
+  QVBoxLayout l;
+  l.addWidget( w.get() );
+  d.setLayout( &l );
+  d.exec();
+  //*/
 
   QCOMPARE( providerSpy.count(), 1 );
   QCOMPARE( uriSpy.count(), 0 );
@@ -152,7 +161,7 @@ void TestQgsNewDatabaseTableNameWidget::testWidgetSignalsPostgres()
   w->mBrowserTreeView->scrollTo( w->mBrowserProxyModel.mapFromSource( index ) );
   rect = w->mBrowserTreeView->visualRect( w->mBrowserProxyModel.mapFromSource( index ) );
   QVERIFY( rect.isValid() );
-  QTest::mouseClick( w->mBrowserTreeView->viewport(), Qt::LeftButton, 0, rect.center() );
+  QTest::mouseClick( w->mBrowserTreeView->viewport(), Qt::LeftButton, Qt::KeyboardModifiers(), rect.center() );
 
   QVERIFY( ! w->isValid() );
 
@@ -195,7 +204,7 @@ void TestQgsNewDatabaseTableNameWidget::testWidgetSignalsPostgres()
   w->mBrowserTreeView->scrollTo( w->mBrowserProxyModel.mapFromSource( index ) );
   rect = w->mBrowserTreeView->visualRect( w->mBrowserProxyModel.mapFromSource( index ) );
   QVERIFY( rect.isValid() );
-  QTest::mouseClick( w->mBrowserTreeView->viewport(), Qt::LeftButton, 0, rect.center() );
+  QTest::mouseClick( w->mBrowserTreeView->viewport(), Qt::LeftButton, Qt::KeyboardModifiers(), rect.center() );
   QCOMPARE( w->schema(), QString( "public" ) );
   QVERIFY( w->isValid() );
   QCOMPARE( validationSpy.count(), 1 );
@@ -216,7 +225,7 @@ void TestQgsNewDatabaseTableNameWidget::testWidgetSignalsPostgres()
 void TestQgsNewDatabaseTableNameWidget::testWidgetSignalsGeopackage()
 {
 #ifdef ENABLE_PGTEST
-  std::unique_ptr<QgsNewDatabaseTableNameWidget> w { qgis::make_unique<QgsNewDatabaseTableNameWidget>( nullptr, QStringList{ "ogr" } ) };
+  std::unique_ptr<QgsNewDatabaseTableNameWidget> w { std::make_unique<QgsNewDatabaseTableNameWidget>( nullptr, QStringList{ "ogr" } ) };
 
   auto index = w->mBrowserModel->findPath( QStringLiteral( "pg:/PG_1" ) );
   QVERIFY( index.isValid() );
@@ -245,7 +254,7 @@ void TestQgsNewDatabaseTableNameWidget::testWidgetSignalsGeopackage()
   w->mBrowserTreeView->scrollTo( w->mBrowserProxyModel.mapFromSource( index ) );
   auto rect = w->mBrowserTreeView->visualRect( w->mBrowserProxyModel.mapFromSource( index ) );
   QVERIFY( rect.isValid() );
-  QTest::mouseClick( w->mBrowserTreeView->viewport(), Qt::LeftButton, 0, rect.center() );
+  QTest::mouseClick( w->mBrowserTreeView->viewport(), Qt::LeftButton, Qt::KeyboardModifiers(), rect.center() );
 
   QVERIFY( ! w->isValid() );
   QCOMPARE( schemaSpy.count(), 1 );
@@ -265,7 +274,7 @@ void TestQgsNewDatabaseTableNameWidget::testWidgetSignalsGeopackage()
   QCOMPARE( w->table(), QString( "newTableName" ) );
   QCOMPARE( w->schema(), mGpkgPath );
   QCOMPARE( w->dataProviderKey(), QString( "ogr" ) );
-  QCOMPARE( w->uri(), mGpkgPath + QStringLiteral( "|layername=newTableName" ) );
+  QCOMPARE( w->uri(), QString( mGpkgPath + QStringLiteral( "|layername=newTableName" ) ) );
 #endif
 }
 

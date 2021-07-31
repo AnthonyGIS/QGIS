@@ -18,11 +18,13 @@
 #include <QApplication>
 #include <QCheckBox>
 #include <memory>
+#include <QSignalSpy>
 
 //qgis includes...
 #include "qgis.h"
 #include "qgsmaplayermodel.h"
 #include "qgsattributeeditorelement.h"
+#include "qgsfieldproxymodel.h"
 
 /**
  * \ingroup UnitTests
@@ -45,6 +47,8 @@ class TestQgis : public QObject
     void signalBlocker();
     void qVariantCompare_data();
     void qVariantCompare();
+    void testNanCompatibleEquals_data();
+    void testNanCompatibleEquals();
     void testQgsAsConst();
     void testQgsRound();
     void testQgsVariantEqual();
@@ -318,6 +322,29 @@ void TestQgis::qVariantCompare()
   QCOMPARE( qgsVariantGreaterThan( lhs, rhs ), greaterThan );
 }
 
+void TestQgis::testNanCompatibleEquals_data()
+{
+  QTest::addColumn<double>( "lhs" );
+  QTest::addColumn<double>( "rhs" );
+  QTest::addColumn<bool>( "expected" );
+
+  QTest::newRow( "both nan" ) << std::numeric_limits< double >::quiet_NaN() << std::numeric_limits< double >::quiet_NaN() << true;
+  QTest::newRow( "first is nan" ) << std::numeric_limits< double >::quiet_NaN() << 5.0 << false;
+  QTest::newRow( "second is nan" ) << 5.0 << std::numeric_limits< double >::quiet_NaN() << false;
+  QTest::newRow( "two numbers, not equal" ) << 5.0 << 6.0 << false;
+  QTest::newRow( "two numbers, equal" ) << 5.0 << 5.0 << true;
+}
+
+void TestQgis::testNanCompatibleEquals()
+{
+  QFETCH( double, lhs );
+  QFETCH( double, rhs );
+  QFETCH( bool, expected );
+
+  QCOMPARE( qgsNanCompatibleEquals( lhs, rhs ), expected );
+  QCOMPARE( qgsNanCompatibleEquals( rhs, lhs ), expected );
+}
+
 class ConstTester
 {
   public:
@@ -340,7 +367,7 @@ void TestQgis::testQgsAsConst()
   ConstTester ct;
   ct.doSomething();
   QCOMPARE( ct.mVal, 1 );
-  qgis::as_const( ct ).doSomething();
+  std::as_const( ct ).doSomething();
   QCOMPARE( ct.mVal, 2 );
 }
 
@@ -356,7 +383,7 @@ void TestQgis::testQgsRound()
   QGSCOMPARENEAR( qgsRound( 98765432198, 13 ), 98765432198, 1.0 );
   QGSCOMPARENEAR( qgsRound( 98765432198, 14 ), 98765432198, 1.0 );
   QGSCOMPARENEAR( qgsRound( 98765432198765, 14 ), 98765432198765, 1.0 );
-  QGSCOMPARENEAR( qgsRound( 98765432198765432, 20 ), 98765432198765432, 1.0 );
+  QGSCOMPARENEAR( qgsRound( 98765432198765432., 20 ), 98765432198765432., 1.0 );
   QGSCOMPARENEAR( qgsRound( 9.8765432198765, 2 ), 9.88, 0.001 );
   QGSCOMPARENEAR( qgsRound( 9.8765432198765, 3 ), 9.877, 0.0001 );
   QGSCOMPARENEAR( qgsRound( 9.8765432198765, 4 ), 9.8765, 0.00001 );
@@ -410,19 +437,27 @@ void TestQgis::testQgsEnumValueToKey()
 }
 void TestQgis::testQgsEnumKeyToValue()
 {
-  QCOMPARE( qgsEnumKeyToValue<QgsMapLayerModel::ItemDataRole>( QStringLiteral( "LayerRole" ), QgsMapLayerModel::LayerIdRole ), QgsMapLayerModel::LayerRole );
+  QCOMPARE( qgsEnumKeyToValue<QgsMapLayerModel::ItemDataRole>( QStringLiteral( "AdditionalRole" ), QgsMapLayerModel::LayerIdRole ), QgsMapLayerModel::AdditionalRole );
   QCOMPARE( qgsEnumKeyToValue<QgsMapLayerModel::ItemDataRole>( QStringLiteral( "UnknownKey" ), QgsMapLayerModel::LayerIdRole ), QgsMapLayerModel::LayerIdRole );
+  // try with int values as string keys
+  QCOMPARE( qgsEnumKeyToValue<QgsMapLayerModel::ItemDataRole>( QString::number( QgsMapLayerModel::AdditionalRole ), QgsMapLayerModel::LayerIdRole, true ), QgsMapLayerModel::AdditionalRole );
+  QCOMPARE( qgsEnumKeyToValue<QgsMapLayerModel::ItemDataRole>( QString::number( QgsMapLayerModel::AdditionalRole ), QgsMapLayerModel::LayerIdRole, false ), QgsMapLayerModel::LayerIdRole );
+  // also try with an invalid int value
+  QMetaEnum metaEnum = QMetaEnum::fromType<QgsMapLayerModel::ItemDataRole>();
+  int invalidValue = QgsMapLayerModel::LayerIdRole + 100;
+  QVERIFY( !metaEnum.valueToKey( invalidValue ) );
+  QCOMPARE( qgsEnumKeyToValue<QgsMapLayerModel::ItemDataRole>( QString::number( invalidValue ), QgsMapLayerModel::LayerIdRole ), QgsMapLayerModel::LayerIdRole );
 }
 
 void TestQgis::testQgsFlagValueToKeys()
 {
-  QgsAttributeEditorRelation::Buttons buttons = QgsAttributeEditorRelation::Button::Link | QgsAttributeEditorRelation::Button::AddChildFeature;
-  QCOMPARE( qgsFlagValueToKeys( buttons ), QStringLiteral( "Link|AddChildFeature" ) );
+  QgsFieldProxyModel::Filters filters = QgsFieldProxyModel::Filter::String | QgsFieldProxyModel::Filter::Double;
+  QCOMPARE( qgsFlagValueToKeys( filters ), QStringLiteral( "String|Double" ) );
 }
 void TestQgis::testQgsFlagKeysToValue()
 {
-  QCOMPARE( qgsFlagKeysToValue( QStringLiteral( "Link|AddChildFeature" ), QgsAttributeEditorRelation::Buttons( QgsAttributeEditorRelation::Button::AllButtons ) ), QgsAttributeEditorRelation::Button::Link | QgsAttributeEditorRelation::Button::AddChildFeature );
-  QCOMPARE( qgsFlagKeysToValue( QStringLiteral( "UnknownKey" ), QgsAttributeEditorRelation::Buttons( QgsAttributeEditorRelation::Button::AllButtons ) ), QgsAttributeEditorRelation::Buttons( QgsAttributeEditorRelation::Button::AllButtons ) );
+  QCOMPARE( qgsFlagKeysToValue( QStringLiteral( "String|Double" ), QgsFieldProxyModel::Filters( QgsFieldProxyModel::Filter::AllTypes ) ), QgsFieldProxyModel::Filter::String | QgsFieldProxyModel::Filter::Double );
+  QCOMPARE( qgsFlagKeysToValue( QStringLiteral( "UnknownKey" ), QgsFieldProxyModel::Filters( QgsFieldProxyModel::Filter::AllTypes ) ), QgsFieldProxyModel::Filters( QgsFieldProxyModel::Filter::AllTypes ) );
 }
 
 void TestQgis::testQMapQVariantList()

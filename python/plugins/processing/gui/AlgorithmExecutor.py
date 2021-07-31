@@ -45,7 +45,7 @@ from processing.tools import dataobjects
 from qgis.utils import iface
 
 
-def execute(alg, parameters, context=None, feedback=None):
+def execute(alg, parameters, context=None, feedback=None, catch_exceptions=True):
     """Executes a given algorithm, showing its progress in the
     progress object passed along.
 
@@ -58,14 +58,18 @@ def execute(alg, parameters, context=None, feedback=None):
     if context is None:
         context = dataobjects.createContext(feedback)
 
-    try:
-        results, ok = alg.run(parameters, context, feedback)
+    if catch_exceptions:
+        try:
+            results, ok = alg.run(parameters, context, feedback)
+            return ok, results
+        except QgsProcessingException as e:
+            QgsMessageLog.logMessage(str(sys.exc_info()[0]), 'Processing', Qgis.Critical)
+            if feedback is not None:
+                feedback.reportError(e.msg)
+            return False, {}
+    else:
+        results, ok = alg.run(parameters, context, feedback, {}, False)
         return ok, results
-    except QgsProcessingException as e:
-        QgsMessageLog.logMessage(str(sys.exc_info()[0]), 'Processing', Qgis.Critical)
-        if feedback is not None:
-            feedback.reportError(e.msg)
-        return False, {}
 
 
 def execute_in_place_run(alg, parameters, context=None, feedback=None, raise_exceptions=False):
@@ -98,7 +102,16 @@ def execute_in_place_run(alg, parameters, context=None, feedback=None, raise_exc
     except AttributeError:
         pass
 
-    active_layer = parameters['INPUT']
+    in_place_input_parameter_name = 'INPUT'
+    if hasattr(alg, 'inputParameterName'):
+        in_place_input_parameter_name = alg.inputParameterName()
+
+    active_layer = parameters[in_place_input_parameter_name]
+
+    # prepare expression context for feature iteration
+    alg_context = context.expressionContext()
+    alg_context.appendScope(active_layer.createExpressionContextScope())
+    context.setExpressionContext(alg_context)
 
     # Run some checks and prepare the layer for in-place execution by:
     # - getting the active layer and checking that it is a vector
@@ -110,7 +123,7 @@ def execute_in_place_run(alg, parameters, context=None, feedback=None, raise_exc
     # the feedback
     try:
         if active_layer is None:
-            raise QgsProcessingException(tr("There is not active layer."))
+            raise QgsProcessingException(tr("There is no active layer."))
 
         if not isinstance(active_layer, QgsVectorLayer):
             raise QgsProcessingException(tr("Active layer is not a vector layer."))
@@ -133,7 +146,7 @@ def execute_in_place_run(alg, parameters, context=None, feedback=None, raise_exc
         active_layer.selectAll()
 
     # Make sure we are working on selected features only
-    parameters['INPUT'] = QgsProcessingFeatureSourceDefinition(active_layer.id(), True)
+    parameters[in_place_input_parameter_name] = QgsProcessingFeatureSourceDefinition(active_layer.id(), True)
     parameters['OUTPUT'] = 'memory:'
 
     req = QgsFeatureRequest(QgsExpression(r"$id < 0"))
@@ -153,7 +166,7 @@ def execute_in_place_run(alg, parameters, context=None, feedback=None, raise_exc
         if hasattr(alg, 'processFeature'):  # in-place feature editing
             # Make a clone or it will crash the second time the dialog
             # is opened and run
-            alg = alg.create()
+            alg = alg.create({'IN_PLACE': True})
             if not alg.prepare(parameters, context, feedback):
                 raise QgsProcessingException(tr("Could not prepare selected algorithm."))
             # Check again for compatibility after prepare
@@ -171,6 +184,7 @@ def execute_in_place_run(alg, parameters, context=None, feedback=None, raise_exc
             iterator_req.setInvalidGeometryCheck(context.invalidGeometryCheck())
             feature_iterator = active_layer.getFeatures(iterator_req)
             step = 100 / len(active_layer.selectedFeatureIds()) if active_layer.selectedFeatureIds() else 1
+            current = 0
             for current, f in enumerate(feature_iterator):
                 if feedback.isCanceled():
                     break
@@ -178,6 +192,9 @@ def execute_in_place_run(alg, parameters, context=None, feedback=None, raise_exc
                 # need a deep copy, because python processFeature implementations may return
                 # a shallow copy from processFeature
                 input_feature = QgsFeature(f)
+
+                context.expressionContext().setFeature(input_feature)
+
                 new_features = alg.processFeature(input_feature, context, feedback)
                 new_features = QgsVectorLayerUtils.makeFeaturesCompatible(new_features, active_layer)
 
@@ -207,7 +224,7 @@ def execute_in_place_run(alg, parameters, context=None, feedback=None, raise_exc
 
                 feedback.setProgress(int((current + 1) * step))
 
-            results, ok = {}, True
+            results, ok = {'__count': current + 1}, True
 
         else:  # Traditional 'run' with delete and add features cycle
 
@@ -218,7 +235,7 @@ def execute_in_place_run(alg, parameters, context=None, feedback=None, raise_exc
             else:
                 selected_ids = []
 
-            results, ok = alg.run(parameters, context, feedback)
+            results, ok = alg.run(parameters, context, feedback, configuration={'IN_PLACE': True})
 
             if ok:
                 result_layer = QgsProcessingUtils.mapLayerFromString(results['OUTPUT'], context)
@@ -236,9 +253,13 @@ def execute_in_place_run(alg, parameters, context=None, feedback=None, raise_exc
 
                 active_layer.deleteFeatures(active_layer.selectedFeatureIds())
 
+                regenerate_primary_key = result_layer.customProperty('OnConvertFormatRegeneratePrimaryKey', False)
+                sink_flags = QgsFeatureSink.SinkFlags(QgsFeatureSink.RegeneratePrimaryKey) if regenerate_primary_key \
+                    else QgsFeatureSink.SinkFlags()
+
                 for f in result_layer.getFeatures():
                     new_features.extend(QgsVectorLayerUtils.
-                                        makeFeaturesCompatible([f], active_layer))
+                                        makeFeaturesCompatible([f], active_layer, sink_flags))
 
                 # Get the new ids
                 old_ids = set([f.id() for f in active_layer.getFeatures(req)])
@@ -246,6 +267,7 @@ def execute_in_place_run(alg, parameters, context=None, feedback=None, raise_exc
                     raise QgsProcessingException(tr("Error adding processed features back into the layer."))
                 new_ids = set([f.id() for f in active_layer.getFeatures(req)])
                 new_feature_ids += list(new_ids - old_ids)
+                results['__count'] = len(new_feature_ids)
 
         active_layer.endEditCommand()
 
@@ -291,14 +313,21 @@ def execute_in_place(alg, parameters, context=None, feedback=None):
     if context is None:
         context = dataobjects.createContext(feedback)
 
-    if 'INPUT' not in parameters or not parameters['INPUT']:
-        parameters['INPUT'] = iface.activeLayer()
+    in_place_input_parameter_name = 'INPUT'
+    if hasattr(alg, 'inputParameterName'):
+        in_place_input_parameter_name = alg.inputParameterName()
+    in_place_input_layer_name = 'INPUT'
+    if hasattr(alg, 'inputParameterDescription'):
+        in_place_input_layer_name = alg.inputParameterDescription()
+
+    if in_place_input_parameter_name not in parameters or not parameters[in_place_input_parameter_name]:
+        parameters[in_place_input_parameter_name] = iface.activeLayer()
     ok, results = execute_in_place_run(alg, parameters, context=context, feedback=feedback)
     if ok:
-        if isinstance(parameters['INPUT'], QgsProcessingFeatureSourceDefinition):
-            layer = alg.parameterAsVectorLayer({'INPUT': parameters['INPUT'].source}, 'INPUT', context)
-        elif isinstance(parameters['INPUT'], QgsVectorLayer):
-            layer = parameters['INPUT']
+        if isinstance(parameters[in_place_input_parameter_name], QgsProcessingFeatureSourceDefinition):
+            layer = alg.parameterAsVectorLayer({in_place_input_parameter_name: parameters[in_place_input_parameter_name].source}, in_place_input_layer_name, context)
+        elif isinstance(parameters[in_place_input_parameter_name], QgsVectorLayer):
+            layer = parameters[in_place_input_parameter_name]
         if layer:
             layer.triggerRepaint()
     return ok, results

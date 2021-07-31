@@ -184,19 +184,19 @@ namespace QgsWfs
     QDomElement summaryElem = doc.createElement( QStringLiteral( "TransactionSummary" ) );
     if ( aRequest.inserts.size() > 0 )
     {
-      QDomElement totalInsertedElem = doc.createElement( QStringLiteral( "TotalInserted" ) );
+      QDomElement totalInsertedElem = doc.createElement( QStringLiteral( "totalInserted" ) );
       totalInsertedElem.appendChild( doc.createTextNode( QString::number( totalInserted ) ) );
       summaryElem.appendChild( totalInsertedElem );
     }
     if ( aRequest.updates.size() > 0 )
     {
-      QDomElement totalUpdatedElem = doc.createElement( QStringLiteral( "TotalUpdated" ) );
+      QDomElement totalUpdatedElem = doc.createElement( QStringLiteral( "totalUpdated" ) );
       totalUpdatedElem.appendChild( doc.createTextNode( QString::number( totalUpdated ) ) );
       summaryElem.appendChild( totalUpdatedElem );
     }
     if ( aRequest.deletes.size() > 0 )
     {
-      QDomElement totalDeletedElem = doc.createElement( QStringLiteral( "TotalDeleted" ) );
+      QDomElement totalDeletedElem = doc.createElement( QStringLiteral( "totalDeleted" ) );
       totalDeletedElem.appendChild( doc.createTextNode( QString::number( totalDeleted ) ) );
       summaryElem.appendChild( totalDeletedElem );
     }
@@ -532,7 +532,7 @@ namespace QgsWfs
       if ( !vlayer->commitChanges() )
       {
         action.error = true;
-        action.errorMsg = QStringLiteral( "Error committing updates: %1" ).arg( vlayer->commitErrors().join( QStringLiteral( "; " ) ) );
+        action.errorMsg = QStringLiteral( "Error committing updates: %1" ).arg( vlayer->commitErrors().join( QLatin1String( "; " ) ) );
         vlayer->rollBack();
         continue;
       }
@@ -651,7 +651,7 @@ namespace QgsWfs
       if ( !vlayer->commitChanges() )
       {
         action.error = true;
-        action.errorMsg = QStringLiteral( "Error committing deletes: %1" ).arg( vlayer->commitErrors().join( QStringLiteral( "; " ) ) );
+        action.errorMsg = QStringLiteral( "Error committing deletes: %1" ).arg( vlayer->commitErrors().join( QLatin1String( "; " ) ) );
         vlayer->rollBack();
         continue;
       }
@@ -711,12 +711,12 @@ namespace QgsWfs
       QgsFeatureList featureList;
       try
       {
-        featureList = featuresFromGML( action.featureNodeList, provider );
+        featureList = featuresFromGML( action.featureNodeList, vlayer );
       }
       catch ( QgsOgcServiceException &ex )
       {
         action.error = true;
-        action.errorMsg = QStringLiteral( "%1 '%2'" ).arg( ex.message() ).arg( typeName );
+        action.errorMsg = QStringLiteral( "%1 '%2'" ).arg( ex.message(), typeName );
         continue;
       }
 
@@ -767,7 +767,7 @@ namespace QgsWfs
       if ( !vlayer->commitChanges() )
       {
         action.error = true;
-        action.errorMsg = QStringLiteral( "Error committing inserts: %1" ).arg( vlayer->commitErrors().join( QStringLiteral( "; " ) ) );
+        action.errorMsg = QStringLiteral( "Error committing inserts: %1" ).arg( vlayer->commitErrors().join( QLatin1String( "; " ) ) );
         vlayer->rollBack();
         continue;
       }
@@ -776,7 +776,7 @@ namespace QgsWfs
 
       // Get the Feature Ids of the inserted feature
       QgsAttributeList pkAttributes = provider->pkAttributeIndexes();
-      for ( const QgsFeature &feat : qgis::as_const( featureList ) )
+      for ( const QgsFeature &feat : std::as_const( featureList ) )
       {
         action.insertFeatureIds << QStringLiteral( "%1.%2" ).arg( typeName, QgsServerFeatureId::getServerFid( feat, pkAttributes ) );
       }
@@ -786,10 +786,12 @@ namespace QgsWfs
     filterRestorer.reset();
   }
 
-  QgsFeatureList featuresFromGML( QDomNodeList featureNodeList, QgsVectorDataProvider *provider )
+  QgsFeatureList featuresFromGML( QDomNodeList featureNodeList, QgsVectorLayer *layer )
   {
     // Store the inserted features
     QgsFeatureList featList;
+
+    const QgsVectorDataProvider *provider { layer->dataProvider() };
 
     // Get Layer Field Information
     QgsFields fields = provider->fields();
@@ -839,7 +841,8 @@ namespace QgsWfs
           }
           else //a geometry attribute
           {
-            QgsGeometry g = QgsOgcUtils::geometryFromGML( currentAttributeElement );
+            const QgsOgcUtils::Context context { layer, provider->transformContext() };
+            QgsGeometry g = QgsOgcUtils::geometryFromGML( currentAttributeElement, context );
             if ( g.isNull() )
             {
               throw QgsRequestNotWellFormedException( QStringLiteral( "Geometry from GML error on layer insert" ) );
@@ -861,7 +864,7 @@ namespace QgsWfs
     {
       throw QgsRequestNotWellFormedException( QStringLiteral( "OPERATION parameter is mandatory" ) );
     }
-    if ( parameters.value( QStringLiteral( "OPERATION" ) ).toUpper() != QStringLiteral( "DELETE" ) )
+    if ( parameters.value( QStringLiteral( "OPERATION" ) ).toUpper() != QLatin1String( "DELETE" ) )
     {
       throw QgsRequestNotWellFormedException( QStringLiteral( "Only DELETE value is defined for OPERATION parameter" ) );
     }
@@ -1173,7 +1176,7 @@ namespace QgsWfs
 
   transactionUpdate parseUpdateActionElement( QDomElement &actionElem, const QgsProject *project )
   {
-    QgsMessageLog::logMessage( QStringLiteral( "parseUpdateActionElement" ), QStringLiteral( "Server" ), Qgis::Info );
+    QgsMessageLog::logMessage( QStringLiteral( "parseUpdateActionElement" ), QStringLiteral( "Server" ), Qgis::MessageLevel::Info );
     QString typeName = actionElem.attribute( QStringLiteral( "typeName" ) );
     if ( typeName.contains( ':' ) )
       typeName = typeName.section( ':', 1, 1 );
@@ -1213,7 +1216,7 @@ namespace QgsWfs
       QDomElement filterElem = filterNodeList.at( 0 ).toElement();
       featureRequest = parseFilterElement( typeName, filterElem, serverFids, project );
     }
-    QgsMessageLog::logMessage( QStringLiteral( "parseUpdateActionElement: serverFids length %1" ).arg( serverFids.count() ), QStringLiteral( "Server" ), Qgis::Info );
+    QgsMessageLog::logMessage( QStringLiteral( "parseUpdateActionElement: serverFids length %1" ).arg( serverFids.count() ), QStringLiteral( "Server" ), Qgis::MessageLevel::Info );
 
     transactionUpdate action;
     action.typeName = typeName;

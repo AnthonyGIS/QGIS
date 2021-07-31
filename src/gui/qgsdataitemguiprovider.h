@@ -18,6 +18,7 @@
 
 #include "qgis_gui.h"
 #include "qgis_sip.h"
+#include "qgis.h"
 #include <QList>
 #include <QWidget>
 #include <QMimeData>
@@ -32,7 +33,7 @@ class QgsLayerItem;
  * \class QgsDataItemGuiContext
  * \ingroup gui
  *
- * Encapsulates the context in which a QgsDataItem is shown within the application GUI.
+ * \brief Encapsulates the context in which a QgsDataItem is shown within the application GUI.
  *
  * \since QGIS 3.6
  */
@@ -74,7 +75,7 @@ Q_DECLARE_METATYPE( QgsDataItemGuiContext );
  * \class QgsDataItemGuiProvider
  * \ingroup gui
  *
- * Abstract base class for providers which affect how QgsDataItem items behave
+ * \brief Abstract base class for providers which affect how QgsDataItem items behave
  * within the application GUI.
  *
  * Providers must be registered via QgsDataItemGuiProviderRegistry.
@@ -120,6 +121,19 @@ class GUI_EXPORT QgsDataItemGuiProvider
                                       const QList<QgsDataItem *> &selectedItems, QgsDataItemGuiContext context );
 
     /**
+     * Returns the provider's precedence to use when populating context menus via calls to populateContextMenu().
+     *
+     * Providers which return larger values will be called AFTER other providers when the menu is being populated.
+     * This allows them to nicely insert their corresponding menu items in the desired location with respect to
+     * existing items added by other providers.
+     *
+     * The default implementation returns 0.
+     *
+     * \since QGIS 3.22
+     */
+    virtual int precedenceWhenPopulatingMenus() const;
+
+    /**
      * Sets a new \a name for the item, and returns TRUE if the item was successfully renamed.
      *
      * Items which implement this method should return the QgsDataItem::Rename capability.
@@ -132,7 +146,7 @@ class GUI_EXPORT QgsDataItemGuiProvider
 
     /**
      * Tries to permanently delete map layer representing the given item.
-     * Returns true if the layer was successfully deleted.
+     * Returns TRUE if the layer was successfully deleted.
      *
      * Items which implement this method should return the QgsDataItem::Delete capability.
      *
@@ -174,6 +188,19 @@ class GUI_EXPORT QgsDataItemGuiProvider
      * \since QGIS 3.10
      */
     virtual QWidget *createParamWidget( QgsDataItem *item, QgsDataItemGuiContext context ) SIP_FACTORY;
+
+    /**
+     * Notify the user showing a \a message with \a title and \a level
+     * If the context has a message bar the message will be shown in the message bar
+     * else a message dialog will be used.
+     *
+     * Since QGIS 3.18, the optional \a duration argument can be used to specify the message timeout in seconds. If \a duration
+     * is set to 0, then the message must be manually dismissed by the user. A duration of -1 indicates that
+     * the default timeout for the message \a level should be used.
+     *
+     * \since QGIS 3.16
+     */
+    static void notify( const QString &title, const QString &message, QgsDataItemGuiContext context, Qgis::MessageLevel level = Qgis::MessageLevel::Info, int duration = -1, QWidget *parent = nullptr );
 };
 
 #endif // QGSDATAITEMGUIPROVIDER_H

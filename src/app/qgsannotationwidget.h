@@ -27,14 +27,16 @@ class QgsMarkerSymbol;
 class QgsFillSymbol;
 
 /**
- * A configuration widget to configure the annotation item properties. Usually embedded by QgsAnnotation
-subclass configuration dialogs*/
+ * A configuration widget to configure the annotation item properties.
+ *
+ * Usually embedded by QgsAnnotation subclass configuration dialogs.
+*/
 class APP_EXPORT QgsAnnotationWidget: public QWidget, private Ui::QgsAnnotationWidgetBase
 {
     Q_OBJECT
   public:
 
-    QgsAnnotationWidget( QgsMapCanvasAnnotationItem *item, QWidget *parent = nullptr, Qt::WindowFlags f = nullptr );
+    QgsAnnotationWidget( QgsMapCanvasAnnotationItem *item, QWidget *parent = nullptr, Qt::WindowFlags f = Qt::WindowFlags() );
 
     //! Returns the annotation frame symbol fill color
     QColor backgroundColor();

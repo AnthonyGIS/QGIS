@@ -35,8 +35,8 @@ namespace QgsWmts
     QgsCoordinateReferenceSystem wgs84 = QgsCoordinateReferenceSystem::fromOgcWmsCrs( geoEpsgCrsAuthId() );
 
     // Constant
-    int tileSize = 256;
-    double POINTS_TO_M = 2.83464567 / 10000.0;
+    const int tileSize = 256;
+    const double POINTS_TO_M = 2.800005600011068 / 10000.0;
 
     QMap< QString, tileMatrixInfo> fixedTileMatrixInfoMap = populateFixedTileMatrixInfoMap();
     QMap< QString, tileMatrixInfo> calculatedTileMatrixInfoMap; // for project without WMTSGrids configuration
@@ -48,13 +48,9 @@ namespace QgsWmts
   }
 
 
-  QString serviceUrl( const QgsServerRequest &request, const QgsProject *project )
+  QString serviceUrl( const QgsServerRequest &request, const QgsProject *project, const QgsServerSettings &settings )
   {
-    QString href;
-    if ( project )
-    {
-      href = QgsServerProjectUtils::wmtsServiceUrl( *project );
-    }
+    QString href = QgsServerProjectUtils::wmtsServiceUrl( project ? *project : *QgsProject::instance(), request, settings );
 
     // Build default url
     if ( href.isEmpty() )
@@ -844,5 +840,4 @@ namespace QgsWmts
   }
 
 } // namespace QgsWmts
-
 

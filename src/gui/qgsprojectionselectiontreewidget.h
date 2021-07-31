@@ -25,7 +25,7 @@ class QResizeEvent;
 /**
  * \class QgsProjectionSelectionTreeWidget
  * \ingroup gui
- * A widget for selecting a coordinate reference system from a tree.
+ * \brief A widget for selecting a coordinate reference system from a tree.
  *
  * This widget implements a tree view of projections, as seen in the
  * QgsProjectionSelectionDialog dialog. In most cases it is more
@@ -65,7 +65,7 @@ class GUI_EXPORT QgsProjectionSelectionTreeWidget : public QWidget, private Ui::
     void setShowNoProjection( bool show );
 
     /**
-     * Sets whether to show the bounnds preview map.
+     * Sets whether to show the bounds preview map.
      * \see showBoundsMap()
      * \since QGIS 3.0
      */
@@ -78,6 +78,13 @@ class GUI_EXPORT QgsProjectionSelectionTreeWidget : public QWidget, private Ui::
      * \since QGIS 3.0
      */
     bool showNoProjection() const;
+
+    /**
+     * Sets the text to show for the not set option. Note that this option is not shown
+     * by default and must be set visible by calling setShowNoProjection().
+     * \since QGIS 3.16
+     */
+    void setNotSetText( const QString &text );
 
     /**
      * Returns whether the bounds preview map is shown.
@@ -133,8 +140,10 @@ class GUI_EXPORT QgsProjectionSelectionTreeWidget : public QWidget, private Ui::
 
     /**
      * Marks the current selected projection for push to front of recent projections list.
+     *
+     * \deprecated Has no effect since QGIS 3.20
      */
-    void pushProjectionToFront();
+    Q_DECL_DEPRECATED void pushProjectionToFront() SIP_DEPRECATED;
 
   signals:
 
@@ -154,6 +163,13 @@ class GUI_EXPORT QgsProjectionSelectionTreeWidget : public QWidget, private Ui::
      * \since QGIS 2.14
      */
     void projectionDoubleClicked();
+
+    /**
+     * Emitted when the selection in the tree is changed from a valid selection to an invalid selection, or vice-versa.
+     *
+     * \since QGIS 3.18
+     */
+    void hasValidSelectionChanged( bool isValid );
 
   protected:
     // Used to ensure the projection list view is actually populated
@@ -277,8 +293,6 @@ class GUI_EXPORT QgsProjectionSelectionTreeWidget : public QWidget, private Ui::
     enum Columns { NameColumn, AuthidColumn, QgisCrsIdColumn, None };
     int mSearchColumn = QgsProjectionSelectionTreeWidget::None;
     QString mSearchValue;
-
-    bool mPushProjectionToFront = false;
 
     //! The set of OGC WMS CRSs that want to be applied to this widget
     QSet<QString> mCrsFilter;

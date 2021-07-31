@@ -28,7 +28,7 @@
 
 /**
  * \ingroup gui
- * A dialog for customizing the properties of an exported image file.
+ * \brief A dialog for customizing the properties of an exported image file.
  *
  * \note This class is not a part of public API
  * \since QGIS 3.0
@@ -81,7 +81,7 @@ class GUI_EXPORT QgsLayoutImageExportOptionsDialog: public QDialog, private Ui::
 
     /**
      * Sets whether the crop to contents option should be checked in the dialog
-     * \param crop set to true to check crop to contents
+     * \param crop set to TRUE to check crop to contents
      * \see cropToContents()
      */
     void setCropToContents( bool crop );

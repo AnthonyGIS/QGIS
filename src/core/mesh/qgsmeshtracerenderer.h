@@ -36,7 +36,7 @@
 /**
  * \ingroup core
  *
- * Abstract class used to interpolate the value of the vector for a pixel
+ * \brief Abstract class used to interpolate the value of the vector for a pixel
  *
  * \note not available in Python bindings
  * \since QGIS 3.12
@@ -62,7 +62,10 @@ class QgsMeshVectorValueInterpolator
     //! Destructor
     virtual ~QgsMeshVectorValueInterpolator() = default;
 
-    //! Returns the interpolated vector
+    /**
+     * Returns the interpolated vector
+     * \param point point in map coordinates
+     */
     virtual QgsVector vectorValue( const QgsPointXY &point ) const;
 
     //! Assignment operator
@@ -89,7 +92,7 @@ class QgsMeshVectorValueInterpolator
 /**
  * \ingroup core
  *
- * Class used to retrieve the value of the vector for a pixel from vertex
+ * \brief Class used to retrieve the value of the vector for a pixel from vertex
  *
  * \note not available in Python bindings
  * \since QGIS 3.12
@@ -122,7 +125,7 @@ class QgsMeshVectorValueInterpolatorFromVertex: public QgsMeshVectorValueInterpo
 /**
  * \ingroup core
  *
- * Class used to retrieve the value of the vector for a pixel from vertex
+ * \brief Class used to retrieve the value of the vector for a pixel from vertex
  *
  * \note not available in Python bindings
  * \since QGIS 3.12
@@ -155,7 +158,7 @@ class QgsMeshVectorValueInterpolatorFromFace: public QgsMeshVectorValueInterpola
 /**
  * \ingroup core
  *
- * Abstract class used to handle information about stream field
+ * \brief Abstract class used to handle information about stream field
  *
  * \note not available in Python bindings
  * \since QGIS 3.12
@@ -309,7 +312,7 @@ class QgsMeshStreamField
 /**
  * \ingroup core
  *
- * Class used to draw streamlines from vector field
+ * \brief Class used to draw streamlines from vector field
  *
  * \note not available in Python bindings
  * \since QGIS 3.12
@@ -348,7 +351,7 @@ class QgsMeshParticleTracesField;
 /**
  * \ingroup core
  *
- * Used to simulation moving particle
+ * \brief Used to simulation moving particle
  *
  * \note not available in Python bindings
  * \since QGIS 3.12
@@ -364,7 +367,7 @@ struct QgsMeshTraceParticle
 /**
  * \ingroup core
  *
- * Class used to draw streamlines from vector field
+ * \brief Class used to draw streamlines from vector field
  *
  * \note not available in Python bindings
  * \since QGIS 3.12
@@ -490,7 +493,7 @@ class QgsMeshParticleTracesField: public QgsMeshStreamField
 /**
  * \ingroup core
  *
- * A class derived from QgsMeshVectorRenderer used to render the particles traces
+ * \brief A class derived from QgsMeshVectorRenderer used to render the particles traces
  *
  * Not available for data defined on edges
  *
@@ -521,7 +524,7 @@ class QgsMeshVectorStreamlineRenderer: public QgsMeshVectorRenderer
 /**
  * \ingroup core
  *
- * A class derived from QgsMeshVectorRenderer used to render the particles traces.
+ * \brief A class derived from QgsMeshVectorRenderer used to render the particles traces.
  *
  * Not available for data defined on edges
  *
@@ -556,7 +559,7 @@ class QgsMeshVectorTraceRenderer: public QgsMeshVectorRenderer
 /**
  * \ingroup core
  *
- * A wrapper for QgsMeshParticuleTracesField used to render the particles. Available for Python binding
+ * \brief A wrapper for QgsMeshParticuleTracesField used to render the particles. Available for Python binding
  *
  * \since QGIS 3.12
  */

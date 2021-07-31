@@ -21,12 +21,33 @@ static const char *EMPTY_STR = "";
 
 const char *MDAL_Version()
 {
-  return "0.6.90";
+  return "0.8.90";
 }
 
 MDAL_Status MDAL_LastStatus()
 {
   return MDAL::Log::getLastStatus();
+}
+
+MDAL_EXPORT void MDAL_ResetStatus()
+{
+  return MDAL::Log::resetLastStatus();
+}
+
+MDAL_EXPORT void MDAL_SetStatus( MDAL_LogLevel level, MDAL_Status status, const char *message )
+{
+  MDAL::Log::resetLastStatus();
+  switch ( level )
+  {
+    case MDAL_LogLevel::Error:
+      return MDAL::Log::error( status, message );
+    case MDAL_LogLevel::Warn:
+      return MDAL::Log::warning( status, message );
+    case MDAL_LogLevel::Info:
+      return MDAL::Log::info( message );
+    case MDAL_LogLevel::Debug:
+      return MDAL::Log::debug( message );
+  }
 }
 
 void MDAL_SetLoggerCallback( MDAL_LoggerCallback callback )
@@ -194,6 +215,7 @@ const char *MDAL_MeshNames( const char *uri )
 
 void MDAL_SaveMesh( MDAL_MeshH mesh, const char *meshFile, const char *driver )
 {
+  MDAL::Log::resetLastStatus();
   if ( !meshFile )
   {
     MDAL::Log::error( MDAL_Status::Err_FileNotFound, "Mesh file is not valid (null)" );
@@ -874,6 +896,18 @@ const char *MDAL_G_referenceTime( MDAL_DatasetGroupH group )
   return _return_str( g->referenceTime().toStandardCalendarISO8601() );
 }
 
+void MDAL_G_setReferenceTime( MDAL_DatasetGroupH group, const char *referenceTimeISO8601 )
+{
+  if ( !group )
+  {
+    MDAL::Log::error( MDAL_Status::Err_IncompatibleDataset, "Dataset Group is not valid (null)" );
+    return;
+  }
+  MDAL::DatasetGroup *g = static_cast< MDAL::DatasetGroup * >( group );
+  const std::string datetime( referenceTimeISO8601 );
+  g->setReferenceTime( MDAL::DateTime( datetime ) );
+}
+
 void MDAL_G_setMetadata( MDAL_DatasetGroupH group, const char *key, const char *val )
 {
   if ( !group )
@@ -1202,3 +1236,87 @@ const char *MDAL_DR_writeDatasetsSuffix( MDAL_DriverH driver )
   MDAL::Driver *d = static_cast< MDAL::Driver * >( driver );
   return _return_str( d->writeDatasetOnFileSuffix() );
 }
+
+const char *MDAL_DR_saveMeshSuffix( MDAL_DriverH driver )
+{
+  if ( !driver )
+  {
+    MDAL::Log::error( MDAL_Status::Err_MissingDriver, "Driver is not valid (null)" );
+    return EMPTY_STR;
+  }
+
+  MDAL::Driver *d = static_cast< MDAL::Driver * >( driver );
+  return _return_str( d->saveMeshOnFileSuffix() );
+}
+
+MDAL_MeshH MDAL_CreateMesh( MDAL_DriverH driver )
+{
+  if ( !driver )
+  {
+    MDAL::Log::error( MDAL_Status::Err_MissingDriver, "Driver is not valid (null)" );
+    return nullptr;
+  }
+
+  MDAL::Driver *d =  static_cast<MDAL::Driver *>( driver );
+  return new MDAL::MemoryMesh( d->name(),
+                               0, // empty mesh, so faceVerticesMaximumCount=0, this attribute will be updated if faces are added
+                               "" );
+}
+
+void MDAL_M_addVertices( MDAL_MeshH mesh, int vertexCount, double *coordinates )
+{
+  MDAL::Log::resetLastStatus();
+  if ( !mesh )
+  {
+    MDAL::Log::error( MDAL_Status::Err_IncompatibleMesh, "Mesh is not valid (null)" );
+    return;
+  }
+
+  MDAL::Mesh *m = static_cast<MDAL::Mesh *>( mesh );
+
+  if ( ! m->isEditable() )
+  {
+    MDAL::Log::error( MDAL_Status::Err_IncompatibleMesh, "Mesh is not editable" );
+  }
+
+  m->datasetGroups.clear();
+  m->addVertices( vertexCount, coordinates );
+}
+
+void MDAL_M_addFaces( MDAL_MeshH mesh, int faceCount, int *faceSizes, int *vertexIndices )
+{
+  MDAL::Log::resetLastStatus();
+  if ( !mesh )
+  {
+    MDAL::Log::error( MDAL_Status::Err_IncompatibleMesh, "Mesh is not valid (null)" );
+    return;
+  }
+
+  MDAL::Mesh *m = static_cast<MDAL::Mesh *>( mesh );
+
+  if ( ! m->isEditable() )
+  {
+    MDAL::Log::error( MDAL_Status::Err_IncompatibleMesh, "Mesh is not editable" );
+  }
+
+  m->datasetGroups.clear();
+  std::shared_ptr<MDAL::Driver> driver = MDAL::DriverManager::instance().driver( m->driverName() );
+  int maxVerticesPerFace = std::numeric_limits<int>::max();
+  if ( driver )
+    maxVerticesPerFace = driver->faceVerticesMaximumCount();
+
+  m->addFaces( faceCount, maxVerticesPerFace, faceSizes, vertexIndices );
+}
+
+void MDAL_M_setProjection( MDAL_MeshH mesh, const char *projection )
+{
+  MDAL::Log::resetLastStatus();
+  if ( !mesh )
+  {
+    MDAL::Log::error( MDAL_Status::Err_IncompatibleMesh, "Mesh is not valid (null)" );
+    return;
+  }
+
+  static_cast<MDAL::Mesh *>( mesh )->setSourceCrsFromWKT( std::string( projection ) );
+}
+

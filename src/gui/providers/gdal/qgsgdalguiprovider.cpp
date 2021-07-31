@@ -30,9 +30,11 @@
 #include "qgsgdalsourceselect.h"
 #include "qgsapplication.h"
 #include "qgsprovidermetadata.h"
-#include "qgsdataitem.h"
 #include "qgsdataitemguiprovider.h"
-#include "qgsgdaldataitems.h"
+#include "qgsmaplayer.h"
+#include "qgsgdalfilesourcewidget.h"
+#include "qgsabstractdatabaseproviderconnection.h"
+#include "qgslayeritem.h"
 
 static QString PROVIDER_KEY = QStringLiteral( "gdal" );
 
@@ -45,7 +47,7 @@ QString QgsGdalItemGuiProvider::name()
   return QStringLiteral( "gdal_items" );
 }
 
-void QgsGdalItemGuiProvider::onDeleteLayer()
+void QgsGdalItemGuiProvider::onDeletePostgresRasterLayer( QgsDataItemGuiContext context )
 {
   QAction *s = qobject_cast<QAction *>( sender() );
   QVariantMap data = s->data().toMap();
@@ -53,11 +55,7 @@ void QgsGdalItemGuiProvider::onDeleteLayer()
   const QString path = data[QStringLiteral( "path" )].toString();
   QPointer< QgsDataItem > parent = data[QStringLiteral( "parentItem" )].value<QPointer< QgsDataItem >>();
 
-  // Messages are different for files and tables
-  bool isPostgresRaster { uri.startsWith( QStringLiteral( "PG:" ) ) };
-  const QString title = isPostgresRaster  ?
-                        tr( "Delete Table" ) :
-                        tr( "Delete File" );
+  const QString title = tr( "Delete Table" );
 
   // Check if the layer is in the project
   const QgsMapLayer *projectLayer = nullptr;
@@ -72,111 +70,98 @@ void QgsGdalItemGuiProvider::onDeleteLayer()
 
   if ( ! projectLayer )
   {
-    const QString confirmMessage = isPostgresRaster  ? tr( "Are you sure you want to delete table “%1”?" ).arg( path ) :
-                                   tr( "Are you sure you want to delete file “%1”?" ).arg( path );
+    const QString confirmMessage = tr( "Are you sure you want to delete table “%1”?" ).arg( path );
 
     if ( QMessageBox::question( nullptr, title,
                                 confirmMessage,
                                 QMessageBox::Yes | QMessageBox::No, QMessageBox::No ) != QMessageBox::Yes )
       return;
 
-    if ( isPostgresRaster )
+    QString errorMessage;
+    bool deleted { false };
+    QgsProviderMetadata *postgresMetadata { QgsProviderRegistry::instance()->providerMetadata( QLatin1String( "postgres" ) ) };
+    if ( postgresMetadata )
     {
-      QString errorMessage;
-      bool deleted { false };
-      QgsProviderMetadata *postgresMetadata { QgsProviderRegistry::instance()->providerMetadata( QLatin1String( "postgres" ) ) };
-      if ( postgresMetadata )
+      std::unique_ptr<QgsAbstractDatabaseProviderConnection> connection { static_cast<QgsAbstractDatabaseProviderConnection *>( postgresMetadata->createConnection( uri, {} ) ) };
+      const QgsDataSourceUri dsUri { QgsDataSourceUri( uri ) };
+      if ( connection )
       {
-        std::unique_ptr<QgsAbstractDatabaseProviderConnection> connection { static_cast<QgsAbstractDatabaseProviderConnection *>( postgresMetadata->createConnection( uri, {} ) ) };
-        const QgsDataSourceUri dsUri { QgsDataSourceUri( uri ) };
-        if ( connection )
+        try
         {
-          try
+          // Try hard to get the schema
+          QString schema = dsUri.schema();
+          if ( schema.isEmpty() )
           {
-            // Try hard to get the schema
-            QString schema = dsUri.schema();
-            if ( schema.isEmpty() )
-            {
-              schema = dsUri.param( QStringLiteral( "schema" ) );
-            }
-            if ( schema.isEmpty() )
-            {
-              schema = QStringLiteral( "public" );
-            }
-
-            connection->dropRasterTable( schema, dsUri.table() );
-            deleted = true;
-
+            schema = dsUri.param( QStringLiteral( "schema" ) );
           }
-          catch ( QgsProviderConnectionException &ex )
+          if ( schema.isEmpty() )
           {
-            errorMessage = ex.what();
+            schema = QStringLiteral( "public" );
           }
+
+          connection->dropRasterTable( schema, dsUri.table() );
+          deleted = true;
+
         }
-        else
+        catch ( QgsProviderConnectionException &ex )
         {
-          errorMessage = tr( "could not create a connection to the database" );
+          errorMessage = ex.what();
         }
       }
       else
       {
-        errorMessage = tr( "could not retrieve provider metadata" );
-      }
-
-      if ( deleted )
-      {
-        QMessageBox::information( nullptr, title, tr( "Table deleted successfully." ) );
-        if ( parent )
-          parent->refresh();
-      }
-      else
-      {
-        QMessageBox::warning( nullptr, title, errorMessage.isEmpty() ?
-                              tr( "Could not delete table." ) :
-                              tr( "Could not delete table, reason: %1." ).arg( errorMessage ) );
+        errorMessage = tr( "could not create a connection to the database" );
       }
     }
     else
     {
-      if ( !QFile::remove( path ) )
-      {
-        QMessageBox::warning( nullptr, title, tr( "Could not delete file." ) );
-      }
-      else
-      {
-        QMessageBox::information( nullptr, title, tr( "File deleted successfully." ) );
-        if ( parent )
-          parent->refresh();
-      }
+      errorMessage = tr( "could not retrieve provider metadata" );
+    }
+
+    if ( deleted )
+    {
+      notify( title, tr( "Table deleted successfully." ), context, Qgis::MessageLevel::Success );
+      if ( parent )
+        parent->refresh();
+    }
+    else
+    {
+      notify( title, errorMessage.isEmpty() ?
+              tr( "Could not delete table." ) :
+              tr( "Could not delete table, reason: %1." ).arg( errorMessage ), context, Qgis::MessageLevel::Warning );
     }
   }
   else
   {
-    QMessageBox::warning( nullptr, title, QObject::tr( "The layer “%1” cannot be deleted because it is in the current project as “%2”,"
-                          " remove it from the project and retry." ).arg( path, projectLayer->name() ) );
+    notify( title, tr( "The layer “%1” cannot be deleted because it is in the current project as “%2”,"
+                       " remove it from the project and retry." ).arg( path, projectLayer->name() ), context, Qgis::MessageLevel::Warning );
   }
 }
 
 void QgsGdalItemGuiProvider::populateContextMenu( QgsDataItem *item, QMenu *menu, const QList<QgsDataItem *> &selectedItems, QgsDataItemGuiContext context )
 {
-  Q_UNUSED( selectedItems );
-  Q_UNUSED( context );
+  Q_UNUSED( selectedItems )
 
-  if ( QgsGdalLayerItem *layerItem = qobject_cast< QgsGdalLayerItem * >( item ) )
+  if ( QgsLayerItem *layerItem = qobject_cast< QgsLayerItem * >( item ) )
   {
-    // Messages are different for files and tables
-    bool isPostgresRaster { layerItem->uri().startsWith( QStringLiteral( "PG:" ) ) };
-    const QString message = isPostgresRaster  ?
-                            QObject::tr( "Delete Table “%1”…" ).arg( layerItem->name() ) :
-                            QObject::tr( "Delete File “%1”…" ).arg( layerItem->name() );
-    QAction *actionDeleteLayer = new QAction( message, menu );
-    QVariantMap data;
-    data.insert( QStringLiteral( "uri" ), layerItem->uri() );
-    data.insert( QStringLiteral( "path" ), isPostgresRaster ? layerItem->name() : layerItem->path() );
-    data.insert( QStringLiteral( "parentItem" ), QVariant::fromValue( QPointer< QgsDataItem >( layerItem->parent() ) ) );
-    actionDeleteLayer->setData( data );
-    connect( actionDeleteLayer, &QAction::triggered, this, &QgsGdalItemGuiProvider::onDeleteLayer );
-    menu->addAction( actionDeleteLayer );
+    if ( layerItem->providerKey() == QLatin1String( "gdal" ) )
+    {
+      // We only show a delete layer action for postgres rasters -- GDAL itself only supports
+      // deletion of raster layers from geopackage files, and we have special handling elsewhere for those
+      const bool isPostgresRaster { layerItem->uri().startsWith( QLatin1String( "PG:" ) ) };
+      if ( isPostgresRaster )
+      {
+        const QString message = QObject::tr( "Delete Table “%1”…" ).arg( layerItem->name() );
+        QAction *actionDeleteLayer = new QAction( message, menu );
+        QVariantMap data;
+        data.insert( QStringLiteral( "uri" ), layerItem->uri() );
+        data.insert( QStringLiteral( "path" ), layerItem->name() );
+        data.insert( QStringLiteral( "parentItem" ), QVariant::fromValue( QPointer< QgsDataItem >( layerItem->parent() ) ) );
+        actionDeleteLayer->setData( data );
+        connect( actionDeleteLayer, &QAction::triggered, this, [ = ] { onDeletePostgresRasterLayer( context ); } );
+        menu->addAction( actionDeleteLayer );
+      }
+    }
   }
 }
 
@@ -195,7 +180,48 @@ class QgsGdalRasterSourceSelectProvider : public QgsSourceSelectProvider
     }
 };
 
+//
+// QgsGdalSourceWidgetProvider
+//
 
+QgsGdalSourceWidgetProvider::QgsGdalSourceWidgetProvider()
+{
+
+}
+
+QString QgsGdalSourceWidgetProvider::providerKey() const
+{
+  return QStringLiteral( "gdal" );
+}
+
+bool QgsGdalSourceWidgetProvider::canHandleLayer( QgsMapLayer *layer ) const
+{
+  if ( layer->providerType() != QLatin1String( "gdal" ) )
+    return false;
+
+  const QVariantMap parts = QgsProviderRegistry::instance()->decodeUri( QStringLiteral( "gdal" ), layer->source() );
+  if ( parts.value( QStringLiteral( "path" ) ).toString().isEmpty() )
+    return false;
+
+  return true;
+}
+
+QgsProviderSourceWidget *QgsGdalSourceWidgetProvider::createWidget( QgsMapLayer *layer, QWidget *parent )
+{
+  if ( layer->providerType() != QLatin1String( "gdal" ) )
+    return nullptr;
+
+  const QVariantMap parts = QgsProviderRegistry::instance()->decodeUri( QStringLiteral( "gdal" ), layer->source() );
+  if ( parts.value( QStringLiteral( "path" ) ).toString().isEmpty() )
+    return nullptr;
+
+  return new QgsGdalFileSourceWidget( parent );
+}
+
+
+//
+// QgsGdalGuiProviderMetadata
+//
 QgsGdalGuiProviderMetadata::QgsGdalGuiProviderMetadata():
   QgsProviderGuiMetadata( PROVIDER_KEY )
 {
@@ -212,6 +238,13 @@ QList<QgsDataItemGuiProvider *> QgsGdalGuiProviderMetadata::dataItemGuiProviders
 {
   QList<QgsDataItemGuiProvider *> providers;
   providers << new QgsGdalItemGuiProvider();
+  return providers;
+}
+
+QList<QgsProviderSourceWidgetProvider *> QgsGdalGuiProviderMetadata::sourceWidgetProviders()
+{
+  QList<QgsProviderSourceWidgetProvider *> providers;
+  providers << new QgsGdalSourceWidgetProvider();
   return providers;
 }
 

@@ -46,8 +46,8 @@ QgsMemoryFeatureIterator::QgsMemoryFeatureIterator( QgsMemoryFeatureSource *sour
 
   if ( !mSource->mSubsetString.isEmpty() )
   {
-    mSubsetExpression = qgis::make_unique< QgsExpression >( mSource->mSubsetString );
-    mSubsetExpression->prepare( &mSource->mExpressionContext );
+    mSubsetExpression = std::make_unique< QgsExpression >( mSource->mSubsetString );
+    mSubsetExpression->prepare( mSource->expressionContext() );
   }
 
   if ( !mFilterRect.isNull() && mRequest.flags() & QgsFeatureRequest::ExactIntersect )
@@ -63,7 +63,7 @@ QgsMemoryFeatureIterator::QgsMemoryFeatureIterator( QgsMemoryFeatureSource *sour
   {
     mUsingFeatureIdList = true;
     mFeatureIdList = mSource->mSpatialIndex->intersects( mFilterRect );
-    QgsDebugMsg( "Features returned by spatial index: " + QString::number( mFeatureIdList.count() ) );
+    QgsDebugMsgLevel( "Features returned by spatial index: " + QString::number( mFeatureIdList.count() ), 2 );
   }
   else if ( mRequest.filterType() == QgsFeatureRequest::FilterFid )
   {
@@ -138,8 +138,8 @@ bool QgsMemoryFeatureIterator::nextFeatureUsingList( QgsFeature &feature )
 
     if ( hasFeature && mSubsetExpression )
     {
-      mSource->mExpressionContext.setFeature( candidate );
-      if ( !mSubsetExpression->evaluate( &mSource->mExpressionContext ).toBool() )
+      mSource->expressionContext()->setFeature( candidate );
+      if ( !mSubsetExpression->evaluate( mSource->expressionContext() ).toBool() )
         hasFeature = false;
     }
 
@@ -198,8 +198,8 @@ bool QgsMemoryFeatureIterator::nextFeatureTraverseAll( QgsFeature &feature )
 
     if ( mSubsetExpression )
     {
-      mSource->mExpressionContext.setFeature( *mSelectIterator );
-      if ( !mSubsetExpression->evaluate( &mSource->mExpressionContext ).toBool() )
+      mSource->expressionContext()->setFeature( *mSelectIterator );
+      if ( !mSubsetExpression->evaluate( mSource->expressionContext() ).toBool() )
         hasFeature = false;
     }
 
@@ -253,18 +253,30 @@ bool QgsMemoryFeatureIterator::close()
 QgsMemoryFeatureSource::QgsMemoryFeatureSource( const QgsMemoryProvider *p )
   : mFields( p->mFields )
   , mFeatures( p->mFeatures )
-  , mSpatialIndex( p->mSpatialIndex ? qgis::make_unique< QgsSpatialIndex >( *p->mSpatialIndex ) : nullptr ) // just shallow copy
+  , mSpatialIndex( p->mSpatialIndex ? std::make_unique< QgsSpatialIndex >( *p->mSpatialIndex ) : nullptr ) // just shallow copy
   , mSubsetString( p->mSubsetString )
   , mCrs( p->mCrs )
 {
-  mExpressionContext << QgsExpressionContextUtils::globalScope()
-                     << QgsExpressionContextUtils::projectScope( QgsProject::instance() );
-  mExpressionContext.setFields( mFields );
 }
 
 QgsFeatureIterator QgsMemoryFeatureSource::getFeatures( const QgsFeatureRequest &request )
 {
   return QgsFeatureIterator( new QgsMemoryFeatureIterator( this, false, request ) );
+}
+
+QgsExpressionContext *QgsMemoryFeatureSource::expressionContext()
+{
+  // lazy construct expression context -- it's not free to calculate, and is only used when
+  // iterating over a memory layer with a subset string set
+  if ( !mExpressionContext )
+  {
+    mExpressionContext = std::make_unique< QgsExpressionContext >(
+                           QList<QgsExpressionContextScope *>()
+                           << QgsExpressionContextUtils::globalScope()
+                           << QgsExpressionContextUtils::projectScope( QgsProject::instance() ) );
+    mExpressionContext->setFields( mFields );
+  }
+  return mExpressionContext.get();
 }
 
 ///@endcond PRIVATE

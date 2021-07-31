@@ -23,7 +23,7 @@ class QgsLineSymbol;
 
 /**
  * \ingroup core
- * Raster renderer that generates contours on the fly for a source raster band.
+ * \brief Raster renderer that generates contours on the fly for a source raster band.
  *
  * \since QGIS 3.14
  */
@@ -49,6 +49,7 @@ class CORE_EXPORT QgsRasterContourRenderer : public QgsRasterRenderer
     QgsRasterBlock *block( int bandNo, const QgsRectangle &extent, int width, int height, QgsRasterBlockFeedback *feedback = nullptr ) override SIP_FACTORY;
 
     QList<int> usesBands() const override;
+    QList<QgsLayerTreeModelLegendNode *> createLegendNodes( QgsLayerTreeLayer *nodeLayer ) SIP_FACTORY override;
 
     //
 

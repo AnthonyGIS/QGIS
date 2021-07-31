@@ -34,7 +34,7 @@ class QInputEvent;
 
 /**
  * \ingroup gui
- * Base class for an item handling drawing of selection outlines and mouse handles in a QGraphicsView
+ * \brief Base class for an item handling drawing of selection outlines and mouse handles in a QGraphicsView
  *
  * Also is responsible for mouse interactions such as resizing and moving selected items.
  *
@@ -240,7 +240,8 @@ class GUI_EXPORT QgsGraphicsViewMouseHandles: public QObject, public QGraphicsRe
 
     /**
      * Returns the current (zoom level dependent) tolerance to decide if mouse position is close enough to the
-    item border for resizing*/
+     * item border for resizing.
+    */
     double rectHandlerBorderTolerance();
 
     //! Finds out the appropriate cursor for the current mouse position in the widget (e.g. move in the middle, resize at border)

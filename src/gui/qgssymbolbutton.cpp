@@ -29,16 +29,20 @@
 #include "qgsexpressioncontextutils.h"
 #include "qgsgui.h"
 #include "qgscolordialog.h"
+#include "qgsfillsymbol.h"
+#include "qgslinesymbol.h"
+#include "qgsmarkersymbol.h"
 
 #include <QMenu>
 #include <QClipboard>
 #include <QDrag>
+#include <QBuffer>
 
 QgsSymbolButton::QgsSymbolButton( QWidget *parent, const QString &dialogTitle )
   : QToolButton( parent )
   , mDialogTitle( dialogTitle.isEmpty() ? tr( "Symbol Settings" ) : dialogTitle )
 {
-  mSymbol.reset( QgsFillSymbol::createSimple( QgsStringMap() ) );
+  mSymbol.reset( QgsFillSymbol::createSimple( QVariantMap() ) );
 
   setAcceptDrops( true );
   connect( this, &QAbstractButton::clicked, this, &QgsSymbolButton::showSettingsDialog );
@@ -55,6 +59,8 @@ QgsSymbolButton::QgsSymbolButton( QWidget *parent, const QString &dialogTitle )
   mSizeHint = QSize( size.width(), std::max( size.height(), fontHeight ) );
 }
 
+QgsSymbolButton::~QgsSymbolButton() = default;
+
 QSize QgsSymbolButton::minimumSizeHint() const
 {
 
@@ -66,25 +72,25 @@ QSize QgsSymbolButton::sizeHint() const
   return mSizeHint;
 }
 
-void QgsSymbolButton::setSymbolType( QgsSymbol::SymbolType type )
+void QgsSymbolButton::setSymbolType( Qgis::SymbolType type )
 {
   if ( type != mType )
   {
     switch ( type )
     {
-      case QgsSymbol::Marker:
-        mSymbol.reset( QgsMarkerSymbol::createSimple( QgsStringMap() ) );
+      case Qgis::SymbolType::Marker:
+        mSymbol.reset( QgsMarkerSymbol::createSimple( QVariantMap() ) );
         break;
 
-      case QgsSymbol::Line:
-        mSymbol.reset( QgsLineSymbol::createSimple( QgsStringMap() ) );
+      case Qgis::SymbolType::Line:
+        mSymbol.reset( QgsLineSymbol::createSimple( QVariantMap() ) );
         break;
 
-      case QgsSymbol::Fill:
-        mSymbol.reset( QgsFillSymbol::createSimple( QgsStringMap() ) );
+      case Qgis::SymbolType::Fill:
+        mSymbol.reset( QgsFillSymbol::createSimple( QVariantMap() ) );
         break;
 
-      case QgsSymbol::Hybrid:
+      case Qgis::SymbolType::Hybrid:
         break;
     }
   }
@@ -111,7 +117,7 @@ void QgsSymbolButton::showSettingsDialog()
   QgsPanelWidget *panel = QgsPanelWidget::findParentPanel( this );
   if ( panel && panel->dockMode() )
   {
-    QgsSymbolSelectorWidget *d = new QgsSymbolSelectorWidget( newSymbol, QgsStyle::defaultStyle(), mLayer, nullptr );
+    QgsSymbolSelectorWidget *d = new QgsSymbolSelectorWidget( newSymbol, QgsStyle::defaultStyle(), mLayer, panel );
     d->setPanelTitle( mDialogTitle );
     d->setContext( symbolContext );
     connect( d, &QgsPanelWidget::widgetChanged, this, &QgsSymbolButton::updateSymbolFromWidget );
@@ -551,11 +557,7 @@ void QgsSymbolButton::updatePreview( const QColor &color, QgsSymbol *tempSymbol 
   // set tooltip
   // create very large preview image
 
-#if QT_VERSION < QT_VERSION_CHECK(5, 11, 0)
-  int width = static_cast< int >( Qgis::UI_SCALE_FACTOR * fontMetrics().width( 'X' ) * 23 );
-#else
   int width = static_cast< int >( Qgis::UI_SCALE_FACTOR * fontMetrics().horizontalAdvance( 'X' ) * 23 );
-#endif
   int height = static_cast< int >( width / 1.61803398875 ); // golden ratio
 
   QPixmap pm = QgsSymbolLayerUtils::symbolPreviewPixmap( previewSymbol.get(), QSize( width, height ), height / 20 );
@@ -647,7 +649,7 @@ void QgsSymbolButton::showColorDialog()
     return;
   }
 
-  QgsColorDialog dialog( this, nullptr, mSymbol->color() );
+  QgsColorDialog dialog( this, Qt::WindowFlags(), mSymbol->color() );
   dialog.setTitle( tr( "Symbol Color" ) );
   dialog.setAllowOpacity( true );
 

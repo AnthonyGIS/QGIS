@@ -23,7 +23,7 @@
 #include "qgsbackgroundcachedshareddata.h"
 #include "qgsbackgroundcachedfeatureiterator.h"
 
-// !Class shared between provider and feature source
+//! Class shared between provider and feature source
 class QgsWFSSharedData : public QObject, public QgsBackgroundCachedSharedData
 {
     Q_OBJECT
@@ -40,11 +40,13 @@ class QgsWFSSharedData : public QObject, public QgsBackgroundCachedSharedData
     //! Return provider geometry attribute name
     const QString &geometryAttribute() const { return mGeometryAttribute; }
 
-    std::unique_ptr<QgsFeatureDownloaderImpl> newFeatureDownloaderImpl( QgsFeatureDownloader * ) override;
+    std::unique_ptr<QgsFeatureDownloaderImpl> newFeatureDownloaderImpl( QgsFeatureDownloader *, bool requestFromMainThread ) override;
 
     bool isRestrictedToRequestBBOX() const override;
 
     bool hasGeometry() const override { return !mGeometryAttribute.isEmpty(); }
+
+    const QgsWfsCapabilities::Capabilities &capabilities() const { return mCaps; }
 
   signals:
 
@@ -75,7 +77,7 @@ class QgsWFSSharedData : public QObject, public QgsBackgroundCachedSharedData
     QMap< QString, QPair<QString, QString> > mMapFieldNameToSrcLayerNameFieldName;
 
     //! Page size for WFS 2.0. 0 = disabled
-    int mPageSize = 0;
+    long long mPageSize = 0;
 
     //! Server capabilities
     QgsWfsCapabilities::Capabilities mCaps;
@@ -85,8 +87,14 @@ class QgsWFSSharedData : public QObject, public QgsBackgroundCachedSharedData
 
     /**
      * If the server (typically MapServer WFS 1.1) honours EPSG axis order, but returns
-        EPSG:XXXX srsName and not EPSG urns */
+     * EPSG:XXXX srsName and not EPSG urns
+    */
     bool mGetFeatureEPSGDotHonoursEPSGOrder = false;
+
+    /**
+     * If the server (typically ESRI with WFS-T 1.1 in 2020) does not like "pos" and "posList", and requires "coordinates" for WFS 1.1 transactions
+     */
+    bool mServerPrefersCoordinatesForTransactions_1_1 = false;
 
     //! Geometry type of the features in this layer
     QgsWkbTypes::Type mWKBType = QgsWkbTypes::Unknown;
@@ -119,7 +127,7 @@ class QgsWFSSharedData : public QObject, public QgsBackgroundCachedSharedData
 
     QgsRectangle getExtentFromSingleFeatureRequest() const override;
 
-    int getFeatureCountFromServer() const override;
+    long long getFeatureCountFromServer() const override;
 };
 
 //! Utility class to issue a GetFeature resultType=hits request
@@ -130,7 +138,7 @@ class QgsWFSFeatureHitsRequest: public QgsWfsRequest
     explicit QgsWFSFeatureHitsRequest( const QgsWFSDataSourceURI &uri );
 
     //! Returns the feature count, or -1 in case of error
-    int getFeatureCount( const QString &WFSVersion, const QString &filter, const QgsWfsCapabilities::Capabilities &caps );
+    long long getFeatureCount( const QString &WFSVersion, const QString &filter, const QgsWfsCapabilities::Capabilities &caps );
 
   protected:
     QString errorMessageWithReason( const QString &reason ) override;
@@ -138,7 +146,8 @@ class QgsWFSFeatureHitsRequest: public QgsWfsRequest
 
 /**
  * Utility class to issue a GetFeature requets with maxfeatures/count=1
- * Used by QgsWFSSharedData::endOfDownload() when capabilities extent are likely wrong */
+ * Used by QgsWFSSharedData::endOfDownload() when capabilities extent are likely wrong
+*/
 class QgsWFSSingleFeatureRequest: public QgsWfsRequest
 {
     Q_OBJECT

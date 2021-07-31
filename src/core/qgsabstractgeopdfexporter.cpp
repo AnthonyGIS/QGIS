@@ -31,14 +31,12 @@
 #include <QMutexLocker>
 #include <QDomDocument>
 #include <QDomElement>
-
+#include <QTimeZone>
+#include <QUuid>
+#include <QTextStream>
 
 bool QgsAbstractGeoPdfExporter::geoPDFCreationAvailable()
 {
-#if GDAL_VERSION_NUM < GDAL_COMPUTE_VERSION(3,0,0)
-  return false;
-#else
-
   // test if GDAL has read support in PDF driver
   GDALDriverH hDriverMem = GDALGetDriverByName( "PDF" );
   if ( !hDriverMem )
@@ -55,14 +53,10 @@ bool QgsAbstractGeoPdfExporter::geoPDFCreationAvailable()
     return true;
 
   return false;
-#endif
 }
 
 QString QgsAbstractGeoPdfExporter::geoPDFAvailabilityExplanation()
 {
-#if GDAL_VERSION_NUM < GDAL_COMPUTE_VERSION(3,0,0)
-  return QObject::tr( "GeoPDF creation requires GDAL version 3.0 or later." );
-#else
   // test if GDAL has read support in PDF driver
   GDALDriverH hDriverMem = GDALGetDriverByName( "PDF" );
   if ( !hDriverMem )
@@ -79,7 +73,6 @@ QString QgsAbstractGeoPdfExporter::geoPDFAvailabilityExplanation()
     return QString();
 
   return QObject::tr( "GDAL PDF driver was not built with PDF read support. A build with PDF read support is required for GeoPDF creation." );
-#endif
 }
 
 bool QgsAbstractGeoPdfExporter::finalize( const QList<ComponentLayerDetail> &components, const QString &destinationFile, const ExportDetails &details )
@@ -87,11 +80,6 @@ bool QgsAbstractGeoPdfExporter::finalize( const QList<ComponentLayerDetail> &com
   if ( details.includeFeatures && !saveTemporaryLayers() )
     return false;
 
-#if GDAL_VERSION_NUM < GDAL_COMPUTE_VERSION(3,0,0)
-  Q_UNUSED( components )
-  Q_UNUSED( destinationFile )
-  return false;
-#else
   const QString composition = createCompositionXml( components, details );
   QgsDebugMsg( composition );
   if ( composition.isEmpty() )
@@ -110,6 +98,9 @@ bool QgsAbstractGeoPdfExporter::finalize( const QList<ComponentLayerDetail> &com
   if ( file.open( QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate ) )
   {
     QTextStream out( &file );
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    out.setCodec( "UTF-8" );
+#endif
     out << composition;
   }
   else
@@ -128,7 +119,6 @@ bool QgsAbstractGeoPdfExporter::finalize( const QList<ComponentLayerDetail> &com
   CSLDestroy( papszOptions );
 
   return res;
-#endif
 }
 
 QString QgsAbstractGeoPdfExporter::generateTemporaryFilepath( const QString &filename ) const
@@ -155,8 +145,9 @@ bool QgsAbstractGeoPdfExporter::compositionModeSupported( QPainter::CompositionM
       return true;
 
     default:
-      return false;
+      break;
   }
+
   return false;
 }
 
@@ -288,7 +279,7 @@ QString QgsAbstractGeoPdfExporter::createCompositionXml( const QList<ComponentLa
 
   if ( details.includeFeatures )
   {
-    for ( const VectorComponentDetail &component : qgis::as_const( mVectorComponents ) )
+    for ( const VectorComponentDetail &component : std::as_const( mVectorComponents ) )
     {
       if ( details.customLayerTreeGroups.contains( component.mapLayerId ) )
         continue;
@@ -407,16 +398,17 @@ QString QgsAbstractGeoPdfExporter::createCompositionXml( const QList<ComponentLa
   // pages
   QDomElement page = doc.createElement( QStringLiteral( "Page" ) );
   QDomElement dpi = doc.createElement( QStringLiteral( "DPI" ) );
-  dpi.appendChild( doc.createTextNode( QString::number( details.dpi ) ) );
+  // hardcode DPI of 72 to get correct page sizes in outputs -- refs discussion in https://github.com/OSGeo/gdal/pull/2961
+  dpi.appendChild( doc.createTextNode( qgsDoubleToString( 72 ) ) );
   page.appendChild( dpi );
-  // assumes DPI of 72, which is an assumption on GDALs/PDF side. It's only related to the PDF coordinate space and doesn't affect the actual output DPI!
+  // assumes DPI of 72, as noted above.
   QDomElement width = doc.createElement( QStringLiteral( "Width" ) );
   const double pageWidthPdfUnits = std::ceil( details.pageSizeMm.width() / 25.4 * 72 );
-  width.appendChild( doc.createTextNode( QString::number( pageWidthPdfUnits ) ) );
+  width.appendChild( doc.createTextNode( qgsDoubleToString( pageWidthPdfUnits ) ) );
   page.appendChild( width );
   QDomElement height = doc.createElement( QStringLiteral( "Height" ) );
   const double pageHeightPdfUnits = std::ceil( details.pageSizeMm.height() / 25.4 * 72 );
-  height.appendChild( doc.createTextNode( QString::number( pageHeightPdfUnits ) ) );
+  height.appendChild( doc.createTextNode( qgsDoubleToString( pageHeightPdfUnits ) ) );
   page.appendChild( height );
 
 
@@ -474,20 +466,20 @@ QString QgsAbstractGeoPdfExporter::createCompositionXml( const QList<ComponentLa
         the whole PDF page will be assumed to be georeferenced.
         */
       QDomElement boundingBox = doc.createElement( QStringLiteral( "BoundingBox" ) );
-      boundingBox.setAttribute( QStringLiteral( "x1" ), QString::number( section.pageBoundsMm.xMinimum() / 25.4 * 72 ) );
-      boundingBox.setAttribute( QStringLiteral( "y1" ), QString::number( section.pageBoundsMm.yMinimum() / 25.4 * 72 ) );
-      boundingBox.setAttribute( QStringLiteral( "x2" ), QString::number( section.pageBoundsMm.xMaximum() / 25.4 * 72 ) );
-      boundingBox.setAttribute( QStringLiteral( "y2" ), QString::number( section.pageBoundsMm.yMaximum() / 25.4 * 72 ) );
+      boundingBox.setAttribute( QStringLiteral( "x1" ), qgsDoubleToString( section.pageBoundsMm.xMinimum() / 25.4 * 72 ) );
+      boundingBox.setAttribute( QStringLiteral( "y1" ), qgsDoubleToString( section.pageBoundsMm.yMinimum() / 25.4 * 72 ) );
+      boundingBox.setAttribute( QStringLiteral( "x2" ), qgsDoubleToString( section.pageBoundsMm.xMaximum() / 25.4 * 72 ) );
+      boundingBox.setAttribute( QStringLiteral( "y2" ), qgsDoubleToString( section.pageBoundsMm.yMaximum() / 25.4 * 72 ) );
       georeferencing.appendChild( boundingBox );
     }
 
     for ( const ControlPoint &point : section.controlPoints )
     {
       QDomElement cp1 = doc.createElement( QStringLiteral( "ControlPoint" ) );
-      cp1.setAttribute( QStringLiteral( "x" ), QString::number( point.pagePoint.x() / 25.4 * 72 ) );
-      cp1.setAttribute( QStringLiteral( "y" ), QString::number( ( details.pageSizeMm.height() - point.pagePoint.y() ) / 25.4 * 72 ) );
-      cp1.setAttribute( QStringLiteral( "GeoX" ), QString::number( point.geoPoint.x() ) );
-      cp1.setAttribute( QStringLiteral( "GeoY" ), QString::number( point.geoPoint.y() ) );
+      cp1.setAttribute( QStringLiteral( "x" ), qgsDoubleToString( point.pagePoint.x() / 25.4 * 72 ) );
+      cp1.setAttribute( QStringLiteral( "y" ), qgsDoubleToString( ( details.pageSizeMm.height() - point.pagePoint.y() ) / 25.4 * 72 ) );
+      cp1.setAttribute( QStringLiteral( "GeoX" ), qgsDoubleToString( point.geoPoint.x() ) );
+      cp1.setAttribute( QStringLiteral( "GeoY" ), qgsDoubleToString( point.geoPoint.y() ) );
       georeferencing.appendChild( cp1 );
     }
 
@@ -551,7 +543,7 @@ QString QgsAbstractGeoPdfExporter::createCompositionXml( const QList<ComponentLa
   // vector datasets (we "draw" these on top, just for debugging... but they are invisible, so are never really drawn!)
   if ( details.includeFeatures )
   {
-    for ( const VectorComponentDetail &component : qgis::as_const( mVectorComponents ) )
+    for ( const VectorComponentDetail &component : std::as_const( mVectorComponents ) )
     {
       QDomElement ifLayerOn = doc.createElement( QStringLiteral( "IfLayerOn" ) );
       if ( details.customLayerTreeGroups.contains( component.mapLayerId ) )
@@ -627,10 +619,10 @@ QString QgsAbstractGeoPdfExporter::compositionModeToString( QPainter::Compositio
       return QStringLiteral( "Exclusion" );
 
     default:
-      QgsDebugMsg( QStringLiteral( "Unsupported PDF blend mode %1" ).arg( mode ) );
-      return QStringLiteral( "Normal" );
-
+      break;
   }
-  return QString();
+
+  QgsDebugMsg( QStringLiteral( "Unsupported PDF blend mode %1" ).arg( mode ) );
+  return QStringLiteral( "Normal" );
 }
 

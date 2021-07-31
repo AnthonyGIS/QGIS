@@ -23,7 +23,12 @@
 #include "qgstextrendererutils.h"
 #include "qgspallabeling.h"
 #include <QFontDatabase>
+#include <QMimeData>
+#include <QWidget>
+#include <QScreen>
+#if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)
 #include <QDesktopWidget>
+#endif
 
 QgsTextFormat::QgsTextFormat()
 {
@@ -74,10 +79,12 @@ bool QgsTextFormat::operator==( const QgsTextFormat &other ) const
        || d->orientation != other.orientation()
        || d->previewBackgroundColor != other.previewBackgroundColor()
        || d->allowHtmlFormatting != other.allowHtmlFormatting()
+       || d->capitalization != other.capitalization()
        || mBufferSettings != other.mBufferSettings
        || mBackgroundSettings != other.mBackgroundSettings
        || mShadowSettings != other.mShadowSettings
        || mMaskSettings != other.mMaskSettings
+       || d->families != other.families()
        || d->mDataDefinedProperties != other.dataDefinedProperties() )
     return false;
 
@@ -195,6 +202,17 @@ void QgsTextFormat::setNamedStyle( const QString &style )
   d->textNamedStyle = style;
 }
 
+QStringList QgsTextFormat::families() const
+{
+  return d->families;
+}
+
+void QgsTextFormat::setFamilies( const QStringList &families )
+{
+  d->isValid = true;
+  d->families = families;
+}
+
 QgsUnitTypes::RenderUnit QgsTextFormat::sizeUnit() const
 {
   return d->fontSizeUnits;
@@ -283,6 +301,19 @@ void QgsTextFormat::setOrientation( TextOrientation orientation )
   d->orientation = orientation;
 }
 
+QgsStringUtils::Capitalization QgsTextFormat::capitalization() const
+{
+  // bit of complexity here to maintain API..
+  return d->capitalization == QgsStringUtils::MixedCase && d->textFont.capitalization() != QFont::MixedCase ? static_cast< QgsStringUtils::Capitalization >( d->textFont.capitalization() ) : d->capitalization ;
+}
+
+void QgsTextFormat::setCapitalization( QgsStringUtils::Capitalization capitalization )
+{
+  d->isValid = true;
+  d->capitalization = capitalization;
+  d->textFont.setCapitalization( QFont::MixedCase );
+}
+
 bool QgsTextFormat::allowHtmlFormatting() const
 {
   return d->allowHtmlFormatting;
@@ -365,7 +396,7 @@ void QgsTextFormat::readFromLayer( QgsVectorLayer *layer )
   d->textFont = QFont( fontFamily, d->fontSize, fontWeight, fontItalic );
   d->textNamedStyle = QgsFontUtils::translateNamedStyle( layer->customProperty( QStringLiteral( "labeling/namedStyle" ), QVariant( "" ) ).toString() );
   QgsFontUtils::updateFontViaStyle( d->textFont, d->textNamedStyle ); // must come after textFont.setPointSizeF()
-  d->textFont.setCapitalization( static_cast< QFont::Capitalization >( layer->customProperty( QStringLiteral( "labeling/fontCapitals" ), QVariant( 0 ) ).toUInt() ) );
+  d->capitalization = static_cast< QgsStringUtils::Capitalization >( layer->customProperty( QStringLiteral( "labeling/fontCapitals" ), QVariant( 0 ) ).toUInt() );
   d->textFont.setUnderline( layer->customProperty( QStringLiteral( "labeling/fontUnderline" ) ).toBool() );
   d->textFont.setStrikeOut( layer->customProperty( QStringLiteral( "labeling/fontStrikeout" ) ).toBool() );
   d->textFont.setLetterSpacing( QFont::AbsoluteSpacing, layer->customProperty( QStringLiteral( "labeling/fontLetterSpacing" ), QVariant( 0.0 ) ).toDouble() );
@@ -393,27 +424,52 @@ void QgsTextFormat::readXml( const QDomElement &elem, const QgsReadWriteContext 
 {
   d->isValid = true;
   QDomElement textStyleElem;
-  if ( elem.nodeName() == QStringLiteral( "text-style" ) )
+  if ( elem.nodeName() == QLatin1String( "text-style" ) )
     textStyleElem = elem;
   else
     textStyleElem = elem.firstChildElement( QStringLiteral( "text-style" ) );
   QFont appFont = QApplication::font();
   mTextFontFamily = textStyleElem.attribute( QStringLiteral( "fontFamily" ), appFont.family() );
   QString fontFamily = mTextFontFamily;
+
+  const QDomElement familiesElem = textStyleElem.firstChildElement( QStringLiteral( "families" ) );
+  const QDomNodeList familyNodes = familiesElem.childNodes();
+  QStringList families;
+  families.reserve( familyNodes.size() );
+  for ( int i = 0; i < familyNodes.count(); ++i )
+  {
+    const QDomElement familyElem = familyNodes.at( i ).toElement();
+    families << familyElem.attribute( QStringLiteral( "name" ) );
+  }
+  d->families = families;
+
+  mTextFontFound = false;
   if ( mTextFontFamily != appFont.family() && !QgsFontUtils::fontFamilyMatchOnSystem( mTextFontFamily ) )
   {
-    // trigger to notify user about font family substitution (signal emitted in QgsVectorLayer::prepareLabelingAndDiagrams)
-    mTextFontFound = false;
+    for ( const QString &family : std::as_const( families ) )
+    {
+      if ( QgsFontUtils::fontFamilyMatchOnSystem( family ) )
+      {
+        mTextFontFound = true;
+        fontFamily = family;
+        break;
+      }
+    }
 
-    // TODO: update when pref for how to resolve missing family (use matching algorithm or just default font) is implemented
-    // currently only defaults to matching algorithm for resolving [foundry], if a font of similar family is found (default for QFont)
-
-    // for now, do not use matching algorithm for substitution if family not found, substitute default instead
-    fontFamily = appFont.family();
+    if ( !mTextFontFound )
+    {
+      // couldn't even find a matching font in the backup list -- substitute default instead
+      fontFamily = appFont.family();
+    }
   }
   else
   {
     mTextFontFound = true;
+  }
+
+  if ( !mTextFontFound )
+  {
+    context.pushMessage( QObject::tr( "Font “%1” not available on system" ).arg( mTextFontFamily ) );
   }
 
   if ( textStyleElem.hasAttribute( QStringLiteral( "fontSize" ) ) )
@@ -453,7 +509,6 @@ void QgsTextFormat::readXml( const QDomElement &elem, const QgsReadWriteContext 
   d->textFont.setPointSizeF( d->fontSize ); //double precision needed because of map units
   d->textNamedStyle = QgsFontUtils::translateNamedStyle( textStyleElem.attribute( QStringLiteral( "namedStyle" ) ) );
   QgsFontUtils::updateFontViaStyle( d->textFont, d->textNamedStyle ); // must come after textFont.setPointSizeF()
-  d->textFont.setCapitalization( static_cast< QFont::Capitalization >( textStyleElem.attribute( QStringLiteral( "fontCapitals" ), QStringLiteral( "0" ) ).toUInt() ) );
   d->textFont.setUnderline( textStyleElem.attribute( QStringLiteral( "fontUnderline" ) ).toInt() );
   d->textFont.setStrikeOut( textStyleElem.attribute( QStringLiteral( "fontStrikeout" ) ).toInt() );
   d->textFont.setKerning( textStyleElem.attribute( QStringLiteral( "fontKerning" ), QStringLiteral( "1" ) ).toInt() );
@@ -483,6 +538,11 @@ void QgsTextFormat::readXml( const QDomElement &elem, const QgsReadWriteContext 
   {
     d->multilineHeight = textStyleElem.attribute( QStringLiteral( "multilineHeight" ), QStringLiteral( "1" ) ).toDouble();
   }
+
+  if ( textStyleElem.hasAttribute( QStringLiteral( "capitalization" ) ) )
+    d->capitalization = static_cast< QgsStringUtils::Capitalization >( textStyleElem.attribute( QStringLiteral( "capitalization" ), QString::number( QgsStringUtils::MixedCase ) ).toInt() );
+  else
+    d->capitalization = static_cast< QgsStringUtils::Capitalization >( textStyleElem.attribute( QStringLiteral( "fontCapitals" ), QStringLiteral( "0" ) ).toUInt() );
 
   d->allowHtmlFormatting = textStyleElem.attribute( QStringLiteral( "allowHtml" ), QStringLiteral( "0" ) ).toInt();
 
@@ -527,6 +587,7 @@ void QgsTextFormat::readXml( const QDomElement &elem, const QgsReadWriteContext 
   if ( !ddElem.isNull() )
   {
     d->mDataDefinedProperties.readXml( ddElem, QgsPalLayerSettings::propertyDefinitions() );
+    mBackgroundSettings.upgradeDataDefinedProperties( d->mDataDefinedProperties );
   }
   else
   {
@@ -539,6 +600,16 @@ QDomElement QgsTextFormat::writeXml( QDomDocument &doc, const QgsReadWriteContex
   // text style
   QDomElement textStyleElem = doc.createElement( QStringLiteral( "text-style" ) );
   textStyleElem.setAttribute( QStringLiteral( "fontFamily" ), d->textFont.family() );
+
+  QDomElement familiesElem = doc.createElement( QStringLiteral( "families" ) );
+  for ( const QString &family : std::as_const( d->families ) )
+  {
+    QDomElement familyElem = doc.createElement( QStringLiteral( "family" ) );
+    familyElem.setAttribute( QStringLiteral( "name" ), family );
+    familiesElem.appendChild( familyElem );
+  }
+  textStyleElem.appendChild( familiesElem );
+
   textStyleElem.setAttribute( QStringLiteral( "namedStyle" ), QgsFontUtils::untranslateNamedStyle( d->textNamedStyle ) );
   textStyleElem.setAttribute( QStringLiteral( "fontSize" ), d->fontSize );
   textStyleElem.setAttribute( QStringLiteral( "fontSizeUnit" ), QgsUnitTypes::encodeUnit( d->fontSizeUnits ) );
@@ -549,7 +620,6 @@ QDomElement QgsTextFormat::writeXml( QDomDocument &doc, const QgsReadWriteContex
   textStyleElem.setAttribute( QStringLiteral( "fontUnderline" ), d->textFont.underline() );
   textStyleElem.setAttribute( QStringLiteral( "textColor" ), QgsSymbolLayerUtils::encodeColor( d->textColor ) );
   textStyleElem.setAttribute( QStringLiteral( "previewBkgrdColor" ), QgsSymbolLayerUtils::encodeColor( d->previewBackgroundColor ) );
-  textStyleElem.setAttribute( QStringLiteral( "fontCapitals" ), static_cast< unsigned int >( d->textFont.capitalization() ) );
   textStyleElem.setAttribute( QStringLiteral( "fontLetterSpacing" ), d->textFont.letterSpacing() );
   textStyleElem.setAttribute( QStringLiteral( "fontWordSpacing" ), d->textFont.wordSpacing() );
   textStyleElem.setAttribute( QStringLiteral( "fontKerning" ), d->textFont.kerning() );
@@ -558,6 +628,7 @@ QDomElement QgsTextFormat::writeXml( QDomDocument &doc, const QgsReadWriteContex
   textStyleElem.setAttribute( QStringLiteral( "blendMode" ), QgsPainting::getBlendModeEnum( d->blendMode ) );
   textStyleElem.setAttribute( QStringLiteral( "multilineHeight" ), d->multilineHeight );
   textStyleElem.setAttribute( QStringLiteral( "allowHtml" ), d->allowHtmlFormatting ? QStringLiteral( "1" ) : QStringLiteral( "0" ) );
+  textStyleElem.setAttribute( QStringLiteral( "capitalization" ), QString::number( static_cast< int >( d->capitalization ) ) );
 
   QDomElement ddElem = doc.createElement( QStringLiteral( "dd_properties" ) );
   d->mDataDefinedProperties.writeXml( ddElem, QgsPalLayerSettings::propertyDefinitions() );
@@ -574,6 +645,7 @@ QDomElement QgsTextFormat::writeXml( QDomDocument &doc, const QgsReadWriteContex
 QMimeData *QgsTextFormat::toMimeData() const
 {
   //set both the mime color data, and the text (format settings).
+
   QMimeData *mimeData = new QMimeData;
   mimeData->setColorData( QVariant( color() ) );
 
@@ -716,7 +788,7 @@ void QgsTextFormat::updateDataDefinedProperties( QgsRenderContext &context )
   QString ddFontFamily;
   context.expressionContext().setOriginalValueVariable( d->textFont.family() );
   QVariant exprVal = d->mDataDefinedProperties.value( QgsPalLayerSettings::Family, context.expressionContext() );
-  if ( exprVal.isValid() )
+  if ( !exprVal.isNull() )
   {
     QString family = exprVal.toString().trimmed();
     if ( d->textFont.family() != family )
@@ -734,7 +806,7 @@ void QgsTextFormat::updateDataDefinedProperties( QgsRenderContext &context )
   QString ddFontStyle;
   context.expressionContext().setOriginalValueVariable( d->textNamedStyle );
   exprVal = d->mDataDefinedProperties.value( QgsPalLayerSettings::FontStyle, context.expressionContext() );
-  if ( exprVal.isValid() )
+  if ( !exprVal.isNull() )
   {
     QString fontstyle = exprVal.toString().trimmed();
     ddFontStyle = fontstyle;
@@ -839,7 +911,7 @@ void QgsTextFormat::updateDataDefinedProperties( QgsRenderContext &context )
   }
 
   exprVal = d->mDataDefinedProperties.value( QgsPalLayerSettings::FontSizeUnit, context.expressionContext() );
-  if ( exprVal.isValid() )
+  if ( !exprVal.isNull() )
   {
     QString units = exprVal.toString();
     if ( !units.isEmpty() )
@@ -854,7 +926,11 @@ void QgsTextFormat::updateDataDefinedProperties( QgsRenderContext &context )
   if ( d->mDataDefinedProperties.isActive( QgsPalLayerSettings::FontOpacity ) )
   {
     context.expressionContext().setOriginalValueVariable( d->opacity * 100 );
-    d->opacity = d->mDataDefinedProperties.value( QgsPalLayerSettings::FontOpacity, context.expressionContext(), d->opacity * 100 ).toDouble() / 100.0;
+    const QVariant val = d->mDataDefinedProperties.value( QgsPalLayerSettings::FontOpacity, context.expressionContext(), d->opacity * 100 );
+    if ( !val.isNull() )
+    {
+      d->opacity = val.toDouble() / 100.0;
+    }
   }
 
   if ( d->mDataDefinedProperties.isActive( QgsPalLayerSettings::TextOrientation ) )
@@ -867,13 +943,21 @@ void QgsTextFormat::updateDataDefinedProperties( QgsRenderContext &context )
   if ( d->mDataDefinedProperties.isActive( QgsPalLayerSettings::FontLetterSpacing ) )
   {
     context.expressionContext().setOriginalValueVariable( d->textFont.letterSpacing() );
-    d->textFont.setLetterSpacing( QFont::AbsoluteSpacing, d->mDataDefinedProperties.value( QgsPalLayerSettings::FontLetterSpacing, context.expressionContext(), d->textFont.letterSpacing() ).toDouble() );
+    const QVariant val = d->mDataDefinedProperties.value( QgsPalLayerSettings::FontLetterSpacing, context.expressionContext(), d->textFont.letterSpacing() );
+    if ( !val.isNull() )
+    {
+      d->textFont.setLetterSpacing( QFont::AbsoluteSpacing, val.toDouble() );
+    }
   }
 
   if ( d->mDataDefinedProperties.isActive( QgsPalLayerSettings::FontWordSpacing ) )
   {
     context.expressionContext().setOriginalValueVariable( d->textFont.wordSpacing() );
-    d->textFont.setWordSpacing( d->mDataDefinedProperties.value( QgsPalLayerSettings::FontWordSpacing, context.expressionContext(), d->textFont.wordSpacing() ).toDouble() );
+    const QVariant val = d->mDataDefinedProperties.value( QgsPalLayerSettings::FontWordSpacing, context.expressionContext(), d->textFont.wordSpacing() );
+    if ( !val.isNull() )
+    {
+      d->textFont.setWordSpacing( val.toDouble() );
+    }
   }
 
   if ( d->mDataDefinedProperties.isActive( QgsPalLayerSettings::FontBlendMode ) )
@@ -936,7 +1020,14 @@ QPixmap QgsTextFormat::textFormatPreviewPixmap( const QgsTextFormat &format, QSi
   newCoordXForm.setParameters( 1, 0, 0, 0, 0, 0 );
   context.setMapToPixel( newCoordXForm );
 
-  context.setScaleFactor( QgsApplication::desktop()->logicalDpiX() / 25.4 );
+#if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)
+  const double logicalDpiX = QgsApplication::desktop()->logicalDpiX();
+#else
+  QWidget *activeWindow = QApplication::activeWindow();
+  const double logicalDpiX = activeWindow && activeWindow->screen() ? activeWindow->screen()->logicalDotsPerInchX() : 96.0;
+#endif
+  context.setScaleFactor( logicalDpiX / 25.4 );
+
   context.setUseAdvancedEffects( true );
   context.setFlag( QgsRenderContext::Antialiasing, true );
   context.setPainter( &painter );

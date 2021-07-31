@@ -40,6 +40,7 @@
 #include <QUrl>
 #include <QEventLoop>
 #include <QFile>
+#include <QUrlQuery>
 
 #ifdef QGISDEBUG
 #include <QDir>
@@ -61,8 +62,8 @@ static QString DEFAULT_LATLON_CRS = QStringLiteral( "CRS:84" );
 
 // TODO: colortable - use common baseclass with gdal, mapserver does not support http://trac.osgeo.org/mapserver/ticket/1671
 
-QgsWcsProvider::QgsWcsProvider( const QString &uri, const ProviderOptions &options )
-  : QgsRasterDataProvider( uri, options )
+QgsWcsProvider::QgsWcsProvider( const QString &uri, const ProviderOptions &options, QgsDataProvider::ReadFlags flags )
+  : QgsRasterDataProvider( uri, options, flags )
   , mCachedViewExtent( 0 )
 {
   QgsDebugMsg( "constructing with uri '" + mHttpUri + "'." );
@@ -285,23 +286,23 @@ QgsWcsProvider::QgsWcsProvider( const QString &uri, const ProviderOptions &optio
     double myInternalNoDataValue;
     switch ( srcDataType( i ) )
     {
-      case Qgis::Byte:
+      case Qgis::DataType::Byte:
         myInternalNoDataValue = -32768.0;
         myInternalGdalDataType = GDT_Int16;
         break;
-      case Qgis::Int16:
+      case Qgis::DataType::Int16:
         myInternalNoDataValue = -2147483648.0;
         myInternalGdalDataType = GDT_Int32;
         break;
-      case Qgis::UInt16:
+      case Qgis::DataType::UInt16:
         myInternalNoDataValue = -2147483648.0;
         myInternalGdalDataType = GDT_Int32;
         break;
-      case Qgis::Int32:
+      case Qgis::DataType::Int32:
         // We believe that such values is no used in real data
         myInternalNoDataValue = -2147483648.0;
         break;
-      case Qgis::UInt32:
+      case Qgis::DataType::UInt32:
         // We believe that such values is no used in real data
         myInternalNoDataValue = 4294967295.0;
         break;
@@ -801,8 +802,6 @@ void QgsWcsProvider::getCache( int bandNo, QgsRectangle  const &viewExtent, int 
 
   //mGetFeatureInfoUrlBase = mIgnoreGetFeatureInfoUrl ? mBaseUrl : getFeatureInfoUrl();
 
-  emit statusChanged( tr( "Getting map via WCS." ) );
-
   QgsWcsDownloadHandler handler( url, mAuth, mCacheLoadControl, mCachedData, mCapabilities.version(), mCachedError, feedback );
   handler.blockingDownload();
 
@@ -884,7 +883,7 @@ Qgis::DataType QgsWcsProvider::sourceDataType( int bandNo ) const
 {
   if ( bandNo <= 0 || bandNo > mSrcGdalDataType.size() )
   {
-    return Qgis::UnknownDataType;
+    return Qgis::DataType::UnknownDataType;
   }
 
   return dataTypeFromGdal( mSrcGdalDataType[bandNo - 1] );
@@ -894,7 +893,7 @@ Qgis::DataType QgsWcsProvider::dataType( int bandNo ) const
 {
   if ( bandNo <= 0 || bandNo > mGdalDataType.size() )
   {
-    return Qgis::UnknownDataType;
+    return Qgis::DataType::UnknownDataType;
   }
 
   return dataTypeFromGdal( mGdalDataType[bandNo - 1] );
@@ -1376,7 +1375,7 @@ QString QgsWcsProvider::htmlMetadata()
     metadata += tr( "And %1 more coverages" ).arg( mCapabilities.coverages().size() - count );
   }
 
-  metadata += QStringLiteral( "</table></div></td></tr>\n" );  // End nested table 1
+  metadata += QLatin1String( "</table></div></td></tr>\n" );  // End nested table 1
   return metadata;
 }
 
@@ -1597,6 +1596,11 @@ QString  QgsWcsProvider::description() const
   return WCS_DESCRIPTION;
 }
 
+QgsRasterDataProvider::ProviderCapabilities QgsWcsProvider::providerCapabilities() const
+{
+  return ProviderCapability::ReloadData;
+}
+
 void QgsWcsProvider::reloadProviderData()
 {
   clearCache();
@@ -1650,9 +1654,9 @@ QMap<QString, QString> QgsWcsProvider::supportedMimes()
   return mimes;
 }
 
-QgsWcsProvider *QgsWcsProviderMetadata::createProvider( const QString &uri, const QgsDataProvider::ProviderOptions &options )
+QgsWcsProvider *QgsWcsProviderMetadata::createProvider( const QString &uri, const QgsDataProvider::ProviderOptions &options, QgsDataProvider::ReadFlags flags )
 {
-  return new QgsWcsProvider( uri, options );
+  return new QgsWcsProvider( uri, options, flags );
 }
 
 // ----------

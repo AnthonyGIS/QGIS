@@ -19,6 +19,8 @@
 #define QGSFILEUTILS_H
 
 #include "qgis_core.h"
+#include "qgis_sip.h"
+#include "qgis.h"
 #include <QString>
 
 /**
@@ -45,6 +47,24 @@ class CORE_EXPORT QgsFileUtils
      * \see addExtensionFromFilter()
      */
     static QStringList extensionsFromFilter( const QString &filter );
+
+    /**
+     * Given a \a filter string like "GeoTIFF Files (*.tiff *.tif)", extracts
+     * the wildcard portion of this filter (i.e. "*.tiff *.tif").
+     *
+     * \since QGIS 3.18
+     */
+    static QString wildcardsFromFilter( const QString &filter );
+
+    /**
+     * Returns TRUE if the given \a fileName matches a file \a filter string.
+     *
+     * E.g a filter of "GeoTIFF Files (*.tiff *.tif)" would return TRUE for a \a fileName
+     * of "/home/test.tif", or FALSE for "/home/test.jpg".
+     *
+     * \since QGIS 3.18
+     */
+    static bool fileMatchesFilter( const QString &fileName, const QString &filter );
 
     /**
      * Ensures that a \a fileName ends with an extension from the provided list of
@@ -99,6 +119,23 @@ class CORE_EXPORT QgsFileUtils
      * \since QGIS 3.12
      */
     static QStringList findFile( const QString &file, const QString &basepath = QString(), int maxClimbs = 4, int searchCeiling = 4, const QString &currentDir = QString() );
+
+    /**
+     * Returns the drive type for the given \a path.
+     *
+     * \throws QgsNotSupportedException if determining the drive type is not supported on the current platform.
+     *
+     * \since QGIS 3.20
+     */
+    static Qgis::DriveType driveType( const QString &path ) SIP_THROW( QgsNotSupportedException );
+
+    /**
+     * Returns TRUE if the specified \a path is assumed to reside on a slow device, e.g. a remote
+     * network drive or other non-fixed device.
+     *
+     * \since QGIS 3.20
+     */
+    static bool pathIsSlowDevice( const QString &path );
 
 };
 

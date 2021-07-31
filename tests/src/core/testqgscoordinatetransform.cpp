@@ -41,8 +41,14 @@ class TestQgsCoordinateTransform: public QObject
     void scaleFactor_data();
     void transform_data();
     void transform();
+#if PROJ_VERSION_MAJOR>7 || (PROJ_VERSION_MAJOR == 7 && PROJ_VERSION_MINOR >= 2)
+    void transformEpoch_data();
+    void transformEpoch();
+    void dynamicToDynamicErrorHandler();
+#endif
     void transformLKS();
     void transformContextNormalize();
+    void transform2DPoint();
     void transformErrorMultiplePoints();
     void transformErrorOnePoint();
     void testDeprecated4240to4326();
@@ -182,7 +188,6 @@ void TestQgsCoordinateTransform::isShortCircuited()
 void TestQgsCoordinateTransform::contextShared()
 {
   //test implicit sharing of QgsCoordinateTransformContext
-#if PROJ_VERSION_MAJOR >= 6
   QgsCoordinateTransformContext original;
   original.addCoordinateOperation( QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:3111" ) ), QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:3113" ) ), QStringLiteral( "proj" ) );
 
@@ -210,38 +215,6 @@ void TestQgsCoordinateTransform::contextShared()
   QCOMPARE( original.coordinateOperations(), expected );
   expected.insert( qMakePair( QStringLiteral( "EPSG:3111" ), QStringLiteral( "EPSG:3113" ) ), QStringLiteral( "proj2" ) );
   QCOMPARE( copy2.coordinateOperations(), expected );
-#else
-  QgsCoordinateTransformContext original;
-  Q_NOWARN_DEPRECATED_PUSH
-  original.addSourceDestinationDatumTransform( QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:3111" ) ), QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:3113" ) ), 1, 2 );
-
-  QgsCoordinateTransformContext copy( original );
-  QMap< QPair< QString, QString >, QgsDatumTransform::TransformPair > expected;
-  expected.insert( qMakePair( QStringLiteral( "EPSG:3111" ), QStringLiteral( "EPSG:3113" ) ), QgsDatumTransform::TransformPair( 1, 2 ) );
-  QCOMPARE( original.sourceDestinationDatumTransforms(), expected );
-  QCOMPARE( copy.sourceDestinationDatumTransforms(), expected );
-
-  // trigger detach
-  copy.addSourceDestinationDatumTransform( QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:3111" ) ), QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:3113" ) ), 3, 4 );
-  QCOMPARE( original.sourceDestinationDatumTransforms(), expected );
-
-  expected.insert( qMakePair( QStringLiteral( "EPSG:3111" ), QStringLiteral( "EPSG:3113" ) ), QgsDatumTransform::TransformPair( 3, 4 ) );
-  QCOMPARE( copy.sourceDestinationDatumTransforms(), expected );
-
-  // copy via assignment
-  QgsCoordinateTransformContext copy2;
-  copy2 = original;
-  expected.insert( qMakePair( QStringLiteral( "EPSG:3111" ), QStringLiteral( "EPSG:3113" ) ), QgsDatumTransform::TransformPair( 1, 2 ) );
-  QCOMPARE( original.sourceDestinationDatumTransforms(), expected );
-  QCOMPARE( copy2.sourceDestinationDatumTransforms(), expected );
-
-  copy2.addSourceDestinationDatumTransform( QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:3111" ) ), QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:3113" ) ), 3, 4 );
-  QCOMPARE( original.sourceDestinationDatumTransforms(), expected );
-  expected.insert( qMakePair( QStringLiteral( "EPSG:3111" ), QStringLiteral( "EPSG:3113" ) ), QgsDatumTransform::TransformPair( 3, 4 ) );
-  QCOMPARE( copy2.sourceDestinationDatumTransforms(), expected );
-
-  Q_NOWARN_DEPRECATED_POP
-#endif
 }
 
 void TestQgsCoordinateTransform::scaleFactor()
@@ -301,11 +274,11 @@ void TestQgsCoordinateTransform::transform_data()
   QTest::newRow( "To geographic" )
       << QgsCoordinateReferenceSystem::fromEpsgId( 3111 )
       << QgsCoordinateReferenceSystem::fromEpsgId( 4326 )
-      << 2545059.0 << 2393190.0 << static_cast< int >( QgsCoordinateTransform::ForwardTransform ) << 145.512750 << -37.961375 << 0.000001;
+      << 2545059.0 << 2393190.0 << static_cast< int >( QgsCoordinateTransform::ForwardTransform ) << 145.512750 << -37.961375 << 0.000015;
   QTest::newRow( "From geographic" )
       << QgsCoordinateReferenceSystem::fromEpsgId( 4326 )
       << QgsCoordinateReferenceSystem::fromEpsgId( 3111 )
-      << 145.512750 <<  -37.961375 << static_cast< int >( QgsCoordinateTransform::ForwardTransform ) << 2545059.0 << 2393190.0 << 0.1;
+      << 145.512750 <<  -37.961375 << static_cast< int >( QgsCoordinateTransform::ForwardTransform ) << 2545059.0 << 2393190.0 << 1.5;
   QTest::newRow( "From geographic to geographic" )
       << QgsCoordinateReferenceSystem::fromEpsgId( 4326 )
       << QgsCoordinateReferenceSystem::fromEpsgId( 4164 )
@@ -313,11 +286,11 @@ void TestQgsCoordinateTransform::transform_data()
   QTest::newRow( "To geographic (reverse)" )
       << QgsCoordinateReferenceSystem::fromEpsgId( 3111 )
       << QgsCoordinateReferenceSystem::fromEpsgId( 4326 )
-      << 145.512750 <<  -37.961375 << static_cast< int >( QgsCoordinateTransform::ReverseTransform ) << 2545059.0 << 2393190.0 << 0.1;
+      << 145.512750 <<  -37.961375 << static_cast< int >( QgsCoordinateTransform::ReverseTransform ) << 2545059.0 << 2393190.0 << 1.5;
   QTest::newRow( "From geographic (reverse)" )
       << QgsCoordinateReferenceSystem::fromEpsgId( 4326 )
       << QgsCoordinateReferenceSystem::fromEpsgId( 3111 )
-      << 2545058.9675128171 << 2393190.0509782173 << static_cast< int >( QgsCoordinateTransform::ReverseTransform ) << 145.512750 << -37.961375 << 0.000001;
+      << 2545058.9675128171 << 2393190.0509782173 << static_cast< int >( QgsCoordinateTransform::ReverseTransform ) << 145.512750 << -37.961375 << 0.000015;
   QTest::newRow( "From geographic to geographic reverse" )
       << QgsCoordinateReferenceSystem::fromEpsgId( 4326 )
       << QgsCoordinateReferenceSystem::fromEpsgId( 4164 )
@@ -387,6 +360,166 @@ void TestQgsCoordinateTransform::transform()
   QGSCOMPARENEAR( y, outY, precision );
 }
 
+#if PROJ_VERSION_MAJOR>7 || (PROJ_VERSION_MAJOR == 7 && PROJ_VERSION_MINOR >= 2)
+void TestQgsCoordinateTransform::transformEpoch_data()
+{
+  QTest::addColumn<QgsCoordinateReferenceSystem>( "sourceCrs" );
+  QTest::addColumn<double>( "sourceEpoch" );
+  QTest::addColumn<QgsCoordinateReferenceSystem>( "destCrs" );
+  QTest::addColumn<double>( "destEpoch" );
+  QTest::addColumn<double>( "srcX" );
+  QTest::addColumn<double>( "srcY" );
+  QTest::addColumn<int>( "direction" );
+  QTest::addColumn<double>( "outX" );
+  QTest::addColumn<double>( "outY" );
+  QTest::addColumn<double>( "precision" );
+
+  QTest::newRow( "GDA2020 to ITRF at central epoch -- no coordinate change expected" )
+      << QgsCoordinateReferenceSystem::fromEpsgId( 7844 ) // GDA2020
+      << std::numeric_limits< double >::quiet_NaN()
+      << QgsCoordinateReferenceSystem::fromEpsgId( 9000 ) // ITRF2014
+      << 2020.0
+      << 150.0 << -30.0 << static_cast< int >( QgsCoordinateTransform::ForwardTransform ) << 150.0 << -30.0 << 0.0000000001;
+
+  QTest::newRow( "GDA2020 to ITRF at central epoch (reverse) -- no coordinate change expected" )
+      << QgsCoordinateReferenceSystem::fromEpsgId( 7844 ) // GDA2020
+      << std::numeric_limits< double >::quiet_NaN()
+      << QgsCoordinateReferenceSystem::fromEpsgId( 9000 ) // ITRF2014
+      << 2020.0
+      << 150.0 << -30.0 << static_cast< int >( QgsCoordinateTransform::ReverseTransform ) << 150.0 << -30.0 << 0.0000000001;
+
+  QTest::newRow( "ITRF at central epoch to GDA2020 -- no coordinate change expected" )
+      << QgsCoordinateReferenceSystem::fromEpsgId( 9000 ) // ITRF2014
+      << 2020.0
+      << QgsCoordinateReferenceSystem::fromEpsgId( 7844 ) // GDA2020
+      << std::numeric_limits< double >::quiet_NaN()
+      << 150.0 << -30.0 << static_cast< int >( QgsCoordinateTransform::ForwardTransform ) << 150.0 << -30.0 << 0.0000000001;
+
+  QTest::newRow( "ITRF at central epoch to GDA2020 (reverse) -- no coordinate change expected" )
+      << QgsCoordinateReferenceSystem::fromEpsgId( 9000 ) // ITRF2014
+      << 2020.0
+      << QgsCoordinateReferenceSystem::fromEpsgId( 7844 ) // GDA2020
+      << std::numeric_limits< double >::quiet_NaN()
+      << 150.0 << -30.0 << static_cast< int >( QgsCoordinateTransform::ReverseTransform ) << 150.0 << -30.0 << 0.0000000001;
+
+  QTest::newRow( "GDA2020 to ITRF at 2030 -- coordinate change expected" )
+      << QgsCoordinateReferenceSystem::fromEpsgId( 7844 ) // GDA2020
+      << std::numeric_limits< double >::quiet_NaN()
+      << QgsCoordinateReferenceSystem::fromEpsgId( 9000 ) // ITRF2014
+      << 2030.0
+      << 150.0 << -30.0 << static_cast< int >( QgsCoordinateTransform::ForwardTransform ) << 150.0000022212 << -29.9999950478 << 0.0000001;
+
+  QTest::newRow( "GDA2020 to ITRF at 2030 (reverse) -- coordinate change expected" )
+      << QgsCoordinateReferenceSystem::fromEpsgId( 7844 ) // GDA2020
+      << std::numeric_limits< double >::quiet_NaN()
+      << QgsCoordinateReferenceSystem::fromEpsgId( 9000 ) // ITRF2014
+      << 2030.0
+      << 150.0000022212 << -29.9999950478 << static_cast< int >( QgsCoordinateTransform::ReverseTransform ) << 150.0 << -30.0 << 0.0000001;
+
+  QTest::newRow( "ITRF at 2030 to GDA2020-- coordinate change expected" )
+      << QgsCoordinateReferenceSystem::fromEpsgId( 9000 ) // ITRF2014
+      << 2030.0
+      << QgsCoordinateReferenceSystem::fromEpsgId( 7844 ) // GDA2020
+      << std::numeric_limits< double >::quiet_NaN()
+      << 150.0000022212 << -29.9999950478 << static_cast< int >( QgsCoordinateTransform::ForwardTransform ) << 150.0 << -30.0 << 0.0000001;
+
+  QTest::newRow( "ITRF at 2030 to GDA2020 (reverse) -- coordinate change expected" )
+      << QgsCoordinateReferenceSystem::fromEpsgId( 9000 ) // ITRF2014
+      << 2030.0
+      << QgsCoordinateReferenceSystem::fromEpsgId( 7844 ) // GDA2020
+      << std::numeric_limits< double >::quiet_NaN()
+      << 150.0 << -30.0 << static_cast< int >( QgsCoordinateTransform::ReverseTransform ) << 150.0000022212 << -29.9999950478 << 0.0000001;
+}
+
+void TestQgsCoordinateTransform::transformEpoch()
+{
+  QFETCH( QgsCoordinateReferenceSystem, sourceCrs );
+  QFETCH( double, sourceEpoch );
+  QFETCH( QgsCoordinateReferenceSystem, destCrs );
+  QFETCH( double, destEpoch );
+  QFETCH( double, srcX );
+  QFETCH( double, srcY );
+  QFETCH( int, direction );
+  QFETCH( double, outX );
+  QFETCH( double, outY );
+  QFETCH( double, precision );
+
+  sourceCrs.setCoordinateEpoch( sourceEpoch );
+  destCrs.setCoordinateEpoch( destEpoch );
+
+  double z = 0;
+  QgsCoordinateTransform ct( sourceCrs, destCrs, QgsProject::instance() );
+
+  double x = srcX;
+  double y = srcY;
+  ct.transformInPlace( x, y, z, static_cast<  QgsCoordinateTransform::TransformDirection >( direction ) );
+  QGSCOMPARENEAR( x, outX, precision );
+  QGSCOMPARENEAR( y, outY, precision );
+
+  // make a second transform so that it's fetched from the cache this time
+  QgsCoordinateTransform ct2( sourceCrs, destCrs, QgsProject::instance() );
+  x = srcX;
+  y = srcY;
+  ct2.transformInPlace( x, y, z, static_cast<  QgsCoordinateTransform::TransformDirection >( direction ) );
+  QGSCOMPARENEAR( x, outX, precision );
+  QGSCOMPARENEAR( y, outY, precision );
+}
+
+void TestQgsCoordinateTransform::dynamicToDynamicErrorHandler()
+{
+  // test that warnings are raised when attempting a dynamic crs to dynamic crs transformation (not supported by PROJ)
+  int counter = 0;
+  QgsCoordinateTransform::setDynamicCrsToDynamicCrsWarningHandler( [&counter]( const QgsCoordinateReferenceSystem &, const QgsCoordinateReferenceSystem & )
+  {
+    counter++;
+  } );
+
+  // no warnings -- no coordinate epoch set (although we should consider a different warning in this situation!!)
+  QgsCoordinateReferenceSystem src( QStringLiteral( "EPSG:9000" ) );
+  QgsCoordinateReferenceSystem dest( QStringLiteral( "EPSG:9000" ) );
+  QgsCoordinateTransform t( src, dest, QgsCoordinateTransformContext() );
+  QCOMPARE( counter, 0 );
+
+  // no warnings, static to static
+  src = QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:7844" ) );
+  dest = QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:3111" ) );
+  t = QgsCoordinateTransform( src, dest, QgsCoordinateTransformContext() );
+  QCOMPARE( counter, 0 );
+
+  // no warnings, static to dynamic
+  src = QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:7844" ) );
+  dest = QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:9000" ) );
+  dest.setCoordinateEpoch( 2030 );
+  t = QgsCoordinateTransform( src, dest, QgsCoordinateTransformContext() );
+  QCOMPARE( counter, 0 );
+
+  // no warnings, dynamic to static
+  src = QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:9000" ) );
+  src.setCoordinateEpoch( 2030 );
+  dest = QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:7844" ) );
+  t = QgsCoordinateTransform( src, dest, QgsCoordinateTransformContext() );
+  QCOMPARE( counter, 0 );
+
+  // no warnings, same dynamic CRS to same dynamic CRS with same epoch
+  src = QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:9000" ) );
+  src.setCoordinateEpoch( 2030 );
+  dest = QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:9000" ) );
+  dest.setCoordinateEpoch( 2030 );
+  t = QgsCoordinateTransform( src, dest, QgsCoordinateTransformContext() );
+  QCOMPARE( counter, 0 );
+
+  // yes warnings, dynamic CRS to dynamic CRS with different epoch
+  src = QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:9000" ) );
+  src.setCoordinateEpoch( 2030 );
+  dest = QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:9000" ) );
+  dest.setCoordinateEpoch( 2025 );
+  t = QgsCoordinateTransform( src, dest, QgsCoordinateTransformContext() );
+  QCOMPARE( counter, 1 );
+
+  QgsCoordinateTransform::setDynamicCrsToDynamicCrsWarningHandler( nullptr );
+}
+#endif
+
 void TestQgsCoordinateTransform::transformBoundingBox()
 {
   //test transforming a bounding box which crosses the 180 degree longitude line
@@ -455,7 +588,6 @@ void TestQgsCoordinateTransform::transformLKS()
 
 void TestQgsCoordinateTransform::transformContextNormalize()
 {
-#if PROJ_VERSION_MAJOR >= 6
   // coordinate operation for WGS84 to 27700
   const QString coordOperation = QStringLiteral( "+proj=pipeline +step +proj=unitconvert +xy_in=deg +xy_out=rad +step +proj=push +v_3 +step +proj=cart +ellps=WGS84 +step +inv +proj=helmert +x=446.448 +y=-125.157 +z=542.06 +rx=0.15 +ry=0.247 +rz=0.842 +s=-20.489 +convention=position_vector +step +inv +proj=cart +ellps=airy +step +proj=pop +v_3 +step +proj=tmerc +lat_0=49 +lon_0=-2 +k=0.9996012717 +x_0=400000 +y_0=-100000 +ellps=airy" );
   QgsCoordinateTransformContext context;
@@ -482,10 +614,24 @@ void TestQgsCoordinateTransform::transformContextNormalize()
   p = ct2.transform( p2, QgsCoordinateTransform::ReverseTransform );
   QGSCOMPARENEAR( p.x(), 245424.604645, 0.01 );
   QGSCOMPARENEAR( p.y(), 54016.813093, 0.01 );
-
-#endif
 }
 
+void TestQgsCoordinateTransform::transform2DPoint()
+{
+  // Check that we properly handle 2D point transform
+  QgsCoordinateTransformContext context;
+  QgsCoordinateTransform ct( QgsCoordinateReferenceSystem::fromEpsgId( 4326 ), QgsCoordinateReferenceSystem::fromEpsgId( 3857 ), context );
+  QVERIFY( ct.isValid() );
+  QgsPoint pt( 0.0, 0.0 );
+  double x = pt.x();
+  double y = pt.y();
+  double z = pt.z();
+  ct.transformInPlace( x, y, z );
+
+  QGSCOMPARENEAR( x, 0.0, 0.01 );
+  QGSCOMPARENEAR( y, 0.0, 0.01 );
+  QVERIFY( std::isnan( z ) );
+}
 
 void TestQgsCoordinateTransform::transformErrorMultiplePoints()
 {
@@ -525,7 +671,6 @@ void TestQgsCoordinateTransform::transformErrorOnePoint()
 
 void TestQgsCoordinateTransform::testDeprecated4240to4326()
 {
-#if PROJ_VERSION_MAJOR >= 6
   // test creating a coordinate transform between EPSG 4240 and EPSG 4326 using a deprecated coordinate operation
   // see https://github.com/qgis/QGIS/issues/33121
 
@@ -593,26 +738,26 @@ void TestQgsCoordinateTransform::testDeprecated4240to4326()
   p3 = deprecatedTransformRev.transform( p2, QgsCoordinateTransform::ReverseTransform );
   QGSCOMPARENEAR( p3.x(), 102.496547, 0.000001 );
   QGSCOMPARENEAR( p3.y(), 7.502139, 0.000001 );
-#endif
 }
 
 void TestQgsCoordinateTransform::testCustomProjTransform()
 {
-#if PROJ_VERSION_MAJOR >= 6
   // test custom proj string
   // refs https://github.com/qgis/QGIS/issues/32928
-  QgsCoordinateReferenceSystem ss( QgsCoordinateReferenceSystem::fromProj( QStringLiteral( "+proj=sterea +lat_0=47.4860018439082 +lon_0=19.0491441390302 +k=1 +x_0=500000 +y_0=500000 +ellps=bessel +towgs84=595.75,121.09,515.50,8.2270,-1.5193,5.5971,-2.6729 +units=m +vunits=m +no_defs" ) ) );
-  QgsCoordinateReferenceSystem dd( QStringLiteral( "EPSG:23700" ) );
+  QgsCoordinateReferenceSystem ss( QgsCoordinateReferenceSystem::fromProj( QStringLiteral( "+proj=longlat +ellps=GRS80 +towgs84=1,2,3,4,5,6,7 +no_defs" ) ) );
+  QgsCoordinateReferenceSystem dd( QStringLiteral( "EPSG:4326" ) );
   QgsCoordinateTransform ct( ss, dd, QgsCoordinateTransformContext() );
   QVERIFY( ct.isValid() );
   QgsDebugMsg( ct.instantiatedCoordinateOperationDetails().proj );
-  QCOMPARE( ct.instantiatedCoordinateOperationDetails().proj, QStringLiteral( "+proj=pipeline +step +inv +proj=sterea +lat_0=47.4860018439082 +lon_0=19.0491441390302 +k=1 +x_0=500000 +y_0=500000 +ellps=bessel +step +proj=push +v_3 +step +proj=cart +ellps=bessel +step +proj=helmert +x=595.75 +y=121.09 +z=515.5 +rx=8.227 +ry=-1.5193 +rz=5.5971 +s=-2.6729 +convention=position_vector +step +inv +proj=helmert +x=52.684 +y=-71.194 +z=-13.975 +rx=0.312 +ry=0.1063 +rz=0.3729 +s=1.0191 +convention=coordinate_frame +step +inv +proj=cart +ellps=GRS67 +step +proj=pop +v_3 +step +proj=somerc +lat_0=47.1443937222222 +lon_0=19.0485717777778 +k_0=0.99993 +x_0=650000 +y_0=200000 +ellps=GRS67" ) );
-
-  QgsPointXY pp( 529127, 479348 );
-  pp = ct.transform( pp );
-  QGSCOMPARENEAR( pp.x(),  679125.816475, 0.00001 );
-  QGSCOMPARENEAR( pp.y(), 217454.893093, 0.00001 );
-#endif
+  QCOMPARE( ct.instantiatedCoordinateOperationDetails().proj,
+            QStringLiteral( "+proj=pipeline "
+                            "+step +proj=unitconvert +xy_in=deg +xy_out=rad "
+                            "+step +proj=push +v_3 "
+                            "+step +proj=cart +ellps=GRS80 "
+                            "+step +proj=helmert +x=1 +y=2 +z=3 +rx=4 +ry=5 +rz=6 +s=7 +convention=position_vector "
+                            "+step +inv +proj=cart +ellps=WGS84 "
+                            "+step +proj=pop +v_3 "
+                            "+step +proj=unitconvert +xy_in=rad +xy_out=deg" ) );
 }
 
 

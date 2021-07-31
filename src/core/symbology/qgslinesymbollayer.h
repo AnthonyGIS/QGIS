@@ -24,6 +24,8 @@
 #include <QVector>
 
 class QgsExpression;
+class QgsMarkerSymbol;
+class QgsLineSymbol;
 
 #define DEFAULT_SIMPLELINE_COLOR     QColor(35,35,35)
 #define DEFAULT_SIMPLELINE_WIDTH     DEFAULT_LINE_WIDTH
@@ -34,7 +36,7 @@ class QgsExpression;
 /**
  * \ingroup core
  * \class QgsSimpleLineSymbolLayer
- * A simple line symbol layer, which renders lines using a line in a variety of styles (e.g. solid, dotted, dashed).
+ * \brief A simple line symbol layer, which renders lines using a line in a variety of styles (e.g. solid, dotted, dashed).
  */
 class CORE_EXPORT QgsSimpleLineSymbolLayer : public QgsLineSymbolLayer
 {
@@ -49,6 +51,8 @@ class CORE_EXPORT QgsSimpleLineSymbolLayer : public QgsLineSymbolLayer
                               double width = DEFAULT_SIMPLELINE_WIDTH,
                               Qt::PenStyle penStyle = DEFAULT_SIMPLELINE_PENSTYLE );
 
+    ~QgsSimpleLineSymbolLayer() override;
+
     // static stuff
 
     /**
@@ -56,7 +60,7 @@ class CORE_EXPORT QgsSimpleLineSymbolLayer : public QgsLineSymbolLayer
      * serialized in the \a properties map (corresponding to the output from
      * QgsSimpleLineSymbolLayer::properties() ).
      */
-    static QgsSymbolLayer *create( const QgsStringMap &properties = QgsStringMap() ) SIP_FACTORY;
+    static QgsSymbolLayer *create( const QVariantMap &properties = QVariantMap() ) SIP_FACTORY;
 
     /**
      * Creates a new QgsSimpleLineSymbolLayer from an SLD XML DOM \a element.
@@ -69,12 +73,13 @@ class CORE_EXPORT QgsSimpleLineSymbolLayer : public QgsLineSymbolLayer
     void renderPolyline( const QPolygonF &points, QgsSymbolRenderContext &context ) override;
     //overridden so that clip path can be set when using draw inside polygon option
     void renderPolygonStroke( const QPolygonF &points, const QVector<QPolygonF> *rings, QgsSymbolRenderContext &context ) override;
-    QgsStringMap properties() const override;
+    QVariantMap properties() const override;
     QgsSimpleLineSymbolLayer *clone() const override SIP_FACTORY;
-    void toSld( QDomDocument &doc, QDomElement &element, const QgsStringMap &props ) const override;
+    void toSld( QDomDocument &doc, QDomElement &element, const QVariantMap &props ) const override;
     QString ogrFeatureStyle( double mmScaleFactor, double mapUnitScaleFactor ) const override;
     void setOutputUnit( QgsUnitTypes::RenderUnit unit ) override;
     QgsUnitTypes::RenderUnit outputUnit() const override;
+    bool usesMapUnits() const override;
     void setMapUnitScale( const QgsMapUnitScale &scale ) override;
     QgsMapUnitScale mapUnitScale() const override;
     double estimateMaxBleed( const QgsRenderContext &context ) const override;
@@ -83,6 +88,7 @@ class CORE_EXPORT QgsSimpleLineSymbolLayer : public QgsLineSymbolLayer
     double dxfWidth( const QgsDxfExport &e, QgsSymbolRenderContext &context ) const override;
     double dxfOffset( const QgsDxfExport &e, QgsSymbolRenderContext &context ) const override;
     QColor dxfColor( QgsSymbolRenderContext &context ) const override;
+    bool canCauseArtifactsBetweenAdjacentTiles() const override;
 
     /**
      * Returns the pen style used to render the line (e.g. solid, dashed, etc).
@@ -245,7 +251,7 @@ class CORE_EXPORT QgsSimpleLineSymbolLayer : public QgsLineSymbolLayer
     QgsUnitTypes::RenderUnit dashPatternOffsetUnit() const { return mDashPatternOffsetUnit; }
 
     /**
-     * Returns the map unit scale the dash pattern offset value.
+     * Returns the map unit scale for the dash pattern offset value.
      *
      * \see setDashPatternOffsetMapUnitScale()
      * \see dashPatternOffsetUnit()
@@ -265,6 +271,162 @@ class CORE_EXPORT QgsSimpleLineSymbolLayer : public QgsLineSymbolLayer
      * \since QGIS 3.16
     */
     void setDashPatternOffsetMapUnitScale( const QgsMapUnitScale &scale ) { mDashPatternOffsetMapUnitScale = scale; }
+
+    /**
+     * Returns the trim distance for the start of the line, which dictates a length
+     * from the start of the line at which the actual rendering should start.
+     *
+     * Trim units can be retrieved by calling trimDistanceStartUnit().
+     *
+     * \see setTrimDistanceStart()
+     * \see trimDistanceEnd()
+     * \see trimDistanceStartUnit()
+     * \see trimDistanceStartMapUnitScale()
+     *
+     * \since QGIS 3.20
+     */
+    double trimDistanceStart() const { return mTrimDistanceStart; }
+
+    /**
+     * Sets the trim \a distance for the start of the line, which dictates a length
+     * from the start of the line at which the actual rendering should start.
+     *
+     * Trim units can be set by calling setTrimDistanceStartUnit().
+     *
+     * \see trimDistanceStart()
+     * \see setTrimDistanceEnd()
+     * \see setTrimDistanceStartUnit()
+     * \see setTrimDistanceStartMapUnitScale()
+     *
+     * \since QGIS 3.20
+     */
+    void setTrimDistanceStart( double distance ) { mTrimDistanceStart = distance; }
+
+    /**
+     * Sets the \a unit for the trim distance for the start of the line.
+     *
+     * \see trimDistanceStartUnit()
+     * \see setTrimDistanceEndUnit()
+     * \see setTrimDistanceStart()
+     * \see setTrimDistanceStartMapUnitScale()
+     *
+     * \since QGIS 3.20
+    */
+    void setTrimDistanceStartUnit( QgsUnitTypes::RenderUnit unit ) { mTrimDistanceStartUnit = unit; }
+
+    /**
+     * Returns the unit for the trim distance for the start of the line.
+     *
+     * \see setTrimDistanceStartUnit()
+     * \see trimDistanceEndUnit()
+     * \see trimDistanceStart()
+     * \see trimDistanceStartMapUnitScale()
+     *
+     * \since QGIS 3.20
+    */
+    QgsUnitTypes::RenderUnit trimDistanceStartUnit() const { return mTrimDistanceStartUnit; }
+
+    /**
+     * Returns the map unit scale for the trim distance for the start of the line.
+     *
+     * \see setTrimDistanceStartMapUnitScale()
+     * \see trimDistanceEndMapUnitScale()
+     * \see trimDistanceStart()
+     * \see trimDistanceStartUnit()
+     *
+     * \since QGIS 3.20
+    */
+    const QgsMapUnitScale &trimDistanceStartMapUnitScale() const { return mTrimDistanceStartMapUnitScale; }
+
+    /**
+     * Sets the map unit \a scale for the trim distance for the start of the line.
+     *
+     * \see trimDistanceStartMapUnitScale()
+     * \see setTrimDistanceEndMapUnitScale()
+     * \see setTrimDistanceStart()
+     * \see setTrimDistanceStartUnit()
+     *
+     * \since QGIS 3.20
+    */
+    void setTrimDistanceStartMapUnitScale( const QgsMapUnitScale &scale ) { mTrimDistanceStartMapUnitScale = scale; }
+
+    /**
+     * Returns the trim distance for the end of the line, which dictates a length
+     * from the end of the line at which the actual rendering should end.
+     *
+     * Trim units can be retrieved by calling trimDistanceEndUnit().
+     *
+     * \see setTrimDistanceEnd()
+     * \see trimDistanceStart()
+     * \see trimDistanceEndUnit()
+     * \see trimDistanceEndMapUnitScale()
+     *
+     * \since QGIS 3.20
+     */
+    double trimDistanceEnd() const { return mTrimDistanceEnd; }
+
+    /**
+     * Sets the trim \a distance for the end of the line, which dictates a length
+     * from the end of the line at which the actual rendering should end.
+     *
+     * Trim units can be set by calling setTrimDistanceEndUnit().
+     *
+     * \see trimDistanceEnd()
+     * \see setTrimDistanceStart()
+     * \see setTrimDistanceEndUnit()
+     * \see setTrimDistanceEndMapUnitScale()
+     *
+     * \since QGIS 3.20
+     */
+    void setTrimDistanceEnd( double distance ) { mTrimDistanceEnd = distance; }
+
+    /**
+     * Sets the \a unit for the trim distance for the end of the line.
+     *
+     * \see trimDistanceEndUnit()
+     * \see setTrimDistanceStartUnit()
+     * \see setTrimDistanceEnd()
+     * \see setTrimDistanceEndMapUnitScale()
+     *
+     * \since QGIS 3.20
+    */
+    void setTrimDistanceEndUnit( QgsUnitTypes::RenderUnit unit ) { mTrimDistanceEndUnit = unit; }
+
+    /**
+     * Returns the unit for the trim distance for the end of the line.
+     *
+     * \see setTrimDistanceEndUnit()
+     * \see trimDistanceStartUnit()
+     * \see trimDistanceEnd()
+     * \see trimDistanceEndMapUnitScale()
+     *
+     * \since QGIS 3.20
+    */
+    QgsUnitTypes::RenderUnit trimDistanceEndUnit() const { return mTrimDistanceEndUnit; }
+
+    /**
+     * Returns the map unit scale for the trim distance for the end of the line.
+     *
+     * \see setTrimDistanceEndMapUnitScale()
+     * \see trimDistanceStartMapUnitScale()
+     * \see trimDistanceEnd()
+     * \see trimDistanceEndUnit()
+     *
+     * \since QGIS 3.20
+    */
+    const QgsMapUnitScale &trimDistanceEndMapUnitScale() const { return mTrimDistanceEndMapUnitScale; }
+
+    /**
+     * Sets the map unit \a scale for the trim distance for the end of the line.
+     *
+     * \see trimDistanceEndMapUnitScale()
+     * \see setTrimDistanceStartMapUnitScale()
+     * \see setTrimDistanceEnd()
+     * \see setTrimDistanceEndUnit()
+     *
+     * \since QGIS 3.20
+    */
+    void setTrimDistanceEndMapUnitScale( const QgsMapUnitScale &scale ) { mTrimDistanceEndMapUnitScale = scale; }
 
     /**
      * Returns TRUE if the line should only be drawn inside polygons, and any portion
@@ -288,6 +450,52 @@ class CORE_EXPORT QgsSimpleLineSymbolLayer : public QgsLineSymbolLayer
      */
     void setDrawInsidePolygon( bool drawInsidePolygon ) { mDrawInsidePolygon = drawInsidePolygon; }
 
+    /**
+     * Returns TRUE if dash patterns should be aligned to the start and end of lines, by
+     * applying subtle tweaks to the pattern sizing in order to ensure that the end of
+     * a line is represented by a complete dash element.
+     *
+     * \see setAlignDashPattern()
+     * \see tweakDashPatternOnCorners()
+     * \since QGIS 3.16
+     */
+    bool alignDashPattern() const;
+
+    /**
+     * Sets whether dash patterns should be aligned to the start and end of lines, by
+     * applying subtle tweaks to the pattern sizing in order to ensure that the end of
+     * a line is represented by a complete dash element.
+     *
+     * \see alignDashPattern()
+     * \see setTweakDashPatternOnCorners()
+     * \since QGIS 3.16
+     */
+    void setAlignDashPattern( bool enabled );
+
+    /**
+     * Returns TRUE if dash patterns tweaks should be applied on sharp corners, to ensure
+     * that a double-length dash is drawn running into and out of the corner.
+     *
+     * \note This setting is only applied if alignDashPattern() is TRUE.
+     *
+     * \see setTweakDashPatternOnCorners()
+     * \see alignDashPattern()
+     * \since QGIS 3.16
+     */
+    bool tweakDashPatternOnCorners() const;
+
+    /**
+     * Sets whether dash patterns tweaks should be applied on sharp corners, to ensure
+     * that a double-length dash is drawn running into and out of the corner.
+     *
+     * \note This setting is only applied if alignDashPattern() is TRUE.
+     *
+     * \see tweakDashPatternOnCorners()
+     * \see setAlignDashPattern()
+     * \since QGIS 3.16
+     */
+    void setTweakDashPatternOnCorners( bool enabled );
+
   private:
 
     Qt::PenStyle mPenStyle = Qt::SolidLine;
@@ -304,13 +512,25 @@ class CORE_EXPORT QgsSimpleLineSymbolLayer : public QgsLineSymbolLayer
     QgsUnitTypes::RenderUnit mDashPatternOffsetUnit = QgsUnitTypes::RenderMillimeters;
     QgsMapUnitScale mDashPatternOffsetMapUnitScale;
 
+    double mTrimDistanceStart = 0;
+    QgsUnitTypes::RenderUnit mTrimDistanceStartUnit = QgsUnitTypes::RenderMillimeters;
+    QgsMapUnitScale mTrimDistanceStartMapUnitScale;
+
+    double mTrimDistanceEnd = 0;
+    QgsUnitTypes::RenderUnit mTrimDistanceEndUnit = QgsUnitTypes::RenderMillimeters;
+    QgsMapUnitScale mTrimDistanceEndMapUnitScale;
+
     //! Vector with an even number of entries for the
     QVector<qreal> mCustomDashVector;
+
+    bool mAlignDashPattern = false;
+    bool mPatternCartographicTweakOnSharpCorners = false;
 
     bool mDrawInsidePolygon = false;
 
     //helper functions for data defined symbology
     void applyDataDefinedSymbology( QgsSymbolRenderContext &context, QPen &pen, QPen &selPen, double &offset );
+    void drawPathWithDashPatternTweaks( QPainter *painter, const QPolygonF &points, QPen pen ) const;
 };
 
 /////////
@@ -322,7 +542,7 @@ class CORE_EXPORT QgsSimpleLineSymbolLayer : public QgsLineSymbolLayer
  * \ingroup core
  * \class QgsTemplatedLineSymbolLayerBase
  *
- * Base class for templated line symbols, e.g. line symbols which draw markers or hash
+ * \brief Base class for templated line symbols, e.g. line symbols which draw markers or hash
  * lines at intervals along the line feature.
  *
  * \since QGIS 3.8
@@ -354,6 +574,8 @@ class CORE_EXPORT QgsTemplatedLineSymbolLayerBase : public QgsLineSymbolLayer
      */
     QgsTemplatedLineSymbolLayerBase( bool rotateSymbol = true,
                                      double interval = 3 );
+
+    ~QgsTemplatedLineSymbolLayerBase() override;
 
     /**
      * Returns TRUE if the repeating symbols be rotated to match their line segment orientation.
@@ -542,12 +764,13 @@ class CORE_EXPORT QgsTemplatedLineSymbolLayerBase : public QgsLineSymbolLayer
     */
     const QgsMapUnitScale &averageAngleMapUnitScale() const { return mAverageAngleLengthMapUnitScale; }
 
-    void renderPolyline( const QPolygonF &points, QgsSymbolRenderContext &context ) FINAL;
+    void renderPolyline( const QPolygonF &points, QgsSymbolRenderContext &context ) override;
     void renderPolygonStroke( const QPolygonF &points, const QVector<QPolygonF> *rings, QgsSymbolRenderContext &context ) FINAL;
     QgsUnitTypes::RenderUnit outputUnit() const FINAL;
     void setMapUnitScale( const QgsMapUnitScale &scale ) FINAL;
     QgsMapUnitScale mapUnitScale() const FINAL;
-    QgsStringMap properties() const override;
+    QVariantMap properties() const override;
+    bool canCauseArtifactsBetweenAdjacentTiles() const override;
 
   protected:
 
@@ -578,7 +801,7 @@ class CORE_EXPORT QgsTemplatedLineSymbolLayerBase : public QgsLineSymbolLayer
      * in the \a layer argument. A \a layer of -1 indicates that all symbol layers should be
      * rendered.
      *
-     * If \a selected is true then the symbol will be drawn using the "selected feature"
+     * If \a selected is TRUE then the symbol will be drawn using the "selected feature"
      * style and colors instead of the symbol's normal style.
      */
     virtual void renderSymbol( const QPointF &point, const QgsFeature *feature, QgsRenderContext &context, int layer = -1, bool selected = false ) = 0;
@@ -592,7 +815,7 @@ class CORE_EXPORT QgsTemplatedLineSymbolLayerBase : public QgsLineSymbolLayer
      * Sets all common symbol properties in the \a destLayer, using the settings
      * serialized in the \a properties map.
      */
-    static void setCommonProperties( QgsTemplatedLineSymbolLayerBase *destLayer, const QgsStringMap &properties );
+    static void setCommonProperties( QgsTemplatedLineSymbolLayerBase *destLayer, const QVariantMap &properties );
 
   private:
 
@@ -638,7 +861,7 @@ class CORE_EXPORT QgsTemplatedLineSymbolLayerBase : public QgsLineSymbolLayer
 /**
  * \ingroup core
  * \class QgsMarkerLineSymbolLayer
- * Line symbol layer type which draws repeating marker symbols along a line feature.
+ * \brief Line symbol layer type which draws repeating marker symbols along a line feature.
  */
 class CORE_EXPORT QgsMarkerLineSymbolLayer : public QgsTemplatedLineSymbolLayerBase
 {
@@ -654,6 +877,8 @@ class CORE_EXPORT QgsMarkerLineSymbolLayer : public QgsTemplatedLineSymbolLayerB
     QgsMarkerLineSymbolLayer( bool rotateMarker = DEFAULT_MARKERLINE_ROTATE,
                               double interval = DEFAULT_MARKERLINE_INTERVAL );
 
+    ~QgsMarkerLineSymbolLayer() override;
+
     // static stuff
 
     /**
@@ -661,7 +886,7 @@ class CORE_EXPORT QgsMarkerLineSymbolLayer : public QgsTemplatedLineSymbolLayerB
      * serialized in the \a properties map (corresponding to the output from
      * QgsMarkerLineSymbolLayer::properties() ).
      */
-    static QgsSymbolLayer *create( const QgsStringMap &properties = QgsStringMap() ) SIP_FACTORY;
+    static QgsSymbolLayer *create( const QVariantMap &properties = QVariantMap() ) SIP_FACTORY;
 
     /**
      * Creates a new QgsMarkerLineSymbolLayer from an SLD XML DOM \a element.
@@ -674,7 +899,7 @@ class CORE_EXPORT QgsMarkerLineSymbolLayer : public QgsTemplatedLineSymbolLayerB
     void startRender( QgsSymbolRenderContext &context ) override;
     void stopRender( QgsSymbolRenderContext &context ) override;
     QgsMarkerLineSymbolLayer *clone() const override SIP_FACTORY;
-    void toSld( QDomDocument &doc, QDomElement &element, const QgsStringMap &props ) const override;
+    void toSld( QDomDocument &doc, QDomElement &element, const QVariantMap &props ) const override;
     void setColor( const QColor &color ) override;
     QColor color() const override;
     QgsSymbol *subSymbol() override;
@@ -684,6 +909,7 @@ class CORE_EXPORT QgsMarkerLineSymbolLayer : public QgsTemplatedLineSymbolLayerB
     double width( const QgsRenderContext &context ) const override;
     double estimateMaxBleed( const QgsRenderContext &context ) const override;
     void setOutputUnit( QgsUnitTypes::RenderUnit unit ) override;
+    bool usesMapUnits() const override;
     QSet<QString> usedAttributes( const QgsRenderContext &context ) const override;
     bool hasDataDefinedProperties() const override;
     void setDataDefinedProperty( QgsSymbolLayer::Property key, const QgsProperty &property ) override;
@@ -701,6 +927,8 @@ class CORE_EXPORT QgsMarkerLineSymbolLayer : public QgsTemplatedLineSymbolLayerB
      * \deprecated Use setRotateSymbols() instead.
      */
     Q_DECL_DEPRECATED void setRotateMarker( bool rotate ) SIP_DEPRECATED { setRotateSymbols( rotate ); }
+
+    void renderPolyline( const QPolygonF &points, QgsSymbolRenderContext &context ) override;
 
   protected:
 
@@ -725,7 +953,7 @@ class CORE_EXPORT QgsMarkerLineSymbolLayer : public QgsTemplatedLineSymbolLayerB
  * \ingroup core
  * \class QgsHashedLineSymbolLayer
  *
- * Line symbol layer type which draws repeating line sections along a line feature.
+ * \brief Line symbol layer type which draws repeating line sections along a line feature.
  *
  * \since QGIS 3.8
  */
@@ -743,17 +971,19 @@ class CORE_EXPORT QgsHashedLineSymbolLayer : public QgsTemplatedLineSymbolLayerB
     QgsHashedLineSymbolLayer( bool rotateSymbol = true,
                               double interval = 3 );
 
+    ~QgsHashedLineSymbolLayer() override;
+
     /**
      * Creates a new QgsHashedLineSymbolLayer, using the settings
      * serialized in the \a properties map (corresponding to the output from
      * QgsHashedLineSymbolLayer::properties() ).
      */
-    static QgsSymbolLayer *create( const QgsStringMap &properties = QgsStringMap() ) SIP_FACTORY;
+    static QgsSymbolLayer *create( const QVariantMap &properties = QVariantMap() ) SIP_FACTORY;
 
     QString layerType() const override;
     void startRender( QgsSymbolRenderContext &context ) override;
     void stopRender( QgsSymbolRenderContext &context ) override;
-    QgsStringMap properties() const override;
+    QVariantMap properties() const override;
     QgsHashedLineSymbolLayer *clone() const override SIP_FACTORY;
     void setColor( const QColor &color ) override;
     QColor color() const override;
@@ -767,6 +997,7 @@ class CORE_EXPORT QgsHashedLineSymbolLayer : public QgsTemplatedLineSymbolLayerB
     QSet<QString> usedAttributes( const QgsRenderContext &context ) const override;
     bool hasDataDefinedProperties() const override;
     void setDataDefinedProperty( QgsSymbolLayer::Property key, const QgsProperty &property ) override;
+    bool usesMapUnits() const override;
 
     /**
      * Returns the angle to use when drawing the hashed lines sections, in degrees clockwise.
@@ -825,6 +1056,8 @@ class CORE_EXPORT QgsHashedLineSymbolLayer : public QgsTemplatedLineSymbolLayerB
      * \see hashLength()
      */
     const QgsMapUnitScale &hashLengthMapUnitScale() const { return mHashLengthMapUnitScale; }
+
+    void renderPolyline( const QPolygonF &points, QgsSymbolRenderContext &context ) override;
 
   protected:
 

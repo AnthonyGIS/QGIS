@@ -21,12 +21,13 @@
 
 #include <QAbstractListModel>
 
+#include "qgis.h"
 #include "qgsmaplayer.h"
 #include "qgis_gui.h"
 
 /**
  * \ingroup gui
- * Model for layer style categories
+ * \brief Model for layer style categories
  *
  * \note This class is not a part of public API
  * \since QGIS 3.14
@@ -36,8 +37,11 @@ class GUI_EXPORT QgsMapLayerStyleCategoriesModel : public QAbstractListModel
     Q_OBJECT
 
   public:
-    //! constructor
-    explicit QgsMapLayerStyleCategoriesModel( QObject *parent = nullptr );
+
+    /**
+     * Constructor for QgsMapLayerStyleCategoriesModel, for the specified layer \a type.
+     */
+    explicit QgsMapLayerStyleCategoriesModel( QgsMapLayerType type, QObject *parent = nullptr );
 
     //! Reset the model data
     void setCategories( QgsMapLayer::StyleCategories categories );

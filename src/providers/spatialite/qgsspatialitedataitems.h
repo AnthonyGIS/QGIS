@@ -15,14 +15,17 @@
 #ifndef QGSSPATIALITEDATAITEMS_H
 #define QGSSPATIALITEDATAITEMS_H
 
-#include "qgsdataitem.h"
+#include "qgslayeritem.h"
+#include "qgsdatacollectionitem.h"
 #include "qgsdataitemprovider.h"
+#include "qgsconnectionsitem.h"
+#include "qgsconfig.h"
 
 class QgsSLLayerItem : public QgsLayerItem
 {
     Q_OBJECT
   public:
-    QgsSLLayerItem( QgsDataItem *parent, const QString &name, const QString &path, const QString &uri, LayerType layerType );
+    QgsSLLayerItem( QgsDataItem *parent, const QString &name, const QString &path, const QString &uri, Qgis::BrowserLayerType layerType );
 
     // QgsDataItem interface
     QVector<QgsDataItem *> createChildren() override;
@@ -49,7 +52,7 @@ class QgsSLConnectionItem : public QgsDataCollectionItem
     bool layerCollection() const override;
 };
 
-class QgsSLRootItem : public QgsDataCollectionItem
+class QgsSLRootItem : public QgsConnectionsRootItem
 {
     Q_OBJECT
   public:

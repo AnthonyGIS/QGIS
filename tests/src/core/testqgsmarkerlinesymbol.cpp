@@ -32,7 +32,8 @@
 #include "qgssinglesymbolrenderer.h"
 #include "qgsmarkersymbollayer.h"
 #include "qgsproperty.h"
-
+#include "qgslinesymbol.h"
+#include "qgsmarkersymbol.h"
 //qgis unit test includes
 #include <qgsrenderchecker.h>
 
@@ -152,7 +153,7 @@ void TestQgsMarkerLineSymbol::pointNumInterval()
   QgsSingleSymbolRenderer *r = new QgsSingleSymbolRenderer( lineSymbol );
 
   // make sub-symbol
-  QgsStringMap props;
+  QVariantMap props;
   props[QStringLiteral( "color" )] = QStringLiteral( "255,0,0" );
   props[QStringLiteral( "size" )] = QStringLiteral( "2" );
   props[QStringLiteral( "outline_style" )] = QStringLiteral( "no" );
@@ -181,7 +182,7 @@ void TestQgsMarkerLineSymbol::pointNumVertex()
   QgsSingleSymbolRenderer *r = new QgsSingleSymbolRenderer( lineSymbol );
 
   // make sub-symbol
-  QgsStringMap props;
+  QVariantMap props;
   props[QStringLiteral( "color" )] = QStringLiteral( "255,0,0" );
   props[QStringLiteral( "size" )] = QStringLiteral( "2" );
   props[QStringLiteral( "outline_style" )] = QStringLiteral( "no" );

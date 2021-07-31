@@ -57,7 +57,11 @@
 #include "qgsmessagebar.h"
 #include "qgsmessagebaritem.h"
 #include "qgsnumericformatguiregistry.h"
-
+#include "qgscodeeditorcolorschemeregistry.h"
+#include "qgssubsetstringeditorproviderregistry.h"
+#include "qgsprovidersourcewidgetproviderregistry.h"
+#include "qgsrelationwidgetregistry.h"
+#include "qgssettingsregistrygui.h"
 
 QgsGui *QgsGui::instance()
 {
@@ -70,14 +74,34 @@ QgsNative *QgsGui::nativePlatformInterface()
   return instance()->mNative;
 }
 
+QgsSettingsRegistryGui *QgsGui::settingsRegistryGui()
+{
+  return instance()->mSettingsRegistryGui;
+}
+
 QgsEditorWidgetRegistry *QgsGui::editorWidgetRegistry()
 {
   return instance()->mEditorWidgetRegistry;
 }
 
+QgsRelationWidgetRegistry *QgsGui::relationWidgetRegistry()
+{
+  return instance()->mRelationEditorRegistry;
+}
+
 QgsSourceSelectProviderRegistry *QgsGui::sourceSelectProviderRegistry()
 {
   return instance()->mSourceSelectProviderRegistry;
+}
+
+QgsSubsetStringEditorProviderRegistry *QgsGui::subsetStringEditorProviderRegistry()
+{
+  return instance()->mSubsetStringEditorProviderRegistry;
+}
+
+QgsProviderSourceWidgetProviderRegistry *QgsGui::sourceWidgetProviderRegistry()
+{
+  return instance()->mProviderSourceWidgetProviderRegistry;
 }
 
 QgsShortcutsManager *QgsGui::shortcutsManager()
@@ -108,6 +132,11 @@ QgsProcessingGuiRegistry *QgsGui::processingGuiRegistry()
 QgsNumericFormatGuiRegistry *QgsGui::numericFormatGuiRegistry()
 {
   return instance()->mNumericFormatGuiRegistry;
+}
+
+QgsCodeEditorColorSchemeRegistry *QgsGui::codeEditorColorSchemeRegistry()
+{
+  return instance()->mCodeEditorColorSchemeRegistry;
 }
 
 QgsProcessingRecentAlgorithmLog *QgsGui::processingRecentAlgorithmLog()
@@ -151,14 +180,13 @@ void QgsGui::setWindowManager( QgsWindowManagerInterface *manager )
 
 QgsGui::HigFlags QgsGui::higFlags()
 {
-  QgsSettings settings;
-  if ( settings.value( QStringLiteral( "locale/userLocale" ), QString() ).toString().startsWith( QLatin1String( "en" ) ) )
+  if ( QgsApplication::settingsLocaleUserLocale.value().startsWith( QLatin1String( "en" ) ) )
   {
     return HigMenuTextIsTitleCase | HigDialogTitleIsTitleCase;
   }
   else
   {
-    return nullptr;
+    return QgsGui::HigFlags();
   }
 }
 
@@ -178,6 +206,11 @@ QgsGui::~QgsGui()
   delete mWidgetStateHelper;
   delete mProjectStorageGuiRegistry;
   delete mProviderGuiRegistry;
+  delete mCodeEditorColorSchemeRegistry;
+  delete mSubsetStringEditorProviderRegistry;
+  delete mProviderSourceWidgetProviderRegistry;
+  delete mRelationEditorRegistry;
+  delete mSettingsRegistryGui;
 }
 
 QColor QgsGui::sampleColor( QPoint point )
@@ -223,18 +256,27 @@ QgsGui::QgsGui()
   mNative = new QgsNative();
 #endif
 
+  mSettingsRegistryGui = new QgsSettingsRegistryGui();
+
+  mCodeEditorColorSchemeRegistry = new QgsCodeEditorColorSchemeRegistry();
+
   // provider gui registry initialize QgsProviderRegistry too
   mProviderGuiRegistry = new QgsProviderGuiRegistry( QgsApplication::pluginPath() );
   mProjectStorageGuiRegistry = new QgsProjectStorageGuiRegistry();
   mDataItemGuiProviderRegistry = new QgsDataItemGuiProviderRegistry();
   mSourceSelectProviderRegistry = new QgsSourceSelectProviderRegistry();
   mNumericFormatGuiRegistry = new QgsNumericFormatGuiRegistry();
+  mSubsetStringEditorProviderRegistry = new QgsSubsetStringEditorProviderRegistry();
+  mProviderSourceWidgetProviderRegistry = new QgsProviderSourceWidgetProviderRegistry();
 
   mProjectStorageGuiRegistry->initializeFromProviderGuiRegistry( mProviderGuiRegistry );
   mDataItemGuiProviderRegistry->initializeFromProviderGuiRegistry( mProviderGuiRegistry );
   mSourceSelectProviderRegistry->initializeFromProviderGuiRegistry( mProviderGuiRegistry );
+  mSubsetStringEditorProviderRegistry->initializeFromProviderGuiRegistry( mProviderGuiRegistry );
+  mProviderSourceWidgetProviderRegistry->initializeFromProviderGuiRegistry( mProviderGuiRegistry );
 
   mEditorWidgetRegistry = new QgsEditorWidgetRegistry();
+  mRelationEditorRegistry = new QgsRelationWidgetRegistry();
   mShortcutsManager = new QgsShortcutsManager();
   mLayerTreeEmbeddedWidgetRegistry = new QgsLayerTreeEmbeddedWidgetRegistry();
   mMapLayerActionRegistry = new QgsMapLayerActionRegistry();
@@ -297,7 +339,7 @@ bool QgsGui::pythonMacroAllowed( void ( *lambda )(), QgsMessageBar *messageBar )
             tr( "Security warning" ),
             tr( "Python macros cannot currently be run." ),
             btnEnableMacros,
-            Qgis::Warning,
+            Qgis::MessageLevel::Warning,
             0,
             messageBar );
 
@@ -316,3 +358,10 @@ bool QgsGui::pythonMacroAllowed( void ( *lambda )(), QgsMessageBar *messageBar )
   }
   return false;
 }
+
+///@cond PRIVATE
+void QgsGui::emitOptionsChanged()
+{
+  emit optionsChanged();
+}
+///@endcond

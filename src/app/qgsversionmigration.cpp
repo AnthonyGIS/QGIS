@@ -37,7 +37,7 @@ std::unique_ptr<QgsVersionMigration> QgsVersionMigration::canMigrate( int fromVe
 {
   if ( fromVersion == 20000 && toVersion >= 29900 )
   {
-    return qgis::make_unique< Qgs2To3Migration >();
+    return std::make_unique< Qgs2To3Migration >();
   }
   return nullptr;
 }
@@ -321,7 +321,7 @@ QPair<QString, QString> Qgs2To3Migration::transformKey( QString fullOldKey, QStr
   QString newKey = newKeyPart;
   QString oldKey = fullOldKey;
 
-  if ( newKeyPart == QStringLiteral( "*" ) )
+  if ( newKeyPart == QLatin1String( "*" ) )
   {
     newKey = fullOldKey;
   }

@@ -13,7 +13,7 @@
 
 class QgsRasterBlockFeedback : QgsFeedback
 {
-%Docstring
+%Docstring(signature="appended")
 Feedback object tailored for raster block reading.
 
 .. versionadded:: 3.0
@@ -87,7 +87,7 @@ Returns a list of any errors encountered while retrieving the raster block.
 
 class QgsRasterInterface
 {
-%Docstring
+%Docstring(signature="appended")
 Base class for processing filters like renderers, reprojector, resampler etc.
 %End
 
@@ -198,10 +198,13 @@ source data type may be shorter than dataType
 %Docstring
 Gets the extent of the interface.
 
-:return: QgsRectangle containing the extent of the layer
+:return: :py:class:`QgsRectangle` containing the extent of the layer
 %End
 
-    int dataTypeSize( int bandNo );
+    int dataTypeSize( int bandNo ) const;
+%Docstring
+Returns the size (in bytes) for the data type for the specified band.
+%End
 
     virtual int bandCount() const = 0;
 %Docstring
@@ -223,6 +226,20 @@ Gets raster size
     virtual QString generateBandName( int bandNumber ) const;
 %Docstring
 helper function to create zero padded band names
+%End
+
+    virtual QString colorInterpretationName( int bandNumber ) const;
+%Docstring
+Returns the name of the color interpretation for the specified ``bandNumber``.
+
+.. versionadded:: 3.18
+%End
+
+    QString displayBandName( int bandNumber ) const;
+%Docstring
+Generates a friendly, descriptive name for the specified ``bandNumber``.
+
+.. versionadded:: 3.18
 %End
 
     virtual QgsRasterBlock *block( int bandNo, const QgsRectangle &extent, int width, int height, QgsRasterBlockFeedback *feedback = 0 ) = 0 /Factory/;

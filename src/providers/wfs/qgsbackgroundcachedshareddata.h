@@ -70,14 +70,15 @@ class QgsBackgroundCachedSharedData
     bool downloadFinished() const { return mDownloadFinished; }
 
     //! Returns layer feature count. Might issue a network request if issueRequestIfNeeded == true
-    int getFeatureCount( bool issueRequestIfNeeded = true );
+    long long getFeatureCount( bool issueRequestIfNeeded = true );
 
     //! Return a "consolidated" extent mixing the one from the capabilities from the one of the features already downloaded.
     QgsRectangle consolidatedExtent() const;
 
     /**
      * Used by provider's reloadData(). The effect is to invalid
-        all the caching state, so that a new request results in fresh download */
+     * all the caching state, so that a new request results in fresh download.
+    */
     void invalidateCache();
 
     //! Give a feature id, find the correspond fid/gml.id. Used for edition.
@@ -133,24 +134,27 @@ class QgsBackgroundCachedSharedData
 
     /**
      * Used by a QgsBackgroundCachedFeatureIterator to start a downloader and get the
-        generation counter. */
+     * generation counter.
+    */
     int registerToCache( QgsBackgroundCachedFeatureIterator *iterator, int limit, const QgsRectangle &rect = QgsRectangle() );
 
     /**
      * Used by the rewind() method of an iterator so as to get the up-to-date
-        generation counter. */
+     * generation counter.
+    */
     int getUpdatedCounter();
 
     /**
      * Used by the background downloader to serialize downloaded features into
-        the cache. Also used by a insert operation */
+     * the cache. Also used by a insert operation.
+    */
     void serializeFeatures( QVector<QgsFeatureUniqueIdPair> &featureList );
 
     //! Called by QgsFeatureDownloader::run() at the end of the download process.
-    void endOfDownload( bool success, int featureCount, bool truncatedResponse, bool interrupted, const QString &errorMsg );
+    void endOfDownload( bool success, long long featureCount, bool truncatedResponse, bool interrupted, const QString &errorMsg );
 
     //! Force an update of the feature count
-    void setFeatureCount( int featureCount, bool featureCountExact );
+    void setFeatureCount( long long featureCount, bool featureCountExact );
 
     //! Returns the name of temporary directory. To be paired with releaseCacheDirectory()
     QString acquireCacheDirectory();
@@ -164,7 +168,7 @@ class QgsBackgroundCachedSharedData
     //////// Pure virtual methods
 
     //! Instantiate a new feature downloader implementation.
-    virtual std::unique_ptr<QgsFeatureDownloaderImpl> newFeatureDownloaderImpl( QgsFeatureDownloader * ) = 0;
+    virtual std::unique_ptr<QgsFeatureDownloaderImpl> newFeatureDownloaderImpl( QgsFeatureDownloader *, bool requestMadeFromMainThread ) = 0;
 
     //! Return whether the GetFeature request should include the request bounding box.
     virtual bool isRestrictedToRequestBBOX() const = 0;
@@ -174,6 +178,9 @@ class QgsBackgroundCachedSharedData
 
     //! Return layer name
     virtual QString layerName() const = 0;
+
+    //! Called when an error must be raised to the provider
+    virtual void pushError( const QString &errorMsg ) = 0;
 
   protected:
 
@@ -192,10 +199,10 @@ class QgsBackgroundCachedSharedData
     QString mClientSideFilterExpression;
 
     //! Server-side or user-side limit of downloaded features (including with paging). Valid if > 0
-    int mMaxFeatures = 0;
+    long long mMaxFeatures = 0;
 
     //! Server-side limit of downloaded features (including with paging). Valid if > 0
-    int mServerMaxFeatures = 0;
+    long long mServerMaxFeatures = 0;
 
     //! Bounding box for the layer as returned by GetCapabilities
     QgsRectangle mCapabilityExtent;
@@ -233,10 +240,11 @@ class QgsBackgroundCachedSharedData
 
     /**
      * The generation counter. When a iterator is built or rewind, it gets the
-        current value of the generation counter to query the features in the cache
-        whose generation counter is <= the current value. That way the iterator
-        can consume first cached features, and then deal with the features that are
-        notified in live by the downloader. */
+     * current value of the generation counter to query the features in the cache
+     * whose generation counter is <= the current value. That way the iterator
+     * can consume first cached features, and then deal with the features that are
+     * notified in live by the downloader.
+    */
     int mGenCounter = 0;
 
     //! Extent computed from downloaded features
@@ -280,13 +288,13 @@ class QgsBackgroundCachedSharedData
     QgsFeatureId mNextCachedIdQgisId = 1;
 
     //! Number of features that have been cached, or attempted to be cached
-    int mTotalFeaturesAttemptedToBeCached = 0;
+    long long mTotalFeaturesAttemptedToBeCached = 0;
 
     //! Whether we have already tried fetching one feature after realizing that the capabilities extent is wrong
     bool mTryFetchingOneFeature = false;
 
     //! Number of features of the layer
-    int mFeatureCount = 0;
+    long long mFeatureCount = 0;
 
     //! Whether mFeatureCount value is exact or approximate / in construction
     bool mFeatureCountExact = false;
@@ -301,18 +309,17 @@ class QgsBackgroundCachedSharedData
 
     /**
      * Returns the set of unique ids that have already been downloaded and
-        cached, so as to avoid to cache duplicates. */
+     * cached, so as to avoid to cache duplicates.
+    */
     QSet<QString> getExistingCachedUniqueIds( const QVector<QgsFeatureUniqueIdPair> &featureList );
 
     /**
      * Returns the set of md5 of features that have already been downloaded and
-        cached, so as to avoid to cache duplicates. */
+     * cached, so as to avoid to cache duplicates.
+    */
     QSet<QString> getExistingCachedMD5( const QVector<QgsFeatureUniqueIdPair> &featureList );
 
     ///////////////// PURE VIRTUAL METHODS ////////////////////////
-
-    //! Called when an error must be raised to the provider
-    virtual void pushError( const QString &errorMsg ) = 0;
 
     //! Called when the extent is updated
     virtual void emitExtentUpdated() = 0;
@@ -333,7 +340,7 @@ class QgsBackgroundCachedSharedData
     virtual QgsRectangle getExtentFromSingleFeatureRequest() const = 0;
 
     //! Launch a synchronous request to count the number of features (return -1 in case of error)
-    virtual int getFeatureCountFromServer() const = 0;
+    virtual long long getFeatureCountFromServer() const = 0;
 };
 
 #endif

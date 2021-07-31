@@ -28,6 +28,11 @@
 #include "qgsapplication.h"
 #include "qgspainteffect.h"
 #include "qgssymbollayerreference.h"
+#include "qgsstringutils.h"
+#include "qgsmarkersymbol.h"
+#include "qgsfillsymbol.h"
+#include "qgspropertycollection.h"
+
 #include <QSharedData>
 #include <QPainter>
 
@@ -123,6 +128,7 @@ class QgsTextBackgroundSettingsPrivate : public QSharedData
       , joinStyle( other.joinStyle )
       , paintEffect( other.paintEffect ? other.paintEffect->clone() : nullptr )
       , markerSymbol( other.markerSymbol ? other.markerSymbol->clone() : nullptr )
+      , fillSymbol( other.fillSymbol ? other.fillSymbol->clone() : nullptr )
     {
     }
 
@@ -151,6 +157,7 @@ class QgsTextBackgroundSettingsPrivate : public QSharedData
     Qt::PenJoinStyle joinStyle = Qt::BevelJoin;
     std::unique_ptr< QgsPaintEffect > paintEffect;
     std::unique_ptr< QgsMarkerSymbol > markerSymbol;
+    std::unique_ptr< QgsFillSymbol > fillSymbol;
 
   private:
     QgsTextBackgroundSettingsPrivate &operator=( const QgsTextBackgroundSettingsPrivate & ) = delete;
@@ -260,6 +267,7 @@ class QgsTextSettingsPrivate : public QSharedData
       : QSharedData( other )
       , isValid( other.isValid )
       , textFont( other.textFont )
+      , families( other.families )
       , textNamedStyle( other.textNamedStyle )
       , fontSizeUnits( other.fontSizeUnits )
       , fontSizeMapUnitScale( other.fontSizeMapUnitScale )
@@ -271,12 +279,14 @@ class QgsTextSettingsPrivate : public QSharedData
       , orientation( other.orientation )
       , previewBackgroundColor( other.previewBackgroundColor )
       , allowHtmlFormatting( other.allowHtmlFormatting )
+      , capitalization( other.capitalization )
       , mDataDefinedProperties( other.mDataDefinedProperties )
     {
     }
 
     bool isValid = false;
     QFont textFont;
+    QStringList families;
     QString textNamedStyle;
     QgsUnitTypes::RenderUnit fontSizeUnits = QgsUnitTypes::RenderPoints;
     QgsMapUnitScale fontSizeMapUnitScale;
@@ -287,8 +297,8 @@ class QgsTextSettingsPrivate : public QSharedData
     double multilineHeight = 1.0 ; //0.0 to 10.0, leading between lines as multiplyer of line height
     QgsTextFormat::TextOrientation orientation = QgsTextFormat::HorizontalOrientation;
     QColor previewBackgroundColor = Qt::white;
-
     bool allowHtmlFormatting = false;
+    QgsStringUtils::Capitalization capitalization = QgsStringUtils::MixedCase;
 
     //! Property collection for data defined settings
     QgsPropertyCollection mDataDefinedProperties;

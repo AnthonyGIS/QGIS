@@ -24,7 +24,7 @@ class QByteArray;
 
 /**
  * \ingroup core
- * Keeps track of raw tile data that need to be decoded
+ * \brief Keeps track of raw tile data that need to be decoded
  *
  * \since QGIS 3.14
  */
@@ -47,9 +47,11 @@ class QEventLoop;
 
 class QgsMbTiles;
 
+class QgsTileDownloadManagerReply;
+
 /**
  * \ingroup core
- * The loader class takes care of loading raw vector tile data from a tile source.
+ * \brief The loader class takes care of loading raw vector tile data from a tile source.
  *
  * \since QGIS 3.14
  */
@@ -59,10 +61,20 @@ class QgsVectorTileLoader : public QObject
   public:
 
     //! Returns raw tile data for the specified range of tiles. Blocks the caller until all tiles are fetched.
-    static QList<QgsVectorTileRawData> blockingFetchTileRawData( const QString &sourceType, const QString &sourcePath, const QgsTileMatrix &tileMatrix, const QPointF &viewCenter, const QgsTileRange &range );
+    static QList<QgsVectorTileRawData> blockingFetchTileRawData( const QString &sourceType,
+        const QString &sourcePath,
+        const QgsTileMatrix &tileMatrix,
+        const QPointF &viewCenter,
+        const QgsTileRange &range,
+        const QString &authid,
+        const QString &referer );
 
     //! Returns raw tile data for a single tile, doing a HTTP request. Block the caller until tile data are downloaded.
-    static QByteArray loadFromNetwork( const QgsTileXYZ &id, const QgsTileMatrix &tileMatrix, const QString &requestUrl );
+    static QByteArray loadFromNetwork( const QgsTileXYZ &id,
+                                       const QgsTileMatrix &tileMatrix,
+                                       const QString &requestUrl,
+                                       const QString &authid,
+                                       const QString &referer );
     //! Returns raw tile data for a single tile loaded from MBTiles file
     static QByteArray loadFromMBTiles( const QgsTileXYZ &id, QgsMbTiles &mbTileReader );
 
@@ -71,7 +83,8 @@ class QgsVectorTileLoader : public QObject
     //
 
     //! Constructs tile loader for doing asynchronous requests and starts network requests
-    QgsVectorTileLoader( const QString &uri, const QgsTileMatrix &tileMatrix, const QgsTileRange &range, const QPointF &viewCenter, QgsFeedback *feedback );
+    QgsVectorTileLoader( const QString &uri, const QgsTileMatrix &tileMatrix, const QgsTileRange &range, const QPointF &viewCenter,
+                         const QString &authid, const QString &referer, QgsFeedback *feedback );
     ~QgsVectorTileLoader();
 
     //! Blocks the caller until all asynchronous requests are finished (with a success or a failure)
@@ -93,8 +106,12 @@ class QgsVectorTileLoader : public QObject
     std::unique_ptr<QEventLoop> mEventLoop;
     //! Feedback object that allows cancellation of pending requests
     QgsFeedback *mFeedback;
+
+    QString mAuthCfg;
+    QString mReferer;
+
     //! Running tile requests
-    QList<QNetworkReply *> mReplies;
+    QList<QgsTileDownloadManagerReply *> mReplies;
 
 };
 

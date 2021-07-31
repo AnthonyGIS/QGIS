@@ -20,6 +20,8 @@
 #include "qgsmapsettings.h"
 #include "qgslayout.h"
 #include "qgslayoututils.h"
+#include "qgsmarkersymbol.h"
+
 #include <limits>
 #include <cmath>
 #include <QStyleOptionGraphicsItem>
@@ -28,6 +30,7 @@ void QgsLayoutNodesItem::setNodes( const QPolygonF &nodes )
 {
   mPolygon = nodes;
   updateSceneRect();
+  emit clipPathChanged();
 }
 
 QRectF QgsLayoutNodesItem::boundingRect() const
@@ -156,6 +159,7 @@ bool QgsLayoutNodesItem::addNode( QPointF pt,
   {
     rc = _addNode( idx, start, maxDistance );
     updateSceneRect();
+    emit clipPathChanged();
   }
 
   return rc;
@@ -167,7 +171,7 @@ void QgsLayoutNodesItem::drawNodes( QgsLayoutItemRenderContext &context ) const
 
   double rectSize = 9.0 / context.viewScaleFactor();
 
-  QgsStringMap properties;
+  QVariantMap properties;
   properties.insert( QStringLiteral( "name" ), QStringLiteral( "cross" ) );
   properties.insert( QStringLiteral( "color_border" ), QStringLiteral( "red" ) );
 
@@ -189,7 +193,7 @@ void QgsLayoutNodesItem::drawSelectedNode( QgsLayoutItemRenderContext &context )
 {
   double rectSize = 9.0 / context.viewScaleFactor();
 
-  QgsStringMap properties;
+  QVariantMap properties;
   properties.insert( QStringLiteral( "name" ), QStringLiteral( "square" ) );
   properties.insert( QStringLiteral( "color" ), QStringLiteral( "0, 0, 0, 0" ) );
   properties.insert( QStringLiteral( "color_border" ), QStringLiteral( "blue" ) );
@@ -246,7 +250,10 @@ bool QgsLayoutNodesItem::removeNode( const int index )
 {
   bool rc = _removeNode( index );
   if ( rc )
+  {
     updateSceneRect();
+    emit clipPathChanged();
+  }
   return rc;
 }
 
@@ -259,7 +266,7 @@ bool QgsLayoutNodesItem::moveNode( const int index, QPointF pt )
     QPointF nodeItem = mapFromScene( pt );
     mPolygon.replace( index, nodeItem );
     updateSceneRect();
-
+    emit clipPathChanged();
     rc = true;
   }
 
@@ -287,6 +294,7 @@ bool QgsLayoutNodesItem::readPropertiesFromElement( const QDomElement &itemElem,
   }
 
   emit changed();
+  emit clipPathChanged();
   return true;
 }
 
@@ -305,6 +313,7 @@ void QgsLayoutNodesItem::rescaleToFitBoundingBox()
   QTransform trans;
   trans = trans.scale( ratioX, ratioY );
   mPolygon = trans.map( mPolygon );
+  emit clipPathChanged();
 }
 
 bool QgsLayoutNodesItem::setSelectedNode( const int index )

@@ -15,11 +15,11 @@
  *                                                                         *
  ***************************************************************************/
 
+#include "qgstest.h"
 #include "qgspagesizeregistry.h"
 #include "qgis.h"
 #include "qgsapplication.h"
 #include <QObject>
-#include <QtTest>
 
 class TestQgsPageSizeRegistry : public QObject
 {

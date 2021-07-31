@@ -11,7 +11,7 @@
 
 class QgsLayoutItemMapAtlasClippingSettings : QObject
 {
-%Docstring
+%Docstring(signature="appended")
 Contains settings relating to clipping a layout map by the current atlas feature.
 
 .. versionadded:: 3.16
@@ -69,11 +69,33 @@ Sets whether labels should only be placed inside the atlas feature geometry.
 .. seealso:: :py:func:`forceLabelsInsideFeature`
 %End
 
+    bool restrictToLayers() const;
+%Docstring
+Returns ``True`` if clipping should be restricted to a subset of layers.
+
+.. seealso:: :py:func:`layersToClip`
+
+.. seealso:: :py:func:`setRestrictToLayers`
+%End
+
+    void setRestrictToLayers( bool enabled );
+%Docstring
+Sets whether clipping should be restricted to a subset of layers.
+
+.. seealso:: :py:func:`setLayersToClip`
+
+.. seealso:: :py:func:`restrictToLayers`
+%End
+
     QList< QgsMapLayer * > layersToClip() const;
 %Docstring
 Returns the list of map layers to clip to the atlas feature.
 
-If the returned list is empty then all layers will be clipped.
+.. note::
+
+   This setting is only used if :py:func:`~QgsLayoutItemMapAtlasClippingSettings.restrictToLayers` is ``True``.
+
+.. seealso:: :py:func:`restrictToLayers`
 
 .. seealso:: :py:func:`setLayersToClip`
 %End
@@ -82,7 +104,11 @@ If the returned list is empty then all layers will be clipped.
 %Docstring
 Sets the list of map ``layers`` to clip to the atlas feature.
 
-If the ``layers`` list is empty then all layers will be clipped.
+.. note::
+
+   This setting is only used if :py:func:`~QgsLayoutItemMapAtlasClippingSettings.restrictToLayers` is ``True``.
+
+.. seealso:: :py:func:`restrictToLayers`
 
 .. seealso:: :py:func:`layersToClip`
 %End
@@ -113,9 +139,155 @@ Emitted when the atlas clipping settings are changed.
 };
 
 
+class QgsLayoutItemMapItemClipPathSettings : QObject
+{
+%Docstring(signature="appended")
+Contains settings relating to clipping a layout map by another layout item.
+
+.. versionadded:: 3.16
+%End
+
+%TypeHeaderCode
+#include "qgslayoutitemmap.h"
+%End
+  public:
+
+    QgsLayoutItemMapItemClipPathSettings( QgsLayoutItemMap *map /TransferThis/ = 0 );
+%Docstring
+Constructor for QgsLayoutItemMapItemClipPathSettings, with the specified ``map`` parent.
+%End
+
+    bool isActive() const;
+%Docstring
+Returns ``True`` if the item clipping is enabled and set to a valid source item.
+
+.. seealso:: :py:func:`enabled`
+
+.. seealso:: :py:func:`sourceItem`
+%End
+
+    bool enabled() const;
+%Docstring
+Returns ``True`` if the map content should be clipped to the associated item.
+
+.. seealso:: :py:func:`setEnabled`
+%End
+
+    void setEnabled( bool enabled );
+%Docstring
+Sets whether the map content should be clipped to the associated item.
+
+.. seealso:: :py:func:`enabled`
+%End
+
+    QgsGeometry clippedMapExtent() const;
+%Docstring
+Returns the geometry to use for clipping the parent map, in the map item's CRS.
+
+.. seealso:: :py:func:`clipPathInMapItemCoordinates`
+%End
+
+    QgsGeometry clipPathInMapItemCoordinates() const;
+%Docstring
+Returns the clipping path geometry, in the map item's coordinate space.
+
+.. warning::
+
+   The return path is not in geographic coordinates, rather the map
+   layout item's QGraphicsItem coordinate space. Use :py:func:`~QgsLayoutItemMapItemClipPathSettings.clippedMapExtent` to retrieve
+   the clip path in the map's CRS.
+
+.. seealso:: :py:func:`clippedMapExtent`
+%End
+
+    QgsMapClippingRegion toMapClippingRegion() const;
+%Docstring
+Returns the clip path as a map clipping region.
+%End
+
+    void setSourceItem( QgsLayoutItem *item );
+%Docstring
+Sets the source ``item`` which will provide the clipping path for the map.
+
+The specified ``item`` must return the :py:class:`QgsLayoutItem`.FlagProvidesClipPath flag.
+
+.. seealso:: :py:func:`sourceItem`
+%End
+
+    QgsLayoutItem *sourceItem();
+%Docstring
+Returns the source item which will provide the clipping path for the map, or ``None``
+if no item is set.
+
+.. seealso:: :py:func:`setSourceItem`
+%End
+
+    QgsMapClippingRegion::FeatureClippingType featureClippingType() const;
+%Docstring
+Returns the feature clipping type to apply when clipping to the associated item.
+
+.. seealso:: :py:func:`setFeatureClippingType`
+%End
+
+    void setFeatureClippingType( QgsMapClippingRegion::FeatureClippingType type );
+%Docstring
+Sets the feature clipping ``type`` to apply when clipping to the associated item.
+
+.. seealso:: :py:func:`featureClippingType`
+%End
+
+    bool forceLabelsInsideClipPath() const;
+%Docstring
+Returns ``True`` if labels should only be placed inside the clip path geometry.
+
+.. seealso:: :py:func:`setForceLabelsInsideClipPath`
+%End
+
+    void setForceLabelsInsideClipPath( bool forceInside );
+%Docstring
+Sets whether labels should only be placed inside the clip path geometry.
+
+.. seealso:: :py:func:`forceLabelsInsideClipPath`
+%End
+
+    bool writeXml( QDomElement &element, QDomDocument &document, const QgsReadWriteContext &context ) const;
+%Docstring
+Stores settings in a DOM element, where ``element`` is the DOM element
+corresponding to a 'LayoutMap' tag.
+
+.. seealso:: :py:func:`readXml`
+%End
+
+    bool readXml( const QDomElement &element, const QDomDocument &doc, const QgsReadWriteContext &context );
+%Docstring
+Sets the setting's state from a DOM document, where ``element`` is the DOM
+node corresponding to a 'LayoutMap' tag.
+
+.. seealso:: :py:func:`writeXml`
+
+.. seealso:: :py:func:`finalizeRestoreFromXml`
+%End
+
+    void finalizeRestoreFromXml();
+%Docstring
+To be called after all pending items have been restored from XML.
+
+.. seealso:: :py:func:`readXml`
+%End
+
+  signals:
+
+    void changed();
+%Docstring
+Emitted when the item clipping settings are changed.
+%End
+
+};
+
+
 class QgsLayoutItemMap : QgsLayoutItem, QgsTemporalRangeObject
 {
-%Docstring
+%Docstring(signature="appended")
 Layout graphical items for displaying a map.
 
 .. versionadded:: 3.0
@@ -336,12 +508,17 @@ be used instead.
 
     void setLayers( const QList<QgsMapLayer *> &layers );
 %Docstring
-Sets the stored ``layers`` set. If empty, the current project layers will
-be used instead.
+Sets the stored ``layers`` set. If empty, the current project layers will be used.
+If the map item is set to follow a map theme (via :py:func:`~QgsLayoutItemMap.followVisibilityPreset` and :py:func:`~QgsLayoutItemMap.followVisibilityPresetName` ),
+then this method will have no effect and the layers rendered in the map will always follow the map theme.
 
 .. seealso:: :py:func:`layers`
 
 .. seealso:: :py:func:`keepLayerSet`
+
+.. seealso:: :py:func:`followVisibilityPreset`
+
+.. seealso:: :py:func:`followVisibilityPresetName`
 %End
 
     bool keepLayerStyles() const;
@@ -695,6 +872,15 @@ Returns map rendering errors
 :return: list of errors
 %End
 
+    QgsLabelingResults *previewLabelingResults() const;
+%Docstring
+Returns the labeling results of the most recent preview map render. May be ``None`` if no map preview has been rendered in the item.
+
+The map item retains ownership of the returned results.
+
+.. versionadded:: 3.20
+%End
+
     virtual bool accept( QgsStyleEntityVisitorInterface *visitor ) const;
 
 
@@ -734,6 +920,13 @@ Returns the map's atlas clipping settings.
 .. versionadded:: 3.16
 %End
 
+    QgsLayoutItemMapItemClipPathSettings *itemClippingSettings();
+%Docstring
+Returns the map's item based clip path settings.
+
+.. versionadded:: 3.16
+%End
+
   protected:
 
     virtual void draw( QgsLayoutItemRenderContext &context );
@@ -741,6 +934,8 @@ Returns the map's atlas clipping settings.
     virtual bool writePropertiesToElement( QDomElement &element, QDomDocument &document, const QgsReadWriteContext &context ) const;
 
     virtual bool readPropertiesFromElement( const QDomElement &element, const QDomDocument &document, const QgsReadWriteContext &context );
+
+    virtual QPainterPath framePath() const;
 
 
     bool isDrawing() const;
@@ -807,6 +1002,20 @@ Emitted when the map's associated ``theme`` is changed.
    is linked to a different theme then it previously was.
 
 .. versionadded:: 3.14
+%End
+
+    void crsChanged();
+%Docstring
+Emitted when the map's coordinate reference system is changed.
+
+.. versionadded:: 3.18
+%End
+
+    void previewRefreshed();
+%Docstring
+Emitted whenever the item's map preview has been refreshed.
+
+.. versionadded:: 3.20
 %End
 
   public slots:

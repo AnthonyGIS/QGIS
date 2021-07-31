@@ -30,6 +30,8 @@
 #include <QTextStream>
 #include <QTimer>
 #include <QDesktopServices>
+#include <QRegularExpression>
+#include <QUrl>
 
 #include "qgsmessagelog.h"
 
@@ -439,7 +441,7 @@ void QgsPluginManager::getCppPluginsMetadata()
       // show the values (or lack of) for each function
       if ( pName )
       {
-        QgsDebugMsgLevel( "Plugin name: " + pName(), 2 );
+        QgsDebugMsgLevel( "Plugin name: " + *pName(), 2 );
       }
       else
       {
@@ -447,7 +449,7 @@ void QgsPluginManager::getCppPluginsMetadata()
       }
       if ( pDesc )
       {
-        QgsDebugMsgLevel( "Plugin description: " + pDesc(), 2 );
+        QgsDebugMsgLevel( "Plugin description: " + *pDesc(), 2 );
       }
       else
       {
@@ -455,7 +457,7 @@ void QgsPluginManager::getCppPluginsMetadata()
       }
       if ( pCat )
       {
-        QgsDebugMsgLevel( "Plugin category: " + pCat(), 2 );
+        QgsDebugMsgLevel( "Plugin category: " + *pCat(), 2 );
       }
       else
       {
@@ -463,7 +465,7 @@ void QgsPluginManager::getCppPluginsMetadata()
       }
       if ( pVersion )
       {
-        QgsDebugMsgLevel( "Plugin version: " + pVersion(), 2 );
+        QgsDebugMsgLevel( "Plugin version: " + *pVersion(), 2 );
       }
       else
       {
@@ -471,7 +473,7 @@ void QgsPluginManager::getCppPluginsMetadata()
       }
       if ( pIcon )
       {
-        QgsDebugMsgLevel( "Plugin icon: " + pIcon(), 2 );
+        QgsDebugMsgLevel( "Plugin icon: " + *pIcon(), 2 );
       }
       else
       {
@@ -479,7 +481,7 @@ void QgsPluginManager::getCppPluginsMetadata()
       }
       if ( pCreateDate )
       {
-        QgsDebugMsgLevel( "Plugin create date: " + pCreateDate(), 2 );
+        QgsDebugMsgLevel( "Plugin create date: " + *pCreateDate(), 2 );
       }
       else
       {
@@ -487,7 +489,7 @@ void QgsPluginManager::getCppPluginsMetadata()
       }
       if ( pUpdateDate )
       {
-        QgsDebugMsgLevel( "Plugin update date: " + pUpdateDate(), 2 );
+        QgsDebugMsgLevel( "Plugin update date: " + *pUpdateDate(), 2 );
       }
       else
       {
@@ -506,19 +508,19 @@ void QgsPluginManager::getCppPluginsMetadata()
 
       QMap<QString, QString> metadata;
       metadata[QStringLiteral( "id" )] = baseName;
-      metadata[QStringLiteral( "name" )] = pName();
-      metadata[QStringLiteral( "description" )] = pDesc();
-      metadata[QStringLiteral( "category" )] = ( pCat ? pCat() : tr( "Plugins" ) );
-      metadata[QStringLiteral( "version_installed" )] = pVersion();
-      metadata[QStringLiteral( "icon" )] = ( pIcon ? pIcon() : QString() );
+      metadata[QStringLiteral( "name" )] = *pName();
+      metadata[QStringLiteral( "description" )] = *pDesc();
+      metadata[QStringLiteral( "category" )] = ( pCat ? *pCat() : tr( "Plugins" ) );
+      metadata[QStringLiteral( "version_installed" )] = *pVersion();
+      metadata[QStringLiteral( "icon" )] = ( pIcon ? *pIcon() : QString() );
       metadata[QStringLiteral( "library" )] = myLib->fileName();
       metadata[QStringLiteral( "pythonic" )] = QStringLiteral( "false" );
       metadata[QStringLiteral( "installed" )] = QStringLiteral( "true" );
       metadata[QStringLiteral( "readonly" )] = QStringLiteral( "true" );
       metadata[QStringLiteral( "status" )] = QStringLiteral( "orphan" );
-      metadata[QStringLiteral( "experimental" )] = ( pExperimental ? pExperimental() : QString() );
-      metadata[QStringLiteral( "create_date" )] = ( pCreateDate ? pCreateDate() : QString() );
-      metadata[QStringLiteral( "update_date" )] = ( pUpdateDate ? pUpdateDate() : QString() );
+      metadata[QStringLiteral( "experimental" )] = ( pExperimental ? *pExperimental() : QString() );
+      metadata[QStringLiteral( "create_date" )] = ( pCreateDate ? *pCreateDate() : QString() );
+      metadata[QStringLiteral( "update_date" )] = ( pUpdateDate ? *pUpdateDate() : QString() );
       mPlugins.insert( baseName, metadata );
 
       delete myLib;
@@ -966,7 +968,7 @@ void QgsPluginManager::showPluginDetails( QStandardItem *item )
     {
       *tag = QStringLiteral( "<a href='rpc2://search.tag/%1/'>%1</a>" ).arg( ( *tag ).trimmed() );
     }
-    html += QStringLiteral( "<tr><td class='key'>%1 </td><td>%2</td></tr>" ).arg( tr( "Tags" ), tags.join( QStringLiteral( ", " ) ) );
+    html += QStringLiteral( "<tr><td class='key'>%1 </td><td>%2</td></tr>" ).arg( tr( "Tags" ), tags.join( QLatin1String( ", " ) ) );
   }
 
   if ( ! metadata->value( QStringLiteral( "homepage" ) ).isEmpty() || ! metadata->value( QStringLiteral( "tracker" ) ).isEmpty() || ! metadata->value( QStringLiteral( "code_repository" ) ).isEmpty() )
@@ -1006,11 +1008,15 @@ void QgsPluginManager::showPluginDetails( QStandardItem *item )
     QString localDir = metadata->value( QStringLiteral( "library" ) );
     if ( QFileInfo( localDir ).isFile() )
     {
-      localDir = QFileInfo( localDir ).absolutePath();
+      localDir = QFileInfo( localDir ).canonicalFilePath();
+    }
+    else
+    {
+      localDir = QDir( localDir ).canonicalPath();
     }
     html += QStringLiteral( "<tr><td class='key'>%1 </td><td title='%2'><a href='%3'>%4</a></td></tr>"
                           ).arg( tr( "Installed version" ),
-                                 metadata->value( QStringLiteral( "library" ) ),
+                                 QDir::toNativeSeparators( localDir ),
                                  QUrl::fromLocalFile( localDir ).toString(),
                                  ver );
   }
@@ -1022,7 +1028,7 @@ void QgsPluginManager::showPluginDetails( QStandardItem *item )
     if ( downloadUrl.contains( QStringLiteral( "plugins.qgis.org" ) ) )
     {
       // For the main repo, open the plugin version page instead of the download link. For other repositories the download link is the only known endpoint.
-      downloadUrl = downloadUrl.replace( QStringLiteral( "download/" ), QString() );
+      downloadUrl = downloadUrl.replace( QLatin1String( "download/" ), QString() );
     }
 
     QString dateUpdatedStr;
@@ -1046,7 +1052,7 @@ void QgsPluginManager::showPluginDetails( QStandardItem *item )
     if ( downloadUrl.contains( QStringLiteral( "plugins.qgis.org" ) ) )
     {
       // For the main repo, open the plugin version page instead of the download link. For other repositories the download link is the only known endpoint.
-      downloadUrl = downloadUrl.replace( QStringLiteral( "download/" ), QString() );
+      downloadUrl = downloadUrl.replace( QLatin1String( "download/" ), QString() );
     }
 
     QString dateUpdatedStr;
@@ -1427,11 +1433,11 @@ void QgsPluginManager::sendVote( int pluginId, int vote )
   QgsPythonRunner::eval( QStringLiteral( "pyplugin_installer.instance().sendVote('%1', '%2')" ).arg( pluginId ).arg( vote ), response );
   if ( response == QLatin1String( "True" ) )
   {
-    pushMessage( tr( "Vote sent successfully" ), Qgis::Info );
+    pushMessage( tr( "Vote sent successfully" ), Qgis::MessageLevel::Info );
   }
   else
   {
-    pushMessage( tr( "Sending vote to the plugin repository failed." ), Qgis::Warning );
+    pushMessage( tr( "Sending vote to the plugin repository failed." ), Qgis::MessageLevel::Warning );
   }
 }
 
@@ -1814,10 +1820,6 @@ void QgsPluginManager::showEvent( QShowEvent *e )
 
 void QgsPluginManager::pushMessage( const QString &text, Qgis::MessageLevel level, int duration )
 {
-  if ( duration == -1 )
-  {
-    duration = QgisApp::instance()->messageTimeout();
-  }
   msgBar->pushMessage( text, level, duration );
 }
 

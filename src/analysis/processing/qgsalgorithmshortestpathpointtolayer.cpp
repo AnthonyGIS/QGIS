@@ -87,13 +87,13 @@ QVariantMap QgsShortestPathPointToLayerAlgorithm::processAlgorithm( const QVaria
   mDirector->makeGraph( mBuilder.get(), points, snappedPoints, feedback );
 
   feedback->pushInfo( QObject::tr( "Calculating shortest paths…" ) );
-  QgsGraph *graph = mBuilder->graph();
+  std::unique_ptr< QgsGraph > graph( mBuilder->takeGraph() );
   int idxStart = graph->findVertex( snappedPoints[0] );
   int idxEnd;
 
   QVector< int > tree;
   QVector< double > costs;
-  QgsGraphAnalyzer::dijkstra( graph, idxStart, 0, &tree, &costs );
+  QgsGraphAnalyzer::dijkstra( graph.get(), idxStart, 0, &tree, &costs );
 
   QVector<QgsPointXY> route;
   double cost;
@@ -102,7 +102,7 @@ QVariantMap QgsShortestPathPointToLayerAlgorithm::processAlgorithm( const QVaria
   feat.setFields( fields );
   QgsAttributes attributes;
 
-  int step =  points.size() > 0 ? 100.0 / points.size() : 1;
+  const double step = points.size() > 0 ? 100.0 / points.size() : 1;
   for ( int i = 1; i < points.size(); i++ )
   {
     if ( feedback->isCanceled() )
@@ -121,7 +121,8 @@ QVariantMap QgsShortestPathPointToLayerAlgorithm::processAlgorithm( const QVaria
       attributes.append( QVariant() );
       attributes.append( points[i].toString() );
       feat.setAttributes( attributes );
-      sink->addFeature( feat, QgsFeatureSink::FastInsert );
+      if ( !sink->addFeature( feat, QgsFeatureSink::FastInsert ) )
+        throw QgsProcessingException( writeFeatureError( sink.get(), parameters, QStringLiteral( "OUTPUT" ) ) );
       continue;
     }
 
@@ -143,7 +144,8 @@ QVariantMap QgsShortestPathPointToLayerAlgorithm::processAlgorithm( const QVaria
     attributes.append( cost / mMultiplier );
     feat.setAttributes( attributes );
     feat.setGeometry( geom );
-    sink->addFeature( feat, QgsFeatureSink::FastInsert );
+    if ( !sink->addFeature( feat, QgsFeatureSink::FastInsert ) )
+      throw QgsProcessingException( writeFeatureError( sink.get(), parameters, QStringLiteral( "OUTPUT" ) ) );
 
     feedback->setProgress( i * step );
   }

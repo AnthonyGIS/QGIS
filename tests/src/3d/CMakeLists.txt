@@ -1,83 +1,37 @@
 # Standard includes and utils to compile into all tests.
-SET (util_SRCS)
-
+set (util_SRCS)
 
 #####################################################
 # Don't forget to include output directory, otherwise
 # the UI file won't be wrapped!
-INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}
-  ${CMAKE_SOURCE_DIR}/external
-  ${CMAKE_SOURCE_DIR}/external/nlohmann
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_SOURCE_DIR}/tests/core #for render checker class
-  ${CMAKE_SOURCE_DIR}/src/3d
-  ${CMAKE_SOURCE_DIR}/src/3d/chunks
-  ${CMAKE_SOURCE_DIR}/src/3d/mesh
-  ${CMAKE_SOURCE_DIR}/src/3d/symbols
-  ${CMAKE_SOURCE_DIR}/src/3d/terrain
-  ${CMAKE_SOURCE_DIR}/src/core
-  ${CMAKE_SOURCE_DIR}/src/core/3d
-  ${CMAKE_SOURCE_DIR}/src/core/expression
-  ${CMAKE_SOURCE_DIR}/src/core/auth
-  ${CMAKE_SOURCE_DIR}/src/core/geometry
-  ${CMAKE_SOURCE_DIR}/src/core/labeling
-  ${CMAKE_SOURCE_DIR}/src/core/layout
-  ${CMAKE_SOURCE_DIR}/src/core/metadata
-  ${CMAKE_SOURCE_DIR}/src/core/mesh
-  ${CMAKE_SOURCE_DIR}/src/core/raster
-  ${CMAKE_SOURCE_DIR}/src/core/symbology
-  ${CMAKE_SOURCE_DIR}/src/core/effects
-  ${CMAKE_SOURCE_DIR}/src/core/fieldformatter
   ${CMAKE_SOURCE_DIR}/src/test
-  ${CMAKE_SOURCE_DIR}/src/native
-
-
-  ${CMAKE_BINARY_DIR}/src/core
-  ${CMAKE_BINARY_DIR}/src/3d
   ${CMAKE_BINARY_DIR}/src/ui
   ${CMAKE_BINARY_DIR}/src/native
   ${CMAKE_CURRENT_BINARY_DIR}
 )
-INCLUDE_DIRECTORIES(SYSTEM
+include_directories(SYSTEM
   ${QT_INCLUDE_DIR}
   ${GDAL_INCLUDE_DIR}
-  ${QT5_3DEXTRA_INCLUDE_DIR}
+  ${${QT_VERSION_BASE}_3DEXTRA_INCLUDE_DIR}
 )
 
-#note for tests we should not include the moc of our
-#qtests in the executable file list as the moc is
-#directly included in the sources
-#and should not be compiled twice. Trying to include
-#them in will cause an error at build time
-#############################################################
-# Tests:
 
-MACRO (ADD_QGIS_TEST testname testsrc)
-  SET(qgis_${testname}_SRCS ${testsrc} ${util_SRCS})
-  SET(qgis_${testname}_MOC_CPPS ${testsrc})
-  ADD_EXECUTABLE(qgis_${testname} ${qgis_${testname}_SRCS})
-  # weng for qgis test folders. 20.4.27
-  set_target_properties(qgis_${testname} PROPERTIES FOLDER ${QGIS_QGIS_TEST_ROOT_FOLDER}/)
-  SET_TARGET_PROPERTIES(qgis_${testname} PROPERTIES AUTORCC TRUE)
-  TARGET_LINK_LIBRARIES(qgis_${testname}
-    ${Qt5Xml_LIBRARIES}
-    ${Qt5Core_LIBRARIES}
-    ${Qt5Svg_LIBRARIES}
-    ${Qt5Network_LIBRARIES}
-    ${Qt5Test_LIBRARIES}
-    ${PROJ_LIBRARY}
-    ${GEOS_LIBRARY}
-    ${GDAL_LIBRARY}
-    qgis_core
-    qgis_3d)
-  ADD_TEST(qgis_${testname} ${CMAKE_CURRENT_BINARY_DIR}/../../../output/bin/qgis_${testname} -maxwarnings 10000)
-  TARGET_LINK_LIBRARIES(qgis_${testname} qgis_native)
-  ADD_TEST(qgis_${testname} ${CMAKE_CURRENT_BINARY_DIR}/../../../output/bin/qgis_${testname})
-  #SET_TARGET_PROPERTIES(qgis_${testname} PROPERTIES
-  #  INSTALL_RPATH ${CMAKE_INSTALL_PREFIX}/${QGIS_LIB_DIR}
-  #  INSTALL_RPATH_USE_LINK_PATH true )
-ENDMACRO (ADD_QGIS_TEST)
+add_subdirectory(sandbox)
 
-ADD_QGIS_TEST(3dutilstest testqgs3dutils.cpp)
-ADD_QGIS_TEST(3drenderingtest testqgs3drendering.cpp)
-ADD_QGIS_TEST(layout3dmaptest testqgslayout3dmap.cpp)
-ADD_QGIS_TEST(tessellatortest testqgstessellator.cpp)
+set(TESTS
+  testqgs3dutils.cpp
+  testqgs3drendering.cpp
+  testqgslayout3dmap.cpp
+  testqgsmaterialregistry.cpp
+  testqgs3dmaterial.cpp
+  testqgstessellator.cpp
+  testqgs3dsymbolregistry.cpp
+)
+
+
+foreach(TESTSRC ${TESTS})
+  add_qgis_test(${TESTSRC} MODULE 3d LINKEDLIBRARIES qgis_3d)
+endforeach(TESTSRC)
+

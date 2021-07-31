@@ -34,7 +34,7 @@ bool QgsSaveToStyleVisitor::visit( const QgsStyleEntityVisitorInterface::StyleLe
 {
   if ( mObjects.empty() || mObjects.contains( entity.entity->type() ) )
   {
-    const QString name = ( mParentNames.join( ' ' ) + ' ' + entity.description ).trimmed();
+    const QString name = QString( mParentNames.join( ' ' ) + ' ' + entity.description ).trimmed();
     QString candidate = name;
     int i = 1;
     bool exists = true;
@@ -185,7 +185,7 @@ bool QgsStyleFromProjectAlgorithm::prepareAlgorithm( const QVariantMap &paramete
   if ( selectedObjects.contains( 3 ) )
     mObjects << QgsStyle::LabelSettingsEntity;
 
-  mStyle = qgis::make_unique< QgsStyle >();
+  mStyle = std::make_unique< QgsStyle >();
   mStyle->createMemoryDatabase();
 
   if ( mProjectPath.isEmpty() )

@@ -247,31 +247,31 @@ QString QgsWFSDataSourceURI::version() const
   return mURI.param( QgsWFSConstants::URI_PARAM_VERSION );
 }
 
-int QgsWFSDataSourceURI::maxNumFeatures() const
+long long QgsWFSDataSourceURI::maxNumFeatures() const
 {
   if ( !mURI.hasParam( QgsWFSConstants::URI_PARAM_MAXNUMFEATURES ) )
     return 0;
-  return mURI.param( QgsWFSConstants::URI_PARAM_MAXNUMFEATURES ).toInt();
+  return mURI.param( QgsWFSConstants::URI_PARAM_MAXNUMFEATURES ).toLongLong();
 }
 
-void QgsWFSDataSourceURI::setMaxNumFeatures( int maxNumFeatures )
+void QgsWFSDataSourceURI::setMaxNumFeatures( long long maxNumFeatures )
 {
   mURI.removeParam( QgsWFSConstants::URI_PARAM_MAXNUMFEATURES );
-  mURI.setParam( QgsWFSConstants::URI_PARAM_MAXNUMFEATURES, QString( maxNumFeatures ) );
+  mURI.setParam( QgsWFSConstants::URI_PARAM_MAXNUMFEATURES, QString::number( maxNumFeatures ) );
 }
 
-int QgsWFSDataSourceURI::pageSize() const
+long long QgsWFSDataSourceURI::pageSize() const
 {
   if ( !mURI.hasParam( QgsWFSConstants::URI_PARAM_PAGE_SIZE ) )
     return 0;
-  return mURI.param( QgsWFSConstants::URI_PARAM_PAGE_SIZE ).toInt();
+  return mURI.param( QgsWFSConstants::URI_PARAM_PAGE_SIZE ).toLongLong();
 }
 
 bool QgsWFSDataSourceURI::pagingEnabled() const
 {
   if ( !mURI.hasParam( QgsWFSConstants::URI_PARAM_PAGING_ENABLED ) )
     return true;
-  return mURI.param( QgsWFSConstants::URI_PARAM_PAGING_ENABLED ) == QStringLiteral( "true" );
+  return mURI.param( QgsWFSConstants::URI_PARAM_PAGING_ENABLED ) == QLatin1String( "true" );
 }
 
 void QgsWFSDataSourceURI::setTypeName( const QString &typeName )
@@ -373,6 +373,13 @@ bool QgsWFSDataSourceURI::hideDownloadProgressDialog() const
   return mURI.hasParam( QgsWFSConstants::URI_PARAM_HIDEDOWNLOADPROGRESSDIALOG );
 }
 
+
+bool QgsWFSDataSourceURI::preferCoordinatesForWfst11() const
+{
+  return mURI.hasParam( QgsWFSConstants::URI_PARAM_WFST_1_1_PREFER_COORDINATES ) &&
+         mURI.param( QgsWFSConstants::URI_PARAM_WFST_1_1_PREFER_COORDINATES ).toUpper() == QLatin1String( "TRUE" );
+}
+
 QString QgsWFSDataSourceURI::build( const QString &baseUri,
                                     const QString &typeName,
                                     const QString &crsString,
@@ -387,7 +394,7 @@ QString QgsWFSDataSourceURI::build( const QString &baseUri,
   uri.setFilter( filter );
   if ( restrictToCurrentViewExtent )
     uri.mURI.setParam( QgsWFSConstants::URI_PARAM_RESTRICT_TO_REQUEST_BBOX, QStringLiteral( "1" ) );
-  if ( uri.version() == QStringLiteral( "OGC_API_FEATURES" ) )
+  if ( uri.version() == QLatin1String( "OGC_API_FEATURES" ) )
   {
     uri.setVersion( QString() );
   }

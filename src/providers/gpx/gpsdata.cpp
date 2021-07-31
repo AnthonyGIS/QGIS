@@ -24,6 +24,7 @@
 #include <QTextStream>
 #include <QObject>
 #include <QSet>
+#include <QMutexLocker>
 
 #include "gpsdata.h"
 #include "qgslogger.h"
@@ -139,6 +140,19 @@ void QgsTrack::writeXml( QTextStream &stream )
   stream << "</trk>\n";
 }
 
+
+//
+// QgsGpsData
+//
+
+QgsGpsData::DataMap QgsGpsData::sDataObjects;
+
+
+#if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)
+QMutex QgsGpsData::sDataObjectsMutex { QMutex::Recursive };
+#else
+QRecursiveMutex QgsGpsData::sDataObjectsMutex;
+#endif
 
 QgsGpsData::QgsGpsData()
 {
@@ -349,7 +363,9 @@ void QgsGpsData::removeTracks( const QgsFeatureIds &ids )
 
 void QgsGpsData::writeXml( QTextStream &stream )
 {
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
   stream.setCodec( QTextCodec::codecForName( "UTF8" ) );
+#endif
   stream << "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n"
          << "<gpx version=\"1.0\" creator=\"QGIS\">\n";
   for ( WaypointIterator wIter = waypoints.begin();
@@ -360,14 +376,16 @@ void QgsGpsData::writeXml( QTextStream &stream )
   for ( TrackIterator tIter = tracks.begin(); tIter != tracks.end(); ++tIter )
     tIter->writeXml( stream );
   stream << "</gpx>\n";
-  stream << flush;
+  stream.flush();
 }
 
 
 QgsGpsData *QgsGpsData::getData( const QString &fileName )
 {
   // if the data isn't there already, try to load it
-  if ( dataObjects.find( fileName ) == dataObjects.end() )
+  QMutexLocker lock( &sDataObjectsMutex );
+
+  if ( sDataObjects.find( fileName ) == sDataObjects.end() )
   {
     QFile file( fileName );
     if ( !file.open( QIODevice::ReadOnly ) )
@@ -409,7 +427,7 @@ QgsGpsData *QgsGpsData::getData( const QString &fileName )
 
     data->setNoDataExtent();
 
-    dataObjects[fileName] = qMakePair<QgsGpsData *, unsigned>( data, 0 );
+    sDataObjects[fileName] = qMakePair( data, 0 );
   }
   else
   {
@@ -417,7 +435,7 @@ QgsGpsData *QgsGpsData::getData( const QString &fileName )
   }
 
   // return a pointer and increase the reference count for that file name
-  DataMap::iterator iter = dataObjects.find( fileName );
+  DataMap::iterator iter = sDataObjects.find( fileName );
   ++( iter.value().second );
   return ( QgsGpsData * )( iter.value().first );
 }
@@ -425,27 +443,22 @@ QgsGpsData *QgsGpsData::getData( const QString &fileName )
 
 void QgsGpsData::releaseData( const QString &fileName )
 {
+  QMutexLocker lock( &sDataObjectsMutex );
 
   /* decrease the reference count for the file name (if it is used), and erase
      it if the reference count becomes 0 */
-  DataMap::iterator iter = dataObjects.find( fileName );
-  if ( iter != dataObjects.end() )
+  DataMap::iterator iter = sDataObjects.find( fileName );
+  if ( iter != sDataObjects.end() )
   {
     QgsDebugMsg( "unrefing " + fileName );
     if ( --( iter.value().second ) == 0 )
     {
       QgsDebugMsg( "No one's using " + fileName + ", I'll erase it" );
       delete iter.value().first;
-      dataObjects.erase( iter );
+      sDataObjects.erase( iter );
     }
   }
 }
-
-
-// we have to initialize the static member
-QgsGpsData::DataMap QgsGpsData::dataObjects;
-
-
 
 
 bool QgsGPXHandler::startElement( const XML_Char *qName, const XML_Char **attr )

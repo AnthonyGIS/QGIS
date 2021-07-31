@@ -32,7 +32,7 @@ class QgsVectorLayer;
 
 /**
  * \ingroup core
- * This class allows including a set of layers in a database-side transaction,
+ * \brief This class allows including a set of layers in a database-side transaction,
  * provided the layer data providers support transactions and are compatible
  * with each other.
  *
@@ -160,7 +160,7 @@ class CORE_EXPORT QgsTransaction : public QObject SIP_ABSTRACT
 
 ///@cond PRIVATE
     // For internal use only, or by QgsTransactionGroup
-    static QString connectionString( const QString &layerName ) SIP_SKIP;
+    static QString connectionString( const QString &layerUri ) SIP_SKIP;
 ///@endcond
 
   signals:

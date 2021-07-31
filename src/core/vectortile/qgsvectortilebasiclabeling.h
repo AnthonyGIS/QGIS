@@ -24,7 +24,7 @@ class QgsPalLayerSettings;
 
 /**
  * \ingroup core
- * Configuration of a single style within QgsVectorTileBasicLabeling
+ * \brief Configuration of a single style within QgsVectorTileBasicLabeling
  *
  * \since QGIS 3.14
  */
@@ -98,7 +98,7 @@ class CORE_EXPORT QgsVectorTileBasicLabelingStyle
 
 /**
  * \ingroup core
- * Basic labeling configuration for vector tile layers. It contains a definition
+ * \brief Basic labeling configuration for vector tile layers. It contains a definition
  * of a list of labeling styles, where each labeling style is a combination of
  * sub-layer name, geometry type, filter expression, zoom range and label settings.
  *
@@ -134,7 +134,7 @@ class CORE_EXPORT QgsVectorTileBasicLabeling : public QgsVectorTileLabeling
 
 /**
  * \ingroup core
- * Implementation class for QgsVectorTileBasicLabeling
+ * \brief Implementation class for QgsVectorTileBasicLabeling
  *
  * \since QGIS 3.14
  */
@@ -150,6 +150,7 @@ class QgsVectorTileBasicLabelProvider : public QgsVectorTileLabelProvider
     // virtual functions from QgsVectorTileLabelProvider
     void registerTileFeatures( const QgsVectorTileRendererData &tile, QgsRenderContext &context ) override;
     QMap<QString, QSet<QString> > usedAttributes( const QgsRenderContext &context, int tileZoom ) const override;
+    QSet< QString > requiredLayers( QgsRenderContext &context, int tileZoom ) const override;
     void setFields( const QMap<QString, QgsFields> &perLayerFields ) override;
 
   private:

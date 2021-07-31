@@ -139,7 +139,7 @@ namespace pal
        * Solves the labeling problem, selecting the best candidate locations for all labels and returns a list of these
        * calculated label positions.
        *
-       * If \a displayAll is true, then the best positions for ALL labels will be returned, regardless of whether these
+       * If \a displayAll is TRUE, then the best positions for ALL labels will be returned, regardless of whether these
        * labels overlap other labels.
        *
        * If the optional \a unlabeled list is specified, it will be filled with a list of all feature labels which could
@@ -241,6 +241,11 @@ namespace pal
        */
       int globalCandidatesLimitPolygon() const { return mGlobalCandidatesLimitPolygon; }
 
+      /**
+       * Returns TRUE if a labelling candidate \a lp1 conflicts with \a lp2.
+       */
+      bool candidatesAreConflicting( const LabelPosition *lp1, const LabelPosition *lp2 ) const;
+
     private:
 
       std::unordered_map< QgsAbstractLabelProvider *, std::unique_ptr< Layer > > mLayers;
@@ -258,6 +263,9 @@ namespace pal
       int mEjChainDeg = 50;
       int mTenure = 10;
       double mCandListSize = 0.2;
+
+      unsigned int mNextCandidateId = 1;
+      mutable QHash< QPair< unsigned int, unsigned int >, bool > mCandidateConflicts;
 
       /**
        * \brief show partial labels (cut-off by the map canvas) or not

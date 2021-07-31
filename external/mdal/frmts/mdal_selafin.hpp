@@ -127,7 +127,7 @@ namespace MDAL
 
       double readDouble( );
       int readInt( );
-      size_t readSizet( );
+      size_t readSizeT( );
 
       void ignoreArrayLength( );
       std::string readStringWithoutLength( size_t len );
@@ -157,7 +157,7 @@ namespace MDAL
 
       std::string mFileName;
       bool mStreamInFloatPrecision = true;
-      bool mIsNativeLittleEndian = true;
+      bool mChangeEndianness = true;
       long long mFileSize = -1;
 
       std::ifstream mIn;
@@ -262,6 +262,8 @@ namespace MDAL
       size_t facesCount() const override {return mReader->facesCount();}
       BBox extent() const override;
 
+      void closeSource() override;
+
     private:
       mutable bool mIsExtentUpToDate = false;
       mutable BBox mExtent;
@@ -326,6 +328,7 @@ namespace MDAL
       void save( const std::string &uri, Mesh *mesh ) override;
 
       std::string writeDatasetOnFileSuffix() const override;
+      std::string saveMeshOnFileSuffix() const override;
 
     private:
       bool saveDatasetGroupOnFile( DatasetGroup *datasetGroup );

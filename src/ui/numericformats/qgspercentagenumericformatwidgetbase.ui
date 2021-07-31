@@ -45,7 +45,7 @@
     </widget>
    </item>
    <item row="0" column="1">
-    <widget class="QSpinBox" name="mDecimalsSpinBox">
+    <widget class="QgsSpinBox" name="mDecimalsSpinBox">
      <property name="value">
       <number>2</number>
      </property>
@@ -79,12 +79,24 @@
  </widget>
  <customwidgets>
   <customwidget>
+   <class>QgsSpinBox</class>
+   <extends>QSpinBox</extends>
+   <header>qgsspinbox.h</header>
+  </customwidget>
+  <customwidget>
    <class>QgsPanelWidget</class>
    <extends>QWidget</extends>
    <header>qgspanelwidget.h</header>
    <container>1</container>
   </customwidget>
  </customwidgets>
+ <tabstops>
+  <tabstop>mDecimalsSpinBox</tabstop>
+  <tabstop>mShowThousandsCheckBox</tabstop>
+  <tabstop>mShowPlusCheckBox</tabstop>
+  <tabstop>mShowTrailingZerosCheckBox</tabstop>
+  <tabstop>mScalingComboBox</tabstop>
+ </tabstops>
  <resources/>
  <connections/>
 </ui>

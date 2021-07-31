@@ -14,12 +14,13 @@
  ***************************************************************************/
 
 #include "qgis_core.h"
+#include "qgis.h"
+
 #include <QString>
-#include <QRegExp>
+#include <QRegularExpression>
 #include <QList>
 #include <QDomDocument>
 #include <QFont> // for enum values
-#include "qgis.h"
 
 #ifndef QGSSTRINGUTILS_H
 #define QGSSTRINGUTILS_H
@@ -101,7 +102,7 @@ class CORE_EXPORT QgsStringReplacement
 
     bool mWholeWordOnly;
 
-    QRegExp mRx;
+    QRegularExpression mRx;
 };
 
 
@@ -280,7 +281,7 @@ class CORE_EXPORT QgsStringUtils
      * Automatically wraps a \a string by inserting new line characters at appropriate locations in the string.
      *
      * The \a length argument specifies either the minimum or maximum length of lines desired, depending
-     * on whether \a useMaxLineLength is true. If \a useMaxLineLength is TRUE, then the string will be wrapped
+     * on whether \a useMaxLineLength is TRUE. If \a useMaxLineLength is TRUE, then the string will be wrapped
      * so that each line ideally will not exceed \a length of characters. If \a useMaxLineLength is FALSE, then
      * the string will be wrapped so that each line will ideally exceed \a length of characters.
      *
@@ -305,6 +306,25 @@ class CORE_EXPORT QgsStringUtils
      * \since QGIS 3.10
      */
     static QString htmlToMarkdown( const QString &html );
+
+    /**
+     * Returns an escaped string matching the behavior of QRegExp::escape.
+     * \param string String to escape
+     * \returns Escaped string
+     * \since QGIS 3.22
+     */
+    static QString qRegExpEscape( const QString &string );
+
+    /**
+     * Truncates a \a string to the specified maximum character length.
+     *
+     * If the \a string exceeds the maximum character length, then the string
+     * will be truncated by removing characters from the middle of the string
+     * and replacing them with a horizontal ellipsis character.
+     *
+     * \since QGIS 3.22
+     */
+    static QString truncateMiddleOfString( const QString &string, int maxLength );
 
 };
 

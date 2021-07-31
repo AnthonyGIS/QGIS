@@ -21,6 +21,7 @@ QgsRangeConfigDlg::QgsRangeConfigDlg( QgsVectorLayer *vl, int fieldIdx, QWidget 
   : QgsEditorConfigWidget( vl, fieldIdx, parent )
 {
   setupUi( this );
+  precisionSpinBox->setClearValue( 4 );
 
   minimumSpinBox->setMinimum( std::numeric_limits<int>::lowest() );
   minimumSpinBox->setMaximum( std::numeric_limits<int>::max() );
@@ -32,6 +33,7 @@ QgsRangeConfigDlg::QgsRangeConfigDlg( QgsVectorLayer *vl, int fieldIdx, QWidget 
 
   stepSpinBox->setMaximum( std::numeric_limits<int>::max() );
   stepSpinBox->setValue( 1 );
+  stepSpinBox->setClearValue( 1 );
 
   minimumDoubleSpinBox->setMinimum( std::numeric_limits<double>::lowest() );
   minimumDoubleSpinBox->setMaximum( std::numeric_limits<double>::max() );
@@ -44,11 +46,12 @@ QgsRangeConfigDlg::QgsRangeConfigDlg( QgsVectorLayer *vl, int fieldIdx, QWidget 
   // Use integer here:
   stepDoubleSpinBox->setMaximum( std::numeric_limits<int>::max() );
   stepDoubleSpinBox->setValue( 1 );
+  stepDoubleSpinBox->setClearValue( 1 );
 
 
   QString text;
 
-  QVariant::Type fieldType( vl->fields().at( fieldIdx ).type() );
+  const QVariant::Type fieldType( vl->fields().at( fieldIdx ).type() );
 
   switch ( fieldType )
   {
@@ -56,15 +59,24 @@ QgsRangeConfigDlg::QgsRangeConfigDlg( QgsVectorLayer *vl, int fieldIdx, QWidget 
     case QVariant::LongLong:
     case QVariant::Double:
     {
-      rangeStackedWidget->setCurrentIndex( vl->fields().at( fieldIdx ).type() == QVariant::Double ? 1 : 0 );
+      // we use the double spin boxes for double OR long long field types, as QSpinBox does not have sufficient
+      // available range for long long values
+      rangeStackedWidget->setCurrentIndex( fieldType == QVariant::Int ? 0 : 1 );
+      if ( fieldType == QVariant::LongLong )
+      {
+        minimumDoubleSpinBox->setDecimals( 0 );
+        maximumDoubleSpinBox->setDecimals( 0 );
+        stepDoubleSpinBox->setDecimals( 0 );
+      }
 
       rangeWidget->clear();
       rangeWidget->addItem( tr( "Editable" ), QStringLiteral( "SpinBox" ) );
       rangeWidget->addItem( tr( "Slider" ), QStringLiteral( "Slider" ) );
       rangeWidget->addItem( tr( "Dial" ), QStringLiteral( "Dial" ) );
 
-      QVariant min = vl->minimumValue( fieldIdx );
-      QVariant max = vl->maximumValue( fieldIdx );
+      QVariant min;
+      QVariant max;
+      vl->minimumAndMaximumValue( fieldIdx, min, max );
 
       text = tr( "Current minimum for this value is %1 and current maximum is %2." ).arg( min.toString(), max.toString() );
       break;
@@ -103,13 +115,15 @@ QVariantMap QgsRangeConfigDlg::config()
   switch ( layer()->fields().at( field() ).type() )
   {
     case QVariant::Int:
-    case QVariant::LongLong:
       cfg.insert( QStringLiteral( "Min" ), minimumSpinBox->value() );
       cfg.insert( QStringLiteral( "Max" ), maximumSpinBox->value() );
       cfg.insert( QStringLiteral( "Step" ), stepSpinBox->value() );
       break;
 
+    // we use the double spin boxes for double OR long long field types, as QSpinBox does not have sufficient
+    // available range for long long values
     case QVariant::Double:
+    case QVariant::LongLong:
       cfg.insert( QStringLiteral( "Min" ), minimumDoubleSpinBox->value() );
       cfg.insert( QStringLiteral( "Max" ), maximumDoubleSpinBox->value() );
       cfg.insert( QStringLiteral( "Step" ), stepDoubleSpinBox->value() );

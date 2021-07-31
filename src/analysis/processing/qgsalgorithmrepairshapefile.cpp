@@ -76,11 +76,11 @@ QVariantMap QgsRepairShapefileAlgorithm::processAlgorithm( const QVariantMap &pa
   const QString path = parameterAsFile( parameters, QStringLiteral( "INPUT" ), context );
 
   if ( !QFile::exists( path ) )
-    throw QgsProcessingException( QObject::tr( "Could not load source layer for %1." ).arg( QStringLiteral( "INPUT" ) ) );
+    throw QgsProcessingException( QObject::tr( "Could not load source layer for %1." ).arg( QLatin1String( "INPUT" ) ) );
 
   CPLSetConfigOption( "SHAPE_RESTORE_SHX", "YES" );
 
-  std::unique_ptr< QgsVectorLayer > layer = qgis::make_unique< QgsVectorLayer >( path );
+  std::unique_ptr< QgsVectorLayer > layer = std::make_unique< QgsVectorLayer >( path );
   if ( !layer->isValid() )
     throw QgsProcessingException( QObject::tr( "Could not repair %1." ).arg( path ) );
 

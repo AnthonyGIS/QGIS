@@ -28,6 +28,11 @@ QgsFeaturePickerModelBase::QgsFeaturePickerModelBase( QObject *parent )
   mReloadTimer.setInterval( 100 );
   mReloadTimer.setSingleShot( true );
   connect( &mReloadTimer, &QTimer::timeout, this, &QgsFeaturePickerModelBase::scheduledReload );
+
+  // The fact that the feature changed is a combination of the 2 signals:
+  // If the extra value is set to a feature currently not fetched, it will go through an intermediate step while the extra value does not exist (as it call reloadFeature)
+  connect( this, &QgsFeaturePickerModelBase::extraIdentifierValueChanged, this, &QgsFeaturePickerModelBase::currentFeatureChanged );
+  connect( this, &QgsFeaturePickerModelBase::extraValueDoesNotExistChanged, this, &QgsFeaturePickerModelBase::currentFeatureChanged );
 }
 
 
@@ -50,11 +55,14 @@ void QgsFeaturePickerModelBase::setSourceLayer( QgsVectorLayer *sourceLayer )
     return;
 
   mSourceLayer = sourceLayer;
-  mExpressionContext = sourceLayer->createExpressionContext();
+  if ( mSourceLayer )
+    mExpressionContext = mSourceLayer->createExpressionContext();
+
   reload();
   emit sourceLayerChanged();
 
-  setDisplayExpression( sourceLayer->displayExpression() );
+  if ( mSourceLayer )
+    setDisplayExpression( mSourceLayer->displayExpression() );
 }
 
 
@@ -169,8 +177,13 @@ QVariant QgsFeaturePickerModelBase::data( const QModelIndex &index, int role ) c
     case IdentifierValuesRole:
       return mEntries.value( index.row() ).identifierFields;
 
+#if QT_VERSION < QT_VERSION_CHECK(5, 13, 0)
     case Qt::BackgroundColorRole:
     case Qt::TextColorRole:
+#else
+    case Qt::BackgroundRole:
+    case Qt::ForegroundRole:
+#endif
     case Qt::DecorationRole:
     case Qt::FontRole:
     {
@@ -178,7 +191,11 @@ QVariant QgsFeaturePickerModelBase::data( const QModelIndex &index, int role ) c
       if ( isNull )
       {
         // Representation for NULL value
+#if QT_VERSION < QT_VERSION_CHECK(5, 13, 0)
         if ( role == Qt::TextColorRole )
+#else
+        if ( role == Qt::ForegroundRole )
+#endif
         {
           return QBrush( QColor( Qt::gray ) );
         }
@@ -199,9 +216,17 @@ QVariant QgsFeaturePickerModelBase::data( const QModelIndex &index, int role ) c
 
         if ( style.isValid() )
         {
+#if QT_VERSION < QT_VERSION_CHECK(5, 13, 0)
           if ( role == Qt::BackgroundColorRole && style.validBackgroundColor() )
+#else
+          if ( role == Qt::BackgroundRole && style.validBackgroundColor() )
+#endif
             return style.backgroundColor();
+#if QT_VERSION < QT_VERSION_CHECK(5, 13, 0)
           if ( role == Qt::TextColorRole && style.validTextColor() )
+#else
+          if ( role == Qt::ForegroundRole && style.validTextColor() )
+#endif
             return style.textColor();
           if ( role == Qt::DecorationRole )
             return style.icon();
@@ -232,7 +257,7 @@ void QgsFeaturePickerModelBase::updateCompleter()
 
   if ( mExtraValueIndex == -1 )
   {
-    setExtraIdentifierValueUnguarded( nullIentifier() );
+    setExtraIdentifierValueUnguarded( nullIdentifier() );
   }
 
   // Only reloading the current entry?
@@ -262,7 +287,7 @@ void QgsFeaturePickerModelBase::updateCompleter()
     // We got strings for a filter selection
     std::sort( entries.begin(), entries.end(), []( const QgsFeatureExpressionValuesGatherer::Entry & a, const QgsFeatureExpressionValuesGatherer::Entry & b ) { return a.value.localeAwareCompare( b.value ) < 0; } );
 
-    if ( mAllowNull )
+    if ( mAllowNull && mSourceLayer )
     {
       entries.prepend( QgsFeatureExpressionValuesGatherer::nullEntry( mSourceLayer ) );
     }
@@ -401,8 +426,8 @@ void QgsFeaturePickerModelBase::scheduledReload()
   QSet<QString> attributes = requestedAttributes();
   if ( !attributes.isEmpty() )
   {
-    if ( request.filterExpression() )
-      attributes += request.filterExpression()->referencedColumns();
+    if ( auto *lFilterExpression = request.filterExpression() )
+      attributes += lFilterExpression->referencedColumns();
     attributes += requestedAttributesForStyle();
 
     request.setSubsetOfAttributes( attributes, mSourceLayer->fields() );
@@ -493,11 +518,13 @@ void QgsFeaturePickerModelBase::setExtraIdentifierValueUnguarded( const QVariant
       if ( !isNull )
       {
         mEntries.prepend( createEntry( identifierValue ) );
+        setExtraValueDoesNotExist( true );
         reloadCurrentFeature();
       }
       else
       {
         mEntries.prepend( QgsFeatureExpressionValuesGatherer::nullEntry( mSourceLayer ) );
+        setExtraValueDoesNotExist( false );
       }
       endInsertRows();
 
@@ -612,7 +639,7 @@ void QgsFeaturePickerModelBase::reload()
 
 void QgsFeaturePickerModelBase::setExtraIdentifierValue( const QVariant &extraIdentifierValue )
 {
-  if ( extraIdentifierValue == mExtraIdentifierValue && !identifierIsNull( extraIdentifierValue ) )
+  if ( extraIdentifierValue == mExtraIdentifierValue && !identifierIsNull( extraIdentifierValue ) && !identifierIsNull( mExtraIdentifierValue ) )
     return;
 
   if ( mIsSettingExtraIdentifierValue )

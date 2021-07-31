@@ -22,7 +22,7 @@
 #include "qgsmarkersymbollayer.h"
 #include "qgis.h"
 #include "qgsstyleentityvisitor.h"
-
+#include "qgsmarkersymbol.h"
 
 QgsAbstractVectorLayerLabeling *QgsAbstractVectorLayerLabeling::create( const QDomElement &element, const QgsReadWriteContext &context )
 {
@@ -44,6 +44,31 @@ QgsAbstractVectorLayerLabeling *QgsAbstractVectorLayerLabeling::create( const QD
 bool QgsAbstractVectorLayerLabeling::accept( QgsStyleEntityVisitorInterface * ) const
 {
   return true;
+}
+
+QgsPalLayerSettings QgsAbstractVectorLayerLabeling::defaultSettingsForLayer( const QgsVectorLayer *layer )
+{
+  QgsPalLayerSettings settings;
+  settings.fieldName = layer->displayField();
+
+  switch ( layer->geometryType() )
+  {
+    case QgsWkbTypes::PointGeometry:
+      settings.placement = QgsPalLayerSettings::OrderedPositionsAroundPoint;
+      settings.offsetType = QgsPalLayerSettings::FromSymbolBounds;
+      break;
+    case QgsWkbTypes::LineGeometry:
+      settings.placement = QgsPalLayerSettings::Line;
+      break;
+    case QgsWkbTypes::PolygonGeometry:
+      settings.placement = QgsPalLayerSettings::AroundPoint;
+      break;
+
+    case QgsWkbTypes::UnknownGeometry:
+    case QgsWkbTypes::NullGeometry:
+      break;
+  }
+  return settings;
 }
 
 QgsVectorLayerLabelProvider *QgsVectorLayerSimpleLabeling::provider( QgsVectorLayer *layer ) const
@@ -94,7 +119,7 @@ bool QgsVectorLayerSimpleLabeling::accept( QgsStyleEntityVisitorInterface *visit
 
 bool QgsVectorLayerSimpleLabeling::requiresAdvancedEffects() const
 {
-  return mSettings->format().containsAdvancedEffects();
+  return mSettings->containsAdvancedEffects();
 }
 
 QgsVectorLayerSimpleLabeling *QgsVectorLayerSimpleLabeling::create( const QDomElement &element, const QgsReadWriteContext &context )
@@ -249,7 +274,7 @@ std::unique_ptr<QgsMarkerSymbolLayer> backgroundToMarkerLayer( const QgsTextBack
   return layer;
 }
 
-void QgsAbstractVectorLayerLabeling::writeTextSymbolizer( QDomNode &parent, QgsPalLayerSettings &settings, const QgsStringMap &props ) const
+void QgsAbstractVectorLayerLabeling::writeTextSymbolizer( QDomNode &parent, QgsPalLayerSettings &settings, const QVariantMap &props ) const
 {
   QDomDocument doc = parent.ownerDocument();
 
@@ -269,15 +294,18 @@ void QgsAbstractVectorLayerLabeling::writeTextSymbolizer( QDomNode &parent, QgsP
   }
   else
   {
-    if ( font.capitalization() == QFont::AllUppercase )
+    QgsStringUtils::Capitalization capitalization = format.capitalization();
+    if ( capitalization == QgsStringUtils::MixedCase && font.capitalization() != QFont::MixedCase )
+      capitalization = static_cast< QgsStringUtils::Capitalization >( font.capitalization() );
+    if ( capitalization == QgsStringUtils::AllUppercase )
     {
       appendSimpleFunction( doc, labelElement, QStringLiteral( "strToUpperCase" ), settings.fieldName );
     }
-    else if ( font.capitalization() == QFont::AllLowercase )
+    else if ( capitalization == QgsStringUtils::AllLowercase )
     {
       appendSimpleFunction( doc, labelElement, QStringLiteral( "strToLowerCase" ), settings.fieldName );
     }
-    else if ( font.capitalization() == QFont::Capitalize )
+    else if ( capitalization == QgsStringUtils::ForceFirstLetterToCapital )
     {
       appendSimpleFunction( doc, labelElement, QStringLiteral( "strCapitalize" ), settings.fieldName );
     }
@@ -500,7 +528,7 @@ void QgsAbstractVectorLayerLabeling::writeTextSymbolizer( QDomNode &parent, QgsP
     QDomElement vo =  QgsSymbolLayerUtils::createVendorOptionElement( doc, QStringLiteral( "forceLeftToRight" ), QStringLiteral( "false" ) );
     textSymbolizerElement.appendChild( vo );
   }
-  if ( settings.mergeLines )
+  if ( settings.lineSettings().mergeLines() )
   {
     QDomElement vo =  QgsSymbolLayerUtils::createVendorOptionElement( doc, QStringLiteral( "group" ), QStringLiteral( "yes" ) );
     textSymbolizerElement.appendChild( vo );
@@ -558,7 +586,7 @@ void QgsAbstractVectorLayerLabeling::writeTextSymbolizer( QDomNode &parent, QgsP
 }
 
 
-void QgsVectorLayerSimpleLabeling::toSld( QDomNode &parent, const QgsStringMap &props ) const
+void QgsVectorLayerSimpleLabeling::toSld( QDomNode &parent, const QVariantMap &props ) const
 {
 
   if ( mSettings->drawLabels )
@@ -571,7 +599,7 @@ void QgsVectorLayerSimpleLabeling::toSld( QDomNode &parent, const QgsStringMap &
     // scale dependencies
     if ( mSettings->scaleVisibility )
     {
-      QgsStringMap scaleProps = QgsStringMap();
+      QVariantMap scaleProps = QVariantMap();
       // tricky here, the max scale is expressed as its denominator, but it's still the max scale
       // in other words, the smallest scale denominator....
       scaleProps.insert( "scaleMinDenom", qgsDoubleToString( mSettings->maximumScale ) );

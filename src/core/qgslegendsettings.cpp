@@ -36,6 +36,8 @@ QgsLegendSettings::QgsLegendSettings()
   rstyle( QgsLegendStyle::Group ).rfont().setPointSizeF( 14.0 );
   rstyle( QgsLegendStyle::Subgroup ).rfont().setPointSizeF( 12.0 );
   rstyle( QgsLegendStyle::SymbolLabel ).rfont().setPointSizeF( 12.0 );
+  rstyle( QgsLegendStyle::Group ).setIndent( 0.0 );
+  rstyle( QgsLegendStyle::Subgroup ).setIndent( 0.0 );
 }
 
 double QgsLegendSettings::mmPerMapUnit() const
@@ -157,7 +159,7 @@ double QgsLegendSettings::textWidthMillimeters( const QFont &font, const QString
 {
   QFont metricsFont = scaledFontPixelSize( font );
   QFontMetricsF fontMetrics( metricsFont );
-  return ( fontMetrics.width( text ) / FONT_WORKAROUND_SCALE );
+  return ( fontMetrics.horizontalAdvance( text ) / FONT_WORKAROUND_SCALE );
 }
 
 double QgsLegendSettings::fontHeightCharacterMM( const QFont &font, QChar c ) const

@@ -24,16 +24,20 @@
 #include "qgsrasterprojector.h"
 #include "qgsrasterdataprovider.h"
 #include "qgsrasternuller.h"
+#include "qgsreadwritelocker.h"
+#include "qgsrasterpipe.h"
 
 #include <QCoreApplication>
 #include <QProgressDialog>
 #include <QTextStream>
 #include <QMessageBox>
+#include <QRegularExpression>
 
 #include <cmath>
 
 #include <gdal.h>
 #include <cpl_string.h>
+#include <mutex>
 
 QgsRasterDataProvider *QgsRasterFileWriter::createOneBandRaster( Qgis::DataType dataType, int width, int height, const QgsRectangle &extent, const QgsCoordinateReferenceSystem &crs )
 {
@@ -246,7 +250,7 @@ QgsRasterFileWriter::WriterError QgsRasterFileWriter::writeDataRaster( const Qgs
     // GeoPackage does not support nodata for Byte output, and does not
     // support non-Byte multiband output, so do not take the risk of an accidental
     // data type promotion.
-    else if ( !( isGpkgOutput && destDataType == Qgis::Byte ) )
+    else if ( !( isGpkgOutput && destDataType == Qgis::DataType::Byte ) )
     {
       // Verify if we really need no data value, i.e.
       QgsRectangle outputExtentInSrcCrs = outputExtent;
@@ -291,7 +295,7 @@ QgsRasterFileWriter::WriterError QgsRasterFileWriter::writeDataRaster( const Qgs
       nuller->setOutputNoDataValue( bandNo, destNoDataValue );
     }
 
-    QgsDebugMsgLevel( QStringLiteral( "bandNo = %1 destDataType = %2 destHasNoDataValue = %3 destNoDataValue = %4" ).arg( bandNo ).arg( destDataType ).arg( destHasNoDataValue ).arg( destNoDataValue ), 4 );
+    QgsDebugMsgLevel( QStringLiteral( "bandNo = %1 destDataType = %2 destHasNoDataValue = %3 destNoDataValue = %4" ).arg( bandNo ).arg( qgsEnumValueToKey( destDataType ) ).arg( destHasNoDataValue ).arg( destNoDataValue ), 4 );
     destDataTypeList.append( destDataType );
     destHasNoDataValueList.append( destHasNoDataValue );
     destNoDataValueList.append( destNoDataValue );
@@ -569,11 +573,11 @@ QgsRasterFileWriter::WriterError QgsRasterFileWriter::writeImageRaster( QgsRaste
     return SourceProviderError;
 
   Qgis::DataType inputDataType = iface->dataType( 1 );
-  if ( inputDataType != Qgis::ARGB32 && inputDataType != Qgis::ARGB32_Premultiplied )
+  if ( inputDataType != Qgis::DataType::ARGB32 && inputDataType != Qgis::DataType::ARGB32_Premultiplied )
   {
     return SourceProviderError;
   }
-  const bool isPremultiplied = ( inputDataType == Qgis::ARGB32_Premultiplied );
+  const bool isPremultiplied = ( inputDataType == Qgis::DataType::ARGB32_Premultiplied );
 
   iter->setMaximumTileWidth( mMaxTileWidth );
   iter->setMaximumTileHeight( mMaxTileHeight );
@@ -592,7 +596,7 @@ QgsRasterFileWriter::WriterError QgsRasterFileWriter::writeImageRaster( QgsRaste
   globalOutputParameters( outputExtent, nCols, nRows, geoTransform, pixelSize );
 
   const int nOutputBands = 4;
-  std::unique_ptr< QgsRasterDataProvider > destProvider( initOutput( nCols, nRows, crs, geoTransform, nOutputBands, Qgis::Byte ) );
+  std::unique_ptr< QgsRasterDataProvider > destProvider( initOutput( nCols, nRows, crs, geoTransform, nOutputBands, Qgis::DataType::Byte ) );
   if ( !mTiledMode )
   {
     if ( !destProvider )
@@ -625,7 +629,7 @@ QgsRasterFileWriter::WriterError QgsRasterFileWriter::writeImageRaster( QgsRaste
       }
       return CreateDatasourceError;
     }
-    if ( Qgis::Byte != destProvider->dataType( 1 ) )
+    if ( Qgis::DataType::Byte != destProvider->dataType( 1 ) )
     {
       QgsDebugMsg( QStringLiteral( "Created raster does not have requested data type" ) );
       if ( feedback )
@@ -684,7 +688,7 @@ QgsRasterFileWriter::WriterError QgsRasterFileWriter::writeImageRaster( QgsRaste
       std::unique_ptr< QgsRasterDataProvider > partDestProvider( createPartProvider( outputExtent,
           nCols, iterCols, iterRows,
           iterLeft, iterTop, mOutputUrl, fileIndex,
-          4, Qgis::Byte, crs ) );
+          4, Qgis::DataType::Byte, crs ) );
 
       if ( !partDestProvider || partDestProvider->isValid() )
       {
@@ -815,7 +819,7 @@ void QgsRasterFileWriter::buildPyramids( const QString &filename, QgsRasterDataP
     myPyramidList = destProvider->buildPyramidList( mPyramidsList );
   for ( int myCounterInt = 0; myCounterInt < myPyramidList.count(); myCounterInt++ )
   {
-    myPyramidList[myCounterInt].build = true;
+    myPyramidList[myCounterInt].setBuild( true );
   }
 
   QgsDebugMsgLevel( QStringLiteral( "building pyramids : %1 pyramids, %2 resampling, %3 format, %4 options" ).arg( myPyramidList.count() ).arg( mPyramidsResampling ).arg( mPyramidsFormat ).arg( mPyramidsConfigOptions.count() ), 4 );
@@ -917,16 +921,16 @@ void QgsRasterFileWriter::createVRT( int xSize, int ySize, const QgsCoordinateRe
   colorInterp << QStringLiteral( "Red" ) << QStringLiteral( "Green" ) << QStringLiteral( "Blue" ) << QStringLiteral( "Alpha" );
 
   QMap<Qgis::DataType, QString> dataTypes;
-  dataTypes.insert( Qgis::Byte, QStringLiteral( "Byte" ) );
-  dataTypes.insert( Qgis::UInt16, QStringLiteral( "UInt16" ) );
-  dataTypes.insert( Qgis::Int16, QStringLiteral( "Int16" ) );
-  dataTypes.insert( Qgis::UInt32, QStringLiteral( "Int32" ) );
-  dataTypes.insert( Qgis::Float32, QStringLiteral( "Float32" ) );
-  dataTypes.insert( Qgis::Float64, QStringLiteral( "Float64" ) );
-  dataTypes.insert( Qgis::CInt16, QStringLiteral( "CInt16" ) );
-  dataTypes.insert( Qgis::CInt32, QStringLiteral( "CInt32" ) );
-  dataTypes.insert( Qgis::CFloat32, QStringLiteral( "CFloat32" ) );
-  dataTypes.insert( Qgis::CFloat64, QStringLiteral( "CFloat64" ) );
+  dataTypes.insert( Qgis::DataType::Byte, QStringLiteral( "Byte" ) );
+  dataTypes.insert( Qgis::DataType::UInt16, QStringLiteral( "UInt16" ) );
+  dataTypes.insert( Qgis::DataType::Int16, QStringLiteral( "Int16" ) );
+  dataTypes.insert( Qgis::DataType::UInt32, QStringLiteral( "Int32" ) );
+  dataTypes.insert( Qgis::DataType::Float32, QStringLiteral( "Float32" ) );
+  dataTypes.insert( Qgis::DataType::Float64, QStringLiteral( "Float64" ) );
+  dataTypes.insert( Qgis::DataType::CInt16, QStringLiteral( "CInt16" ) );
+  dataTypes.insert( Qgis::DataType::CInt32, QStringLiteral( "CInt32" ) );
+  dataTypes.insert( Qgis::DataType::CFloat32, QStringLiteral( "CFloat32" ) );
+  dataTypes.insert( Qgis::DataType::CFloat64, QStringLiteral( "CFloat64" ) );
 
   for ( int i = 1; i <= nBands; i++ )
   {
@@ -1133,10 +1137,20 @@ QString QgsRasterFileWriter::filterForDriver( const QString &driverName )
 
 QList< QgsRasterFileWriter::FilterFormatDetails > QgsRasterFileWriter::supportedFiltersAndFormats( RasterFormatOptions options )
 {
-  QList< FilterFormatDetails > results;
+  static QReadWriteLock sFilterLock;
+  static QMap< RasterFormatOptions, QList< QgsRasterFileWriter::FilterFormatDetails > > sFilters;
+
+  QgsReadWriteLocker locker( sFilterLock, QgsReadWriteLocker::Read );
+
+  const auto it = sFilters.constFind( options );
+  if ( it != sFilters.constEnd() )
+    return it.value();
 
   GDALAllRegister();
   int const drvCount = GDALGetDriverCount();
+
+  locker.changeMode( QgsReadWriteLocker::Write );
+  QList< QgsRasterFileWriter::FilterFormatDetails > results;
 
   FilterFormatDetails tifFormat;
 
@@ -1182,6 +1196,8 @@ QList< QgsRasterFileWriter::FilterFormatDetails > QgsRasterFileWriter::supported
       results.insert( 0, tifFormat );
     }
   }
+
+  sFilters.insert( options, results );
 
   return results;
 }

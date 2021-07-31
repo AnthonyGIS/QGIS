@@ -16,20 +16,6 @@
  ***************************************************************************/
 
 
-#include <QDir>
-#include <QDomDocument>
-#include <QDomElement>
-#include <QDomImplementation>
-#include <QDomNode>
-#include <QFile>
-#include <QFileInfo>
-#include <QTextStream>
-#include <QUrl>
-
-#include <sqlite3.h>
-
-#include "qgssqliteutils.h"
-
 #include "qgssqliteutils.h"
 #include "qgs3drendererregistry.h"
 #include "qgsabstract3drenderer.h"
@@ -53,7 +39,29 @@
 #include "qgsvectordataprovider.h"
 #include "qgsxmlutils.h"
 #include "qgsstringutils.h"
+#include "qgsmessagelog.h"
 #include "qgsmaplayertemporalproperties.h"
+#include "qgsmaplayerelevationproperties.h"
+#include "qgsprovidermetadata.h"
+#include "qgslayernotesutils.h"
+#include "qgsdatums.h"
+#include "qgsprojoperation.h"
+
+#include <QDir>
+#include <QDomDocument>
+#include <QDomElement>
+#include <QDomImplementation>
+#include <QDomNode>
+#include <QFile>
+#include <QFileInfo>
+#include <QTextStream>
+#include <QUrl>
+#include <QTimer>
+#include <QStandardPaths>
+#include <QUuid>
+#include <QRegularExpression>
+
+#include <sqlite3.h>
 
 QString QgsMapLayer::extensionPropertyType( QgsMapLayer::PropertyType type )
 {
@@ -124,6 +132,8 @@ void QgsMapLayer::clone( QgsMapLayer *layer ) const
   layer->mShouldValidateCrs = mShouldValidateCrs;
   layer->setCrs( crs() );
   layer->setCustomProperties( mCustomProperties );
+  layer->setOpacity( mLayerOpacity );
+  layer->setMetadata( mMetadata );
 }
 
 QgsMapLayerType QgsMapLayer::type() const
@@ -206,7 +216,7 @@ void QgsMapLayer::setBlendMode( const QPainter::CompositionMode blendMode )
 
   mBlendMode = blendMode;
   emit blendModeChanged( blendMode );
-  emit styleChanged();
+  emitStyleChanged();
 }
 
 QPainter::CompositionMode QgsMapLayer::blendMode() const
@@ -214,6 +224,19 @@ QPainter::CompositionMode QgsMapLayer::blendMode() const
   return mBlendMode;
 }
 
+void QgsMapLayer::setOpacity( double opacity )
+{
+  if ( qgsDoubleNear( mLayerOpacity, opacity ) )
+    return;
+  mLayerOpacity = opacity;
+  emit opacityChanged( opacity );
+  emitStyleChanged();
+}
+
+double QgsMapLayer::opacity() const
+{
+  return mLayerOpacity;
+}
 
 bool QgsMapLayer::readLayerXml( const QDomElement &layerElement, QgsReadWriteContext &context, QgsMapLayer::ReadFlags flags )
 {
@@ -232,11 +255,11 @@ bool QgsMapLayer::readLayerXml( const QDomElement &layerElement, QgsReadWriteCon
   // set data source
   mnl = layerElement.namedItem( QStringLiteral( "datasource" ) );
   mne = mnl.toElement();
-  mDataSource = mne.text();
+  mDataSource = context.pathResolver().readPath( mne.text() );
 
   // if the layer needs authentication, ensure the master password is set
-  QRegExp rx( "authcfg=([a-z]|[A-Z]|[0-9]){7}" );
-  if ( ( rx.indexIn( mDataSource ) != -1 )
+  const thread_local QRegularExpression rx( "authcfg=([a-z]|[A-Z]|[0-9]){7}" );
+  if ( rx.match( mDataSource ).hasMatch()
        && !QgsApplication::authManager()->setMasterPassword( true ) )
   {
     return false;
@@ -257,7 +280,7 @@ bool QgsMapLayer::readLayerXml( const QDomElement &layerElement, QgsReadWriteCon
   QDomNode srsNode = layerElement.namedItem( QStringLiteral( "srs" ) );
   mCRS.readXml( srsNode );
   mCRS.setValidationHint( tr( "Specify CRS for layer %1" ).arg( mne.text() ) );
-  if ( isSpatial() )
+  if ( isSpatial() && type() != QgsMapLayerType::AnnotationLayer )
     mCRS.validate();
   savedCRS = mCRS;
 
@@ -282,11 +305,6 @@ bool QgsMapLayer::readLayerXml( const QDomElement &layerElement, QgsReadWriteCon
       mID = mne.text();
     }
   }
-
-  setAutoRefreshInterval( layerElement.attribute( QStringLiteral( "autoRefreshTime" ), QStringLiteral( "0" ) ).toInt() );
-  setAutoRefreshEnabled( layerElement.attribute( QStringLiteral( "autoRefreshEnabled" ), QStringLiteral( "0" ) ).toInt() );
-  setRefreshOnNofifyMessage( layerElement.attribute( QStringLiteral( "refreshOnNotifyMessage" ), QString() ) );
-  setRefreshOnNotifyEnabled( layerElement.attribute( QStringLiteral( "refreshOnNotifyEnabled" ), QStringLiteral( "0" ) ).toInt() );
 
   // set name
   mnl = layerElement.namedItem( QStringLiteral( "layername" ) );
@@ -334,7 +352,7 @@ bool QgsMapLayer::readLayerXml( const QDomElement &layerElement, QgsReadWriteCon
     {
       kwdList << n.toElement().text();
     }
-    mKeywordList = kwdList.join( QStringLiteral( ", " ) );
+    mKeywordList = kwdList.join( QLatin1String( ", " ) );
   }
 
   //metadataUrl
@@ -374,6 +392,21 @@ bool QgsMapLayer::readLayerXml( const QDomElement &layerElement, QgsReadWriteCon
   QDomElement metadataElem = layerElement.firstChildElement( QStringLiteral( "resourceMetadata" ) );
   mMetadata.readMetadataXml( metadataElem );
 
+  setAutoRefreshInterval( layerElement.attribute( QStringLiteral( "autoRefreshTime" ), QStringLiteral( "0" ) ).toInt() );
+  setAutoRefreshEnabled( layerElement.attribute( QStringLiteral( "autoRefreshEnabled" ), QStringLiteral( "0" ) ).toInt() );
+  setRefreshOnNofifyMessage( layerElement.attribute( QStringLiteral( "refreshOnNotifyMessage" ), QString() ) );
+  setRefreshOnNotifyEnabled( layerElement.attribute( QStringLiteral( "refreshOnNotifyEnabled" ), QStringLiteral( "0" ) ).toInt() );
+
+  // geographic extent is read only if necessary
+  if ( mReadFlags & QgsMapLayer::ReadFlag::FlagTrustLayerMetadata )
+  {
+    const QDomNode wgs84ExtentNode = layerElement.namedItem( QStringLiteral( "wgs84extent" ) );
+    if ( !wgs84ExtentNode.isNull() )
+      mWgs84Extent = QgsXmlUtils::readRectangle( wgs84ExtentNode.toElement() );
+  }
+
+  mLegendPlaceholderImage = layerElement.attribute( QStringLiteral( "legendPlaceholderImage" ) );
+
   return ! layerError;
 } // bool QgsMapLayer::readLayerXML
 
@@ -384,6 +417,16 @@ bool QgsMapLayer::readXml( const QDomNode &layer_node, QgsReadWriteContext &cont
   Q_UNUSED( context )
   // NOP by default; children will over-ride with behavior specific to them
 
+  // read Extent
+  if ( mReadFlags & QgsMapLayer::FlagReadExtentFromXml )
+  {
+    const QDomNode extentNode = layer_node.namedItem( QStringLiteral( "extent" ) );
+    if ( !extentNode.isNull() )
+    {
+      mExtent = QgsXmlUtils::readRectangle( extentNode.toElement() );
+    }
+  }
+
   return true;
 } // void QgsMapLayer::readXml
 
@@ -393,6 +436,7 @@ bool QgsMapLayer::writeLayerXml( QDomElement &layerElement, QDomDocument &docume
   if ( !extent().isNull() )
   {
     layerElement.appendChild( QgsXmlUtils::writeRectangle( mExtent, document ) );
+    layerElement.appendChild( QgsXmlUtils::writeRectangle( wgs84Extent( true ), document, QStringLiteral( "wgs84extent" ) ) );
   }
 
   layerElement.setAttribute( QStringLiteral( "autoRefreshTime" ), QString::number( mRefreshTimer->interval() ) );
@@ -410,7 +454,7 @@ bool QgsMapLayer::writeLayerXml( QDomElement &layerElement, QDomDocument &docume
 
   // data source
   QDomElement dataSource = document.createElement( QStringLiteral( "datasource" ) );
-  QString src = encodedSource( source(), context );
+  QString src = context.pathResolver().writePath( encodedSource( source(), context ) );
   QDomText dataSourceText = document.createTextNode( src );
   dataSource.appendChild( dataSourceText );
   layerElement.appendChild( dataSource );
@@ -533,6 +577,8 @@ bool QgsMapLayer::writeLayerXml( QDomElement &layerElement, QDomDocument &docume
   mMetadata.writeMetadataXml( myMetadataElem, document );
   layerElement.appendChild( myMetadataElem );
 
+  layerElement.setAttribute( QStringLiteral( "legendPlaceholderImage" ), mLegendPlaceholderImage );
+
   // now append layer node to map layer node
   return writeXml( layerElement, document, context );
 }
@@ -580,9 +626,23 @@ void QgsMapLayer::writeCommonStyle( QDomElement &layerElement, QDomDocument &doc
     layerElement.appendChild( layerFlagsElem );
   }
 
-  if ( categories.testFlag( Temporal ) && const_cast< QgsMapLayer * >( this )->temporalProperties() )
+  if ( categories.testFlag( Temporal ) )
   {
-    const_cast< QgsMapLayer * >( this )->temporalProperties()->writeXml( layerElement, document, context );
+    if ( QgsMapLayerTemporalProperties *properties = const_cast< QgsMapLayer * >( this )->temporalProperties() )
+      properties->writeXml( layerElement, document, context );
+  }
+
+  if ( categories.testFlag( Elevation ) )
+  {
+    if ( QgsMapLayerElevationProperties *properties = const_cast< QgsMapLayer * >( this )->elevationProperties() )
+      properties->writeXml( layerElement, document, context );
+  }
+
+  if ( categories.testFlag( Notes ) && QgsLayerNotesUtils::layerHasNotes( this ) )
+  {
+    QDomElement notesElem = document.createElement( QStringLiteral( "userNotes" ) );
+    notesElem.setAttribute( QStringLiteral( "value" ), QgsLayerNotesUtils::layerNotes( this ) );
+    layerElement.appendChild( notesElem );
   }
 
   // custom properties
@@ -761,6 +821,11 @@ void QgsMapLayer::setSubLayerVisibility( const QString &name, bool vis )
   // NOOP
 }
 
+bool QgsMapLayer::supportsEditing() const
+{
+  return false;
+}
+
 QgsCoordinateReferenceSystem QgsMapLayer::crs() const
 {
   return mCRS;
@@ -770,7 +835,7 @@ void QgsMapLayer::setCrs( const QgsCoordinateReferenceSystem &srs, bool emitSign
 {
   mCRS = srs;
 
-  if ( mShouldValidateCrs && isSpatial() && !mCRS.isValid() )
+  if ( mShouldValidateCrs && isSpatial() && !mCRS.isValid() && type() != QgsMapLayerType::AnnotationLayer )
   {
     mCRS.setValidationHint( tr( "Specify CRS for layer %1" ).arg( name() ) );
     mCRS.validate();
@@ -782,7 +847,8 @@ void QgsMapLayer::setCrs( const QgsCoordinateReferenceSystem &srs, bool emitSign
 
 QgsCoordinateTransformContext QgsMapLayer::transformContext() const
 {
-  return dataProvider() ? dataProvider()->transformContext() : QgsCoordinateTransformContext();
+  const QgsDataProvider *lDataProvider = dataProvider();
+  return lDataProvider ? lDataProvider->transformContext() : QgsCoordinateTransformContext();
 }
 
 QString QgsMapLayer::formatLayerName( const QString &name )
@@ -843,6 +909,28 @@ QString QgsMapLayer::metadataUri() const
 
 QString QgsMapLayer::saveDefaultMetadata( bool &resultFlag )
 {
+  if ( const QgsProviderMetadata *metadata = QgsProviderRegistry::instance()->providerMetadata( providerType() ) )
+  {
+    if ( metadata->providerCapabilities() & QgsProviderMetadata::SaveLayerMetadata )
+    {
+      try
+      {
+        QString errorMessage;
+        resultFlag = QgsProviderRegistry::instance()->saveLayerMetadata( providerType(), mDataSource, mMetadata, errorMessage );
+        if ( resultFlag )
+          return tr( "Successfully saved default layer metadata" );
+        else
+          return errorMessage;
+      }
+      catch ( QgsNotSupportedException &e )
+      {
+        resultFlag = false;
+        return e.what();
+      }
+    }
+  }
+
+  // fallback default metadata saving method, for providers which don't support (or implement) saveLayerMetadata
   return saveNamedMetadata( metadataUri(), resultFlag );
 }
 
@@ -1429,7 +1517,7 @@ void QgsMapLayer::exportSldStyle( QDomDocument &doc, QString &errorMsg ) const
     root.appendChild( layerNode );
   }
 
-  QgsStringMap props;
+  QVariantMap props;
   if ( hasScaleBasedVisibility() )
   {
     props[ QStringLiteral( "scaleMinDenom" ) ] = QString::number( mMinScale );
@@ -1601,13 +1689,65 @@ bool QgsMapLayer::writeStyle( QDomNode &node, QDomDocument &doc, QString &errorM
   return false;
 }
 
-void QgsMapLayer::setDataSource( const QString &dataSource, const QString &baseName, const QString &provider, const QgsDataProvider::ProviderOptions &options, bool loadDefaultStyleFlag )
+
+void QgsMapLayer::setDataSource( const QString &dataSource, const QString &baseName, const QString &provider,
+                                 bool loadDefaultStyleFlag )
+{
+  QgsDataProvider::ProviderOptions options;
+
+  QgsDataProvider::ReadFlags flags = QgsDataProvider::ReadFlags();
+  if ( loadDefaultStyleFlag )
+  {
+    flags |= QgsDataProvider::FlagLoadDefaultStyle;
+  }
+
+  if ( mReadFlags & QgsMapLayer::FlagTrustLayerMetadata )
+  {
+    flags |= QgsDataProvider::FlagTrustDataSource;
+  }
+  setDataSource( dataSource, baseName, provider, options, flags );
+}
+
+void QgsMapLayer::setDataSource( const QString &dataSource, const QString &baseName, const QString &provider,
+                                 const QgsDataProvider::ProviderOptions &options, bool loadDefaultStyleFlag )
+{
+  QgsDataProvider::ReadFlags flags = QgsDataProvider::ReadFlags();
+  if ( loadDefaultStyleFlag )
+  {
+    flags |= QgsDataProvider::FlagLoadDefaultStyle;
+  }
+
+  if ( mReadFlags & QgsMapLayer::FlagTrustLayerMetadata )
+  {
+    flags |= QgsDataProvider::FlagTrustDataSource;
+  }
+  setDataSource( dataSource, baseName, provider, options, flags );
+}
+
+void QgsMapLayer::setDataSource( const QString &dataSource, const QString &baseName, const QString &provider,
+                                 const QgsDataProvider::ProviderOptions &options, QgsDataProvider::ReadFlags flags )
+{
+
+  if ( ( mReadFlags & QgsMapLayer::FlagTrustLayerMetadata ) &&
+       !( flags & QgsDataProvider::FlagTrustDataSource ) )
+  {
+    flags |= QgsDataProvider::FlagTrustDataSource;
+  }
+  setDataSourcePrivate( dataSource, baseName, provider, options, flags );
+  emit dataSourceChanged();
+  emit dataChanged();
+  triggerRepaint();
+}
+
+
+void QgsMapLayer::setDataSourcePrivate( const QString &dataSource, const QString &baseName, const QString &provider,
+                                        const QgsDataProvider::ProviderOptions &options, QgsDataProvider::ReadFlags flags )
 {
   Q_UNUSED( dataSource )
   Q_UNUSED( baseName )
   Q_UNUSED( provider )
   Q_UNUSED( options )
-  Q_UNUSED( loadDefaultStyleFlag )
+  Q_UNUSED( flags )
 }
 
 
@@ -1621,6 +1761,8 @@ void QgsMapLayer::readCommonStyle( const QDomElement &layerElement, const QgsRea
 {
   if ( categories.testFlag( Symbology3D ) )
   {
+    QgsReadWriteContextCategoryPopper p = context.enterCategory( tr( "3D Symbology" ) );
+
     QgsAbstract3DRenderer *r3D = nullptr;
     QDomElement renderer3DElem = layerElement.firstChildElement( QStringLiteral( "renderer-3d" ) );
     if ( !renderer3DElem.isNull() )
@@ -1679,9 +1821,30 @@ void QgsMapLayer::readCommonStyle( const QDomElement &layerElement, const QgsRea
     setFlags( flags );
   }
 
-  if ( categories.testFlag( Temporal ) && temporalProperties() )
+  if ( categories.testFlag( Temporal ) )
   {
-    temporalProperties()->readXml( layerElement.toElement(), context );
+    QgsReadWriteContextCategoryPopper p = context.enterCategory( tr( "Temporal" ) );
+
+    if ( QgsMapLayerTemporalProperties *properties = temporalProperties() )
+      properties->readXml( layerElement.toElement(), context );
+  }
+
+  if ( categories.testFlag( Elevation ) )
+  {
+    QgsReadWriteContextCategoryPopper p = context.enterCategory( tr( "Elevation" ) );
+
+    if ( QgsMapLayerElevationProperties *properties = elevationProperties() )
+      properties->readXml( layerElement.toElement(), context );
+  }
+
+  if ( categories.testFlag( Notes ) )
+  {
+    const QDomElement notesElem = layerElement.firstChildElement( QStringLiteral( "userNotes" ) );
+    if ( !notesElem.isNull() )
+    {
+      const QString notes = notesElem.attribute( QStringLiteral( "value" ) );
+      QgsLayerNotesUtils::setLayerNotes( this, notes );
+    }
   }
 }
 
@@ -1702,7 +1865,11 @@ QStringList QgsMapLayer::customPropertyKeys() const
 
 void QgsMapLayer::setCustomProperty( const QString &key, const QVariant &value )
 {
-  mCustomProperties.setValue( key, value );
+  if ( !mCustomProperties.contains( key ) || mCustomProperties.value( key ) != value )
+  {
+    mCustomProperties.setValue( key, value );
+    emit customPropertyChanged( key );
+  }
 }
 
 void QgsMapLayer::setCustomProperties( const QgsObjectCustomProperties &properties )
@@ -1722,7 +1889,12 @@ QVariant QgsMapLayer::customProperty( const QString &value, const QVariant &defa
 
 void QgsMapLayer::removeCustomProperty( const QString &key )
 {
-  mCustomProperties.remove( key );
+
+  if ( mCustomProperties.contains( key ) )
+  {
+    mCustomProperties.remove( key );
+    emit customPropertyChanged( key );
+  }
 }
 
 QgsError QgsMapLayer::error() const
@@ -1733,6 +1905,11 @@ QgsError QgsMapLayer::error() const
 
 
 bool QgsMapLayer::isEditable() const
+{
+  return false;
+}
+
+bool QgsMapLayer::isModified() const
 {
   return false;
 }
@@ -1769,7 +1946,11 @@ bool QgsMapLayer::isTemporary() const
 
 void QgsMapLayer::setValid( bool valid )
 {
+  if ( mValid == valid )
+    return;
+
   mValid = valid;
+  emit isValidChanged();
 }
 
 void QgsMapLayer::setLegend( QgsMapLayerLegend *legend )
@@ -1807,6 +1988,7 @@ void QgsMapLayer::setRenderer3D( QgsAbstract3DRenderer *renderer )
   delete m3DRenderer;
   m3DRenderer = renderer;
   emit renderer3DChanged();
+  trigger3DUpdate();
 }
 
 QgsAbstract3DRenderer *QgsMapLayer::renderer3D() const
@@ -1822,6 +2004,11 @@ void QgsMapLayer::triggerRepaint( bool deferredUpdate )
   mRepaintRequestedFired = true;
   emit repaintRequested( deferredUpdate );
   mRepaintRequestedFired = false;
+}
+
+void QgsMapLayer::trigger3DUpdate()
+{
+  emit request3DUpdate();
 }
 
 void QgsMapLayer::setMetadata( const QgsLayerMetadata &metadata )
@@ -1843,12 +2030,13 @@ QDateTime QgsMapLayer::timestamp() const
 
 void QgsMapLayer::emitStyleChanged()
 {
-  emit styleChanged();
+  if ( !mBlockStyleChangedSignal )
+    emit styleChanged();
 }
 
-void QgsMapLayer::setExtent( const QgsRectangle &r )
+void QgsMapLayer::setExtent( const QgsRectangle &extent )
 {
-  mExtent = r;
+  updateExtent( extent );
 }
 
 bool QgsMapLayer::isReadOnly() const
@@ -1878,7 +2066,7 @@ QString QgsMapLayer::generateId( const QString &layerName )
   // underscore) with an underscore.
   // Note that the first backslash in the regular expression is
   // there for the compiler, so the pattern is actually \W
-  id.replace( QRegExp( "[\\W]" ), QStringLiteral( "_" ) );
+  id.replace( QRegularExpression( "[\\W]" ), QStringLiteral( "_" ) );
   return id;
 }
 
@@ -1914,24 +2102,175 @@ bool QgsMapLayer::setDependencies( const QSet<QgsMapLayerDependency> &oDeps )
 
 void QgsMapLayer::setRefreshOnNotifyEnabled( bool enabled )
 {
-  if ( !dataProvider() )
+  QgsDataProvider *lDataProvider = dataProvider();
+
+  if ( !lDataProvider )
     return;
 
   if ( enabled && !isRefreshOnNotifyEnabled() )
   {
-    dataProvider()->setListening( enabled );
-    connect( dataProvider(), &QgsVectorDataProvider::notify, this, &QgsMapLayer::onNotifiedTriggerRepaint );
+    lDataProvider->setListening( enabled );
+    connect( lDataProvider, &QgsDataProvider::notify, this, &QgsMapLayer::onNotified );
   }
   else if ( !enabled && isRefreshOnNotifyEnabled() )
   {
     // we don't want to disable provider listening because someone else could need it (e.g. actions)
-    disconnect( dataProvider(), &QgsVectorDataProvider::notify, this, &QgsMapLayer::onNotifiedTriggerRepaint );
+    disconnect( lDataProvider, &QgsDataProvider::notify, this, &QgsMapLayer::onNotified );
   }
   mIsRefreshOnNofifyEnabled = enabled;
 }
 
-void QgsMapLayer::onNotifiedTriggerRepaint( const QString &message )
+QgsProject *QgsMapLayer::project() const
+{
+  if ( QgsMapLayerStore *store = qobject_cast<QgsMapLayerStore *>( parent() ) )
+  {
+    return qobject_cast<QgsProject *>( store->parent() );
+  }
+  return nullptr;
+}
+
+void QgsMapLayer::onNotified( const QString &message )
 {
   if ( refreshOnNotifyMessage().isEmpty() || refreshOnNotifyMessage() == message )
+  {
     triggerRepaint();
+    emit dataChanged();
+  }
+}
+
+QgsRectangle QgsMapLayer::wgs84Extent( bool forceRecalculate ) const
+{
+  QgsRectangle wgs84Extent;
+
+  if ( ! forceRecalculate && ! mWgs84Extent.isNull() )
+  {
+    wgs84Extent = mWgs84Extent;
+  }
+  else if ( ! mExtent.isNull() )
+  {
+    const QgsCoordinateTransform transformer { crs(), QgsCoordinateReferenceSystem::fromOgcWmsCrs( geoEpsgCrsAuthId() ), transformContext() };
+    try
+    {
+      wgs84Extent = transformer.transformBoundingBox( mExtent );
+    }
+    catch ( const QgsCsException &cse )
+    {
+      QgsMessageLog::logMessage( tr( "Error transforming extent: %1" ).arg( cse.what() ) );
+      wgs84Extent = QgsRectangle();
+    }
+  }
+  return wgs84Extent;
+}
+
+void QgsMapLayer::updateExtent( const QgsRectangle &extent ) const
+{
+  if ( extent == mExtent )
+    return;
+
+  mExtent = extent;
+
+  // do not update the wgs84 extent if we trust layer metadata
+  if ( mReadFlags & QgsMapLayer::ReadFlag::FlagTrustLayerMetadata )
+    return;
+
+  mWgs84Extent = wgs84Extent( true );
+}
+
+void QgsMapLayer::invalidateWgs84Extent()
+{
+  // do not update the wgs84 extent if we trust layer metadata
+  if ( mReadFlags & QgsMapLayer::ReadFlag::FlagTrustLayerMetadata )
+    return;
+
+  mWgs84Extent = QgsRectangle();
+}
+
+QString QgsMapLayer::crsHtmlMetadata() const
+{
+  QString metadata = QStringLiteral( "<h1>" ) + tr( "Coordinate Reference System (CRS)" ) + QStringLiteral( "</h1>\n<hr>\n" );
+  metadata += QLatin1String( "<table class=\"list-view\">\n" );
+
+  // Identifier
+  const QgsCoordinateReferenceSystem c = crs();
+  if ( !c.isValid() )
+    metadata += QStringLiteral( "<tr><td colspan=\"2\" class=\"highlight\">" ) + tr( "Unknown" ) + QStringLiteral( "</td></tr>\n" );
+  else
+  {
+    metadata += QStringLiteral( "<tr><td class=\"highlight\">" ) + tr( "Name" ) + QStringLiteral( "</td><td>" ) + c.userFriendlyIdentifier( QgsCoordinateReferenceSystem::FullString ) + QStringLiteral( "</td></tr>\n" );
+
+    // map units
+    metadata += QStringLiteral( "<tr><td class=\"highlight\">" ) + tr( "Units" ) + QStringLiteral( "</td><td>" )
+                + ( c.isGeographic() ? tr( "Geographic (uses latitude and longitude for coordinates)" ) : QgsUnitTypes::toString( c.mapUnits() ) )
+                + QStringLiteral( "</td></tr>\n" );
+
+
+    // operation
+    const QgsProjOperation operation = c.operation();
+    metadata += QStringLiteral( "<tr><td class=\"highlight\">" ) + tr( "Method" ) + QStringLiteral( "</td><td>" ) + operation.description() + QStringLiteral( "</td></tr>\n" );
+
+    // celestial body
+    try
+    {
+      const QString celestialBody = c.celestialBodyName();
+      if ( !celestialBody.isEmpty() )
+      {
+        metadata += QStringLiteral( "<tr><td class=\"highlight\">" ) + tr( "Celestial body" ) + QStringLiteral( "</td><td>" ) + celestialBody + QStringLiteral( "</td></tr>\n" );
+      }
+    }
+    catch ( QgsNotSupportedException & )
+    {
+
+    }
+
+    QString accuracyString;
+    // dynamic crs with no epoch?
+    if ( c.isDynamic() && std::isnan( c.coordinateEpoch() ) )
+    {
+      accuracyString = tr( "Based on a dynamic CRS, but no coordinate epoch is set. Coordinates are ambiguous and of limited accuracy." );
+    }
+
+    // based on datum ensemble?
+    try
+    {
+      const QgsDatumEnsemble ensemble = c.datumEnsemble();
+      if ( ensemble.isValid() )
+      {
+        QString id;
+        if ( !ensemble.code().isEmpty() )
+          id = QStringLiteral( "<i>%1</i> (%2:%3)" ).arg( ensemble.name(), ensemble.authority(), ensemble.code() );
+        else
+          id = QStringLiteral( "<i>%</i>”" ).arg( ensemble.name() );
+
+        if ( ensemble.accuracy() > 0 )
+        {
+          accuracyString = tr( "Based on %1, which has a limited accuracy of <b>at best %2 meters</b>." ).arg( id ).arg( ensemble.accuracy() );
+        }
+        else
+        {
+          accuracyString = tr( "Based on %1, which has a limited accuracy." ).arg( id );
+        }
+      }
+    }
+    catch ( QgsNotSupportedException & )
+    {
+
+    }
+
+    if ( !accuracyString.isEmpty() )
+    {
+      metadata += QStringLiteral( "<tr><td class=\"highlight\">" ) + tr( "Accuracy" ) + QStringLiteral( "</td><td>" ) + accuracyString + QStringLiteral( "</td></tr>\n" );
+    }
+
+    // static/dynamic
+    metadata += QStringLiteral( "<tr><td class=\"highlight\">" ) + tr( "Reference" ) + QStringLiteral( "</td><td>%1</td></tr>\n" ).arg( c.isDynamic() ? tr( "Dynamic (relies on a datum which is not plate-fixed)" ) : tr( "Static (relies on a datum which is plate-fixed)" ) );
+
+    // coordinate epoch
+    if ( !std::isnan( c.coordinateEpoch() ) )
+    {
+      metadata += QStringLiteral( "<tr><td class=\"highlight\">" ) + tr( "Coordinate epoch" ) + QStringLiteral( "</td><td>%1</td></tr>\n" ).arg( c.coordinateEpoch() );
+    }
+  }
+
+  metadata += QLatin1String( "</table>\n<br><br>\n" );
+  return metadata;
 }

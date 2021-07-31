@@ -66,7 +66,7 @@ class RandomSelectionWithinSubsets(QgisAlgorithm):
         super().__init__()
 
     def flags(self):
-        return super().flags() | QgsProcessingAlgorithm.FlagNoThreading
+        return super().flags() | QgsProcessingAlgorithm.FlagNoThreading | QgsProcessingAlgorithm.FlagNotAvailableInStandaloneTool
 
     def initAlgorithm(self, config=None):
         self.methods = [self.tr('Number of selected features'),
@@ -115,7 +115,7 @@ class RandomSelectionWithinSubsets(QgisAlgorithm):
 
         total = 100.0 / (featureCount * len(unique)) if featureCount else 1
 
-        if not len(unique) == featureCount:
+        if len(unique) != featureCount:
             classes = defaultdict(list)
 
             features = layer.getFeatures(QgsFeatureRequest().setFlags(QgsFeatureRequest.NoGeometry).setSubsetOfAttributes([index]))

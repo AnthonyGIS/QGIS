@@ -41,6 +41,7 @@
 #include <QPainter>
 #include <QTimer>
 #include <QEventLoop>
+#include <QThread>
 
 QgsLayoutItemLabel::QgsLayoutItemLabel( QgsLayout *layout )
   : QgsLayoutItem( layout )
@@ -198,6 +199,7 @@ void QgsLayoutItemLabel::contentChanged()
       break;
     }
     case ModeFont:
+      invalidateCache();
       break;
   }
 }
@@ -514,6 +516,15 @@ void QgsLayoutItemLabel::refresh()
   refreshExpressionContext();
 }
 
+void QgsLayoutItemLabel::convertToStaticText()
+{
+  const QString evaluated = currentText();
+  if ( evaluated == mText )
+    return; // no changes
+
+  setText( evaluated );
+}
+
 void QgsLayoutItemLabel::itemShiftAdjustSize( double newWidth, double newHeight, double &xShift, double &yShift ) const
 {
   //keep alignment point constant
@@ -611,7 +622,7 @@ QUrl QgsLayoutItemLabel::createStylesheetUrl() const
 
   QByteArray ba;
   ba.append( stylesheet.toUtf8() );
-  QUrl cssFileURL = QUrl( "data:text/css;charset=utf-8;base64," + ba.toBase64() );
+  QUrl cssFileURL = QUrl( QString( "data:text/css;charset=utf-8;base64," + ba.toBase64() ) );
 
   return cssFileURL;
 }

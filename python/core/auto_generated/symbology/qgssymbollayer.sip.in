@@ -22,7 +22,7 @@ class QgsSymbolLayer
 %ConvertToSubClassCode
     switch ( sipCpp->type() )
     {
-      case QgsSymbol::Marker:
+      case Qgis::SymbolType::Marker:
         if ( sipCpp->layerType() == "EllipseMarker" )
           sipType = sipType_QgsEllipseSymbolLayer;
         else if ( sipCpp->layerType() == "FontMarker" )
@@ -43,18 +43,20 @@ class QgsSymbolLayer
           sipType = sipType_QgsMarkerSymbolLayer;
         break;
 
-      case QgsSymbol::Line:
+      case Qgis::SymbolType::Line:
         if ( sipCpp->layerType() == "MarkerLine" )
           sipType = sipType_QgsMarkerLineSymbolLayer;
         else if ( sipCpp->layerType() == "SimpleLine" )
           sipType = sipType_QgsSimpleLineSymbolLayer;
         else if ( sipCpp->layerType() == "ArrowLine" )
           sipType = sipType_QgsArrowSymbolLayer;
+        else if ( sipCpp->layerType() == "InterpolatedLine" )
+          sipType = sipType_QgsInterpolatedLineSymbolLayer;
         else
           sipType = sipType_QgsLineSymbolLayer;
         break;
 
-      case QgsSymbol::Fill:
+      case Qgis::SymbolType::Fill:
         if ( sipCpp->layerType() == "SimpleFill" )
           sipType = sipType_QgsSimpleFillSymbolLayer;
         else if ( sipCpp->layerType() == "LinePatternFill" )
@@ -77,7 +79,7 @@ class QgsSymbolLayer
           sipType = sipType_QgsFillSymbolLayer;
         break;
 
-      case QgsSymbol::Hybrid:
+      case Qgis::SymbolType::Hybrid:
         sipType = sipType_QgsGeometryGeneratorSymbolLayer;
         break;
     }
@@ -146,6 +148,8 @@ class QgsSymbolLayer
       PropertyFontFamily,
       PropertyFontStyle,
       PropertyDashPatternOffset,
+      PropertyTrimStart,
+      PropertyTrimEnd,
     };
 
     static const QgsPropertiesDefinition &propertyDefinitions();
@@ -305,11 +309,14 @@ The default implementation does nothing.
 Shall be reimplemented by subclasses to create a deep copy of the instance.
 %End
 
-    virtual void toSld( QDomDocument &doc, QDomElement &element, const QgsStringMap &props ) const;
+    virtual void toSld( QDomDocument &doc, QDomElement &element, const QVariantMap &props ) const;
+%Docstring
+Saves the symbol layer as SLD
+%End
 
     virtual QString ogrFeatureStyle( double mmScaleFactor, double mapUnitScaleFactor ) const;
 
-    virtual QgsStringMap properties() const = 0;
+    virtual QVariantMap properties() const = 0;
 %Docstring
 Should be reimplemented by subclasses to return a string map that
 contains the configuration information for the symbol layer. This
@@ -328,15 +335,38 @@ Returns the symbol's sub symbol, if present.
 Sets layer's subsymbol. takes ownership of the passed symbol
 %End
 
-    QgsSymbol::SymbolType type() const;
+    Qgis::SymbolType type() const;
 
     virtual bool isCompatibleWithSymbol( QgsSymbol *symbol ) const;
 %Docstring
 Returns if the layer can be used below the specified symbol
 %End
 
+    virtual bool canCauseArtifactsBetweenAdjacentTiles() const;
+%Docstring
+Returns ``True`` if the symbol layer rendering can cause visible artifacts across a single feature
+when the feature is rendered as a series of adjacent map tiles each containing a portion of the feature's geometry.
+
+The default implementation returns ``False``.
+
+.. versionadded:: 3.18
+%End
+
     void setLocked( bool locked );
+%Docstring
+Sets whether the layer's colors are locked.
+
+If ``locked`` is ``True`` then the symbol layer colors are locked and the layer will ignore any symbol-level color changes.
+
+.. seealso:: :py:func:`isLocked`
+%End
+
     bool isLocked() const;
+%Docstring
+Returns ``True`` if the symbol layer colors are locked and the layer will ignore any symbol-level color changes.
+
+.. seealso:: :py:func:`setLocked`
+%End
 
     virtual double estimateMaxBleed( const QgsRenderContext &context ) const;
 %Docstring
@@ -344,7 +374,7 @@ Returns the estimated maximum distance which the layer style will bleed outside
 the drawn shape when drawn in the specified /a context. For example, polygons
 drawn with an stroke will draw half the width
 of the stroke outside of the polygon. This amount is estimated, since it may
-be affected by data defined symbology rules.*
+be affected by data defined symbology rules.
 %End
 
     virtual void setOutputUnit( QgsUnitTypes::RenderUnit unit );
@@ -366,9 +396,16 @@ symbol layer subclasses will interpret this in different ways, e.g., a marker sy
 layer may use it to specify the units for the marker size, while a line symbol
 layer may use it to specify the units for the line width.
 
-:return: output unit, or QgsUnitTypes.RenderUnknownUnit if the symbol layer contains mixed units
+:return: output unit, or :py:class:`QgsUnitTypes`.RenderUnknownUnit if the symbol layer contains mixed units
 
 .. seealso:: :py:func:`setOutputUnit`
+%End
+
+    virtual bool usesMapUnits() const;
+%Docstring
+Returns ``True`` if the symbol layer has any components which use map unit based sizes.
+
+.. versionadded:: 3.18
 %End
 
     virtual void setMapUnitScale( const QgsMapUnitScale &scale );
@@ -503,7 +540,7 @@ Sets the symbol layer's property collection, used for data defined overrides.
 
 :param collection: property collection. Existing properties will be replaced.
 
-.. seealso:: :py:func:`properties`
+.. seealso:: :py:func:`dataDefinedProperties`
 
 .. versionadded:: 3.0
 %End
@@ -515,7 +552,7 @@ Returns ``True`` if the symbol layer (or any of its sub-symbols) contains data d
 .. versionadded:: 3.4.5
 %End
 
-    virtual QgsSymbolLayerReferenceList masks() const;
+    virtual QList<QgsSymbolLayerReference> masks() const;
 %Docstring
 Returns masks defined by this symbol layer.
 This is a list of symbol layers of other layers that should be occluded.
@@ -525,7 +562,13 @@ This is a list of symbol layers of other layers that should be occluded.
 
   protected:
 
-    QgsSymbolLayer( QgsSymbol::SymbolType type, bool locked = false );
+    QgsSymbolLayer( Qgis::SymbolType type, bool locked = false );
+%Docstring
+Constructor for QgsSymbolLayer.
+
+:param type: specifies the associated symbol type
+:param locked: if ``True``, then symbol layer colors will be locked and will ignore any symbol-level color changes.
+%End
 
 
 
@@ -533,7 +576,7 @@ This is a list of symbol layers of other layers that should be occluded.
 
 
 
-    void restoreOldDataDefinedProperties( const QgsStringMap &stringMap );
+    void restoreOldDataDefinedProperties( const QVariantMap &stringMap );
 %Docstring
 Restores older data defined properties from string map.
 
@@ -563,7 +606,7 @@ Copies paint effect of this layer to another symbol layer
 
 class QgsMarkerSymbolLayer : QgsSymbolLayer
 {
-%Docstring
+%Docstring(signature="appended")
 Abstract base class for marker symbol layers.
 %End
 
@@ -714,7 +757,7 @@ Returns the map unit scale for the symbol's size.
 .. seealso:: :py:func:`sizeUnit`
 %End
 
-    void setScaleMethod( QgsSymbol::ScaleMethod scaleMethod );
+    void setScaleMethod( Qgis::ScaleMethod scaleMethod );
 %Docstring
 Sets the method to use for scaling the marker's size.
 
@@ -723,7 +766,7 @@ Sets the method to use for scaling the marker's size.
 .. seealso:: :py:func:`scaleMethod`
 %End
 
-    QgsSymbol::ScaleMethod scaleMethod() const;
+    Qgis::ScaleMethod scaleMethod() const;
 %Docstring
 Returns the method to use for scaling the marker's size.
 
@@ -848,10 +891,10 @@ the vertical anchor point is aligned with the marker's desired location.
 .. seealso:: :py:func:`horizontalAnchorPoint`
 %End
 
-    virtual void toSld( QDomDocument &doc, QDomElement &element, const QgsStringMap &props ) const;
+    virtual void toSld( QDomDocument &doc, QDomElement &element, const QVariantMap &props ) const;
 
 
-    virtual void writeSldMarker( QDomDocument &doc, QDomElement &element, const QgsStringMap &props ) const;
+    virtual void writeSldMarker( QDomDocument &doc, QDomElement &element, const QVariantMap &props ) const;
 %Docstring
 Writes the symbol layer definition as a SLD XML element.
 

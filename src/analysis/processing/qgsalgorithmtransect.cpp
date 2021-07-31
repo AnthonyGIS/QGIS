@@ -50,14 +50,14 @@ void QgsTransectAlgorithm::initAlgorithm( const QVariantMap & )
 {
   addParameter( new QgsProcessingParameterFeatureSource( QStringLiteral( "INPUT" ),
                 QObject::tr( "Input layer" ), QList< int >() << QgsProcessing::TypeVectorLine ) );
-  std::unique_ptr< QgsProcessingParameterDistance > length = qgis::make_unique< QgsProcessingParameterDistance >( QStringLiteral( "LENGTH" ), QObject::tr( "Length of the transect" ),
+  std::unique_ptr< QgsProcessingParameterDistance > length = std::make_unique< QgsProcessingParameterDistance >( QStringLiteral( "LENGTH" ), QObject::tr( "Length of the transect" ),
       5.0, QStringLiteral( "INPUT" ), false, 0 );
   length->setIsDynamic( true );
   length->setDynamicPropertyDefinition( QgsPropertyDefinition( QStringLiteral( "LENGTH" ), QObject::tr( "Length of the transect" ), QgsPropertyDefinition::DoublePositive ) );
   length->setDynamicLayerParameterName( QStringLiteral( "INPUT" ) );
   addParameter( length.release() );
 
-  std::unique_ptr< QgsProcessingParameterNumber > angle = qgis::make_unique< QgsProcessingParameterNumber >( QStringLiteral( "ANGLE" ), QObject::tr( "Angle in degrees from the original line at the vertices" ), QgsProcessingParameterNumber::Double,
+  std::unique_ptr< QgsProcessingParameterNumber > angle = std::make_unique< QgsProcessingParameterNumber >( QStringLiteral( "ANGLE" ), QObject::tr( "Angle in degrees from the original line at the vertices" ), QgsProcessingParameterNumber::Double,
       90.0, false, 0, 360 );
   angle->setIsDynamic( true );
   angle->setDynamicPropertyDefinition( QgsPropertyDefinition( QStringLiteral( "ANGLE" ), QObject::tr( "Angle in degrees" ), QgsPropertyDefinition::Double ) );
@@ -173,7 +173,7 @@ QVariantMap QgsTransectAlgorithm::processAlgorithm( const QVariantMap &parameter
     const QgsMultiLineString *multiLine = static_cast< const QgsMultiLineString *  >( inputGeometry.constGet() );
     for ( int id = 0; id < multiLine->numGeometries(); ++id )
     {
-      const QgsLineString *line = static_cast< const QgsLineString * >( multiLine->geometryN( id ) );
+      const QgsLineString *line = multiLine->lineStringN( id );
       QgsAbstractGeometry::vertex_iterator it = line->vertices_begin();
       while ( it != line->vertices_end() )
       {
@@ -187,7 +187,8 @@ QVariantMap QgsTransectAlgorithm::processAlgorithm( const QVariantMap &parameter
         outFeat.setAttributes( attrs );
         double angleAtVertex = line->vertexAngle( vertexId );
         outFeat.setGeometry( calcTransect( *it, angleAtVertex, evaluatedLength, orientation, evaluatedAngle ) );
-        sink->addFeature( outFeat, QgsFeatureSink::FastInsert );
+        if ( !sink->addFeature( outFeat, QgsFeatureSink::FastInsert ) )
+          throw QgsProcessingException( writeFeatureError( sink.get(), parameters, QStringLiteral( "OUTPUT" ) ) );
         number++;
         it++;
       }

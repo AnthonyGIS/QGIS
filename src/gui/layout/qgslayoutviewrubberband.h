@@ -30,7 +30,7 @@ class QgsLayout;
 
 /**
  * \ingroup gui
- * QgsLayoutViewRubberBand is an abstract base class for temporary rubber band items
+ * \brief QgsLayoutViewRubberBand is an abstract base class for temporary rubber band items
  * in various shapes, for use within QgsLayoutView widgets.
  * \since QGIS 3.0
  */
@@ -79,7 +79,7 @@ class GUI_EXPORT QgsLayoutViewRubberBand : public QObject
      * band is no longer required.
      * Returns the final bounding box of the rubber band.
      */
-    virtual QRectF finish( QPointF position = QPointF(), Qt::KeyboardModifiers modifiers = nullptr ) = 0;
+    virtual QRectF finish( QPointF position = QPointF(), Qt::KeyboardModifiers modifiers = Qt::KeyboardModifiers() ) = 0;
 
     /**
      * Returns the view associated with the rubber band.
@@ -153,7 +153,7 @@ class GUI_EXPORT QgsLayoutViewRubberBand : public QObject
 
 /**
  * \ingroup gui
- * QgsLayoutViewRectangularRubberBand is rectangular rubber band for use within QgsLayoutView widgets.
+ * \brief QgsLayoutViewRectangularRubberBand is rectangular rubber band for use within QgsLayoutView widgets.
  * \since QGIS 3.0
  */
 class GUI_EXPORT QgsLayoutViewRectangularRubberBand : public QgsLayoutViewRubberBand
@@ -172,7 +172,7 @@ class GUI_EXPORT QgsLayoutViewRectangularRubberBand : public QgsLayoutViewRubber
 
     void start( QPointF position, Qt::KeyboardModifiers modifiers ) override;
     void update( QPointF position, Qt::KeyboardModifiers modifiers ) override;
-    QRectF finish( QPointF position = QPointF(), Qt::KeyboardModifiers modifiers = nullptr ) override;
+    QRectF finish( QPointF position = QPointF(), Qt::KeyboardModifiers modifiers = Qt::KeyboardModifiers() ) override;
 
   private:
 
@@ -186,7 +186,7 @@ class GUI_EXPORT QgsLayoutViewRectangularRubberBand : public QgsLayoutViewRubber
 
 /**
  * \ingroup gui
- * QgsLayoutViewEllipseRubberBand is elliptical rubber band for use within QgsLayoutView widgets.
+ * \brief QgsLayoutViewEllipseRubberBand is elliptical rubber band for use within QgsLayoutView widgets.
  * \since QGIS 3.0
  */
 class GUI_EXPORT QgsLayoutViewEllipticalRubberBand : public QgsLayoutViewRubberBand
@@ -205,7 +205,7 @@ class GUI_EXPORT QgsLayoutViewEllipticalRubberBand : public QgsLayoutViewRubberB
 
     void start( QPointF position, Qt::KeyboardModifiers modifiers ) override;
     void update( QPointF position, Qt::KeyboardModifiers modifiers ) override;
-    QRectF finish( QPointF position = QPointF(), Qt::KeyboardModifiers modifiers = nullptr ) override;
+    QRectF finish( QPointF position = QPointF(), Qt::KeyboardModifiers modifiers = Qt::KeyboardModifiers() ) override;
 
   private:
 
@@ -219,7 +219,7 @@ class GUI_EXPORT QgsLayoutViewEllipticalRubberBand : public QgsLayoutViewRubberB
 
 /**
  * \ingroup gui
- * QgsLayoutViewTriangleRubberBand is triangular rubber band for use within QgsLayoutView widgets.
+ * \brief QgsLayoutViewTriangleRubberBand is triangular rubber band for use within QgsLayoutView widgets.
  * \since QGIS 3.0
  */
 class GUI_EXPORT QgsLayoutViewTriangleRubberBand : public QgsLayoutViewRubberBand
@@ -238,7 +238,7 @@ class GUI_EXPORT QgsLayoutViewTriangleRubberBand : public QgsLayoutViewRubberBan
 
     void start( QPointF position, Qt::KeyboardModifiers modifiers ) override;
     void update( QPointF position, Qt::KeyboardModifiers modifiers ) override;
-    QRectF finish( QPointF position = QPointF(), Qt::KeyboardModifiers modifiers = nullptr ) override;
+    QRectF finish( QPointF position = QPointF(), Qt::KeyboardModifiers modifiers = Qt::KeyboardModifiers() ) override;
 
   private:
 

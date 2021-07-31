@@ -35,6 +35,7 @@ bool QgsRasterLayerTemporalProperties::isVisibleInTemporalRange( const QgsDateTi
       return range.isInfinite() || mFixedRange.isInfinite() || mFixedRange.overlaps( range );
 
     case ModeTemporalRangeFromDataProvider:
+    case ModeRedrawLayerOnly:
       return true;
   }
   return true;
@@ -53,9 +54,36 @@ QgsDateTimeRange QgsRasterLayerTemporalProperties::calculateTemporalExtent( QgsM
 
     case QgsRasterLayerTemporalProperties::ModeTemporalRangeFromDataProvider:
       return rasterLayer->dataProvider()->temporalCapabilities()->availableTemporalRange();
+
+    case QgsRasterLayerTemporalProperties::ModeRedrawLayerOnly:
+      break;
   }
 
   return QgsDateTimeRange();
+}
+
+QList<QgsDateTimeRange> QgsRasterLayerTemporalProperties::allTemporalRanges( QgsMapLayer *layer ) const
+{
+  QgsRasterLayer *rasterLayer = qobject_cast< QgsRasterLayer *>( layer );
+  if ( !rasterLayer )
+    return {};
+
+  switch ( mMode )
+  {
+    case QgsRasterLayerTemporalProperties::ModeFixedTemporalRange:
+      return { mFixedRange };
+
+    case QgsRasterLayerTemporalProperties::ModeTemporalRangeFromDataProvider:
+    {
+      QList< QgsDateTimeRange > ranges = rasterLayer->dataProvider()->temporalCapabilities()->allAvailableTemporalRanges();
+      return ranges.empty() ? QList< QgsDateTimeRange > { rasterLayer->dataProvider()->temporalCapabilities()->availableTemporalRange() } : ranges;
+    }
+
+    case QgsRasterLayerTemporalProperties::ModeRedrawLayerOnly:
+      break;
+  }
+
+  return {};
 }
 
 QgsRasterLayerTemporalProperties::TemporalMode QgsRasterLayerTemporalProperties::mode() const
@@ -72,7 +100,7 @@ void QgsRasterLayerTemporalProperties::setMode( QgsRasterLayerTemporalProperties
 
 QgsTemporalProperty::Flags QgsRasterLayerTemporalProperties::flags() const
 {
-  return mode() == ModeFixedTemporalRange ? QgsTemporalProperty::FlagDontInvalidateCachedRendersWhenRangeChanges : QgsTemporalProperty::Flags( nullptr );
+  return mode() == ModeFixedTemporalRange ? QgsTemporalProperty::FlagDontInvalidateCachedRendersWhenRangeChanges : QgsTemporalProperty::Flags();
 }
 
 QgsRasterDataProviderTemporalCapabilities::IntervalHandlingMethod QgsRasterLayerTemporalProperties::intervalHandlingMethod() const

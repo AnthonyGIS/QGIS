@@ -20,7 +20,7 @@
 
 class QgsWidgetWrapper : QObject
 {
-%Docstring
+%Docstring(signature="appended")
 Manages an editor widget
 Widget and wrapper share the same parent
 
@@ -178,7 +178,7 @@ might be lost.
 
     void contextChanged();
 %Docstring
-Signal when QgsAttributeEditorContext mContext changed
+Signal when :py:class:`QgsAttributeEditorContext` mContext changed
 
 .. versionadded:: 3.4
 %End
@@ -211,7 +211,7 @@ This method should initialize the editor widget with runtime data. Fill your com
 
     virtual void setFeature( const QgsFeature &feature ) = 0;
 %Docstring
-Is called, when the value of the widget needs to be changed. Update the widget representation
+Is called when the value of the widget needs to be changed. Updates the widget representation
 to reflect the new value.
 
 :param feature: The new feature

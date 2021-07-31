@@ -38,7 +38,7 @@ class QgsLayoutItem;
 
 /**
  * \ingroup gui
- * Abstract base class for all layout view tools.
+ * \brief Abstract base class for all layout view tools.
  * Layout view tools are user interactive tools for manipulating and adding items
  * to QgsLayoutView widgets.
  * \since QGIS 3.0
@@ -217,7 +217,7 @@ class GUI_EXPORT QgsLayoutViewTool : public QObject
     //! Pointer to layout view.
     QgsLayoutView *mView = nullptr;
 
-    QgsLayoutViewTool::Flags mFlags = nullptr;
+    QgsLayoutViewTool::Flags mFlags = QgsLayoutViewTool::Flags();
 
     //! Cursor used by tool
     QCursor mCursor = Qt::ArrowCursor;

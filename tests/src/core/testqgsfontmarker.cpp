@@ -33,6 +33,7 @@
 #include "qgsmarkersymbollayer.h"
 #include "qgsproperty.h"
 #include "qgsfontutils.h"
+#include "qgsmarkersymbol.h"
 
 //qgis test includes
 #include "qgsrenderchecker.h"
@@ -59,6 +60,9 @@ class TestQgsFontMarkerSymbol : public QObject
     void fontMarkerSymbolStroke();
     void bounds();
     void fontMarkerSymbolDataDefinedProperties();
+    void opacityWithDataDefinedColor();
+    void dataDefinedOpacity();
+    void massiveFont();
 
   private:
     bool mTestHasError =  false ;
@@ -81,7 +85,7 @@ void TestQgsFontMarkerSymbol::initTestCase()
   QgsApplication::init();
   QgsApplication::initQgis();
   QgsApplication::showSettings();
-  QgsFontUtils::loadStandardTestFonts( QStringList() << QStringLiteral( "Bold" ) );
+  QgsFontUtils::loadStandardTestFonts( QStringList() << QStringLiteral( "Bold" ) << QStringLiteral( "Oblique" ) );
 
   //create some objects that will be used in all tests...
   QString myDataDir( TEST_DATA_DIR ); //defined in CmakeLists.txt
@@ -142,7 +146,6 @@ void TestQgsFontMarkerSymbol::fontMarkerSymbolStyle()
 {
   mReport += QLatin1String( "<h2>Font marker symbol style layer test</h2>\n" );
 
-  QgsFontUtils::loadStandardTestFonts( QStringList() << QStringLiteral( "Bold" ) << QStringLiteral( "Oblique" ) );
   mFontMarkerLayer->setColor( Qt::blue );
   QFont font = QgsFontUtils::getStandardTestFont( QStringLiteral( "Bold" ) );
   mFontMarkerLayer->setFontFamily( font.family() );
@@ -150,18 +153,11 @@ void TestQgsFontMarkerSymbol::fontMarkerSymbolStyle()
   mFontMarkerLayer->setCharacter( QChar( 'A' ) );
   mFontMarkerLayer->setSize( 12 );
   QVERIFY( imageCheck( "fontmarker_style" ) );
-
-  // Loading both Bold and Oblique in the initTestCase() function creates inconsistent results on windows and linux, this is a workaround
-  QFontDatabase fontDb;
-  fontDb.removeAllApplicationFonts();
-  QgsFontUtils::loadStandardTestFonts( QStringList() << QStringLiteral( "Bold" ) );
 }
 
 void TestQgsFontMarkerSymbol::fontMarkerSymbolDataDefinedProperties()
 {
   mReport += QLatin1String( "<h2>Font marker symbol data defined properties layer test</h2>\n" );
-
-  QgsFontUtils::loadStandardTestFonts( QStringList() << QStringLiteral( "Bold" ) << QStringLiteral( "Oblique" ) );
   mFontMarkerLayer->setColor( Qt::blue );
   QFont font = QgsFontUtils::getStandardTestFont( QStringLiteral( "Bold" ) );
   mFontMarkerLayer->setFontFamily( font.family() );
@@ -174,17 +170,13 @@ void TestQgsFontMarkerSymbol::fontMarkerSymbolDataDefinedProperties()
   QVERIFY( imageCheck( "fontmarker_datadefinedproperties" ) );
 
   mFontMarkerLayer->setDataDefinedProperties( QgsPropertyCollection() );
-
-  // Loading both Bold and Oblique in the initTestCase() function creates inconsistent results on windows and linux, this is a workaround
-  QFontDatabase fontDb;
-  fontDb.removeAllApplicationFonts();
-  QgsFontUtils::loadStandardTestFonts( QStringList() << QStringLiteral( "Bold" ) );
 }
 
 void TestQgsFontMarkerSymbol::fontMarkerSymbolStroke()
 {
   mFontMarkerLayer->setColor( Qt::blue );
   QFont font = QgsFontUtils::getStandardTestFont( QStringLiteral( "Bold" ) );
+  mFontMarkerLayer->setFontStyle( QStringLiteral( "Bold" ) );
   mFontMarkerLayer->setFontFamily( font.family() );
   mFontMarkerLayer->setCharacter( QChar( 'A' ) );
   mFontMarkerLayer->setSize( 30 );
@@ -209,6 +201,66 @@ void TestQgsFontMarkerSymbol::bounds()
   QVERIFY( result );
 }
 
+void TestQgsFontMarkerSymbol::opacityWithDataDefinedColor()
+{
+  mFontMarkerLayer->setColor( QColor( 200, 200, 200 ) );
+  mFontMarkerLayer->setStrokeColor( QColor( 0, 0, 0 ) );
+  QFont font = QgsFontUtils::getStandardTestFont( QStringLiteral( "Bold" ) );
+  mFontMarkerLayer->setFontFamily( font.family() );
+  mFontMarkerLayer->setDataDefinedProperties( QgsPropertyCollection() );
+  mFontMarkerLayer->setCharacter( QChar( 'X' ) );
+  mFontMarkerLayer->setSize( 12 );
+  mFontMarkerLayer->setDataDefinedProperty( QgsSymbolLayer::PropertyFillColor, QgsProperty::fromExpression( QStringLiteral( "if(importance > 2, 'red', 'green')" ) ) );
+  mFontMarkerLayer->setDataDefinedProperty( QgsSymbolLayer::PropertyStrokeColor, QgsProperty::fromExpression( QStringLiteral( "if(importance > 2, 'blue', 'magenta')" ) ) );
+  mFontMarkerLayer->setStrokeWidth( 0.5 );
+  mMarkerSymbol->setOpacity( 0.5 );
+
+  bool result = imageCheck( QStringLiteral( "fontmarker_opacityddcolor" ) );
+  mFontMarkerLayer->setDataDefinedProperty( QgsSymbolLayer::PropertyFillColor, QgsProperty() );
+  mFontMarkerLayer->setDataDefinedProperty( QgsSymbolLayer::PropertyStrokeColor, QgsProperty() );
+  mMarkerSymbol->setOpacity( 1.0 );
+  QVERIFY( result );
+}
+
+void TestQgsFontMarkerSymbol::dataDefinedOpacity()
+{
+  mFontMarkerLayer->setColor( QColor( 200, 200, 200 ) );
+  mFontMarkerLayer->setStrokeColor( QColor( 0, 0, 0 ) );
+  QFont font = QgsFontUtils::getStandardTestFont( QStringLiteral( "Bold" ) );
+  mFontMarkerLayer->setFontFamily( font.family() );
+  mFontMarkerLayer->setDataDefinedProperties( QgsPropertyCollection() );
+  mFontMarkerLayer->setCharacter( QChar( 'X' ) );
+  mFontMarkerLayer->setSize( 12 );
+  mFontMarkerLayer->setDataDefinedProperty( QgsSymbolLayer::PropertyFillColor, QgsProperty::fromExpression( QStringLiteral( "if(importance > 2, 'red', 'green')" ) ) );
+  mFontMarkerLayer->setDataDefinedProperty( QgsSymbolLayer::PropertyStrokeColor, QgsProperty::fromExpression( QStringLiteral( "if(importance > 2, 'blue', 'magenta')" ) ) );
+  mFontMarkerLayer->setStrokeWidth( 0.5 );
+  mMarkerSymbol->setDataDefinedProperty( QgsSymbol::PropertyOpacity, QgsProperty::fromExpression( QStringLiteral( "if(\"Heading\" > 100, 25, 50)" ) ) );
+
+  bool result = imageCheck( QStringLiteral( "fontmarker_ddopacity" ) );
+  mFontMarkerLayer->setDataDefinedProperties( QgsPropertyCollection() );
+  mMarkerSymbol->setDataDefinedProperty( QgsSymbol::PropertyOpacity, QgsProperty() );
+  QVERIFY( result );
+}
+
+void TestQgsFontMarkerSymbol::massiveFont()
+{
+  // test rendering a massive font
+  mFontMarkerLayer->setColor( QColor( 0, 0, 0, 100 ) );
+  mFontMarkerLayer->setStrokeColor( QColor( 0, 0, 0, 0 ) );
+  QFont font = QgsFontUtils::getStandardTestFont( QStringLiteral( "Bold" ) );
+  mFontMarkerLayer->setFontFamily( font.family() );
+  mFontMarkerLayer->setDataDefinedProperties( QgsPropertyCollection() );
+  mFontMarkerLayer->setCharacter( QChar( 'X' ) );
+  mFontMarkerLayer->setSize( 200 );
+  mFontMarkerLayer->setSizeUnit( QgsUnitTypes::RenderMillimeters );
+  mFontMarkerLayer->setDataDefinedProperty( QgsSymbolLayer::PropertySize, QgsProperty::fromExpression( QStringLiteral( "if(importance > 2, 100, 350)" ) ) );
+  mFontMarkerLayer->setDataDefinedProperty( QgsSymbolLayer::PropertyLayerEnabled, QgsProperty::fromExpression( QStringLiteral( "$id in (1, 4)" ) ) ); // 3
+  mFontMarkerLayer->setStrokeWidth( 0.5 );
+
+  bool result = imageCheck( QStringLiteral( "fontmarker_largesize" ) );
+  mFontMarkerLayer->setDataDefinedProperties( QgsPropertyCollection() );
+  QVERIFY( result );
+}
 
 //
 // Private helper functions not called directly by CTest

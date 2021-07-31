@@ -29,16 +29,17 @@
 #include "qgsmessagebar.h"
 #include "qgsgui.h"
 #include "qgsbrowserguimodel.h"
+#include "qgsbrowserwidget.h"
 
 QgsDataSourceManagerDialog::QgsDataSourceManagerDialog( QgsBrowserGuiModel *browserModel, QWidget *parent, QgsMapCanvas *canvas, Qt::WindowFlags fl )
   : QgsOptionsDialogBase( QStringLiteral( "Data Source Manager" ), parent, fl )
   , ui( new Ui::QgsDataSourceManagerDialog )
   , mPreviousRow( -1 )
   , mMapCanvas( canvas )
+  , mBrowserModel( browserModel )
 {
   ui->setupUi( this );
   ui->verticalLayout_2->setSpacing( 6 );
-  ui->verticalLayout_2->setMargin( 0 );
   ui->verticalLayout_2->setContentsMargins( 0, 0, 0, 0 );
 
   mMessageBar = new QgsMessageBar( this );
@@ -54,7 +55,7 @@ QgsDataSourceManagerDialog::QgsDataSourceManagerDialog( QgsBrowserGuiModel *brow
   connect( ui->mOptionsListWidget, &QListWidget::currentRowChanged, this, &QgsDataSourceManagerDialog::setCurrentPage );
 
   // BROWSER Add the browser widget to the first stacked widget page
-  mBrowserWidget = new QgsBrowserDockWidget( QStringLiteral( "Browser" ), browserModel, this );
+  mBrowserWidget = new QgsBrowserDockWidget( QStringLiteral( "Browser" ), mBrowserModel, this );
   mBrowserWidget->setFeatures( QDockWidget::NoDockWidgetFeatures );
   ui->mOptionsStackedWidget->addWidget( mBrowserWidget );
   mPageNames.append( QStringLiteral( "browser" ) );
@@ -62,16 +63,16 @@ QgsDataSourceManagerDialog::QgsDataSourceManagerDialog( QgsBrowserGuiModel *brow
   connect( mBrowserWidget, &QgsBrowserDockWidget::handleDropUriList, this, &QgsDataSourceManagerDialog::handleDropUriList );
   connect( mBrowserWidget, &QgsBrowserDockWidget::openFile, this, &QgsDataSourceManagerDialog::openFile );
   connect( mBrowserWidget, &QgsBrowserDockWidget::connectionsChanged, this, &QgsDataSourceManagerDialog::connectionsChanged );
-  connect( this, &QgsDataSourceManagerDialog::updateProjectHome, mBrowserWidget, &QgsBrowserDockWidget::updateProjectHome );
+  connect( this, &QgsDataSourceManagerDialog::updateProjectHome, mBrowserWidget->browserWidget(), &QgsBrowserWidget::updateProjectHome );
 
   // Add provider dialogs
   const QList<QgsSourceSelectProvider *> sourceSelectProviders = QgsGui::sourceSelectProviderRegistry()->providers( );
-  for ( const auto &provider : sourceSelectProviders )
+  for ( QgsSourceSelectProvider *provider : sourceSelectProviders )
   {
     QgsAbstractDataSourceWidget *dlg = provider->createDataSourceWidget( this );
     if ( !dlg )
     {
-      QgsMessageLog::logMessage( tr( "Cannot get %1 select dialog from source select provider %2." ).arg( provider->name(), provider->providerKey() ), QStringLiteral( "DataSourceManager" ), Qgis::Critical );
+      QgsMessageLog::logMessage( tr( "Cannot get %1 select dialog from source select provider %2." ).arg( provider->name(), provider->providerKey() ), QStringLiteral( "DataSourceManager" ), Qgis::MessageLevel::Critical );
       continue;
     }
     addProviderDialog( dlg, provider->providerKey(), provider->text(), provider->icon( ), provider->toolTip( ) );
@@ -115,7 +116,7 @@ void QgsDataSourceManagerDialog::setPreviousPage()
 
 void QgsDataSourceManagerDialog::refresh()
 {
-  mBrowserWidget->refresh();
+  mBrowserWidget->browserWidget()->refresh();
   emit providerDialogsRefreshRequested();
 }
 
@@ -134,6 +135,11 @@ void QgsDataSourceManagerDialog::reset()
 void QgsDataSourceManagerDialog::rasterLayerAdded( const QString &uri, const QString &baseName, const QString &providerKey )
 {
   emit addRasterLayer( uri, baseName, providerKey );
+}
+
+void QgsDataSourceManagerDialog::rasterLayersAdded( const QStringList &layersList )
+{
+  emit addRasterLayers( layersList );
 }
 
 void QgsDataSourceManagerDialog::vectorLayerAdded( const QString &vectorLayerPath, const QString &baseName, const QString &providerKey )
@@ -158,6 +164,8 @@ void QgsDataSourceManagerDialog::addProviderDialog( QgsAbstractDataSourceWidget 
   {
     dlg->setMapCanvas( mMapCanvas );
   }
+  dlg->setBrowserModel( mBrowserModel );
+
   connect( dlg, &QgsAbstractDataSourceWidget::rejected, this, &QgsDataSourceManagerDialog::reject );
   connect( dlg, &QgsAbstractDataSourceWidget::accepted, this, &QgsDataSourceManagerDialog::accept );
   makeConnections( dlg, providerKey );
@@ -186,10 +194,14 @@ void QgsDataSourceManagerDialog::makeConnections( QgsAbstractDataSourceWidget *d
   {
     addRasterLayer( uri, baseName, providerKey );
   } );
+  connect( dlg, &QgsAbstractDataSourceWidget::addRasterLayers,
+           this, &QgsDataSourceManagerDialog::rasterLayersAdded );
   // Mesh
   connect( dlg, &QgsAbstractDataSourceWidget::addMeshLayer, this, &QgsDataSourceManagerDialog::addMeshLayer );
   // Vector tile
   connect( dlg, &QgsAbstractDataSourceWidget::addVectorTileLayer, this, &QgsDataSourceManagerDialog::addVectorTileLayer );
+  // Point Cloud
+  connect( dlg, &QgsAbstractDataSourceWidget::addPointCloudLayer, this, &QgsDataSourceManagerDialog::addPointCloudLayer );
   // Virtual
   connect( dlg, &QgsAbstractDataSourceWidget::replaceVectorLayer,
            this, &QgsDataSourceManagerDialog::replaceSelectedVectorLayer );

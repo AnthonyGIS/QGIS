@@ -3,145 +3,90 @@
 #####################################################
 # Don't forget to include output directory, otherwise
 # the UI file won't be wrapped!
-INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}
+include_directories(
+  ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_CURRENT_BINARY_DIR}
-  ${CMAKE_SOURCE_DIR}/src/core
-  ${CMAKE_SOURCE_DIR}/src/core/auth
-  ${CMAKE_SOURCE_DIR}/src/core/expression
-  ${CMAKE_SOURCE_DIR}/src/core/geometry
-  ${CMAKE_SOURCE_DIR}/src/core/labeling
-  ${CMAKE_SOURCE_DIR}/src/core/mesh
-  ${CMAKE_SOURCE_DIR}/src/core/metadata
-  ${CMAKE_SOURCE_DIR}/src/core/pal
-  ${CMAKE_SOURCE_DIR}/src/core/raster
-  ${CMAKE_SOURCE_DIR}/src/core/symbology
-  ${CMAKE_SOURCE_DIR}/src/core/effects
-  ${CMAKE_SOURCE_DIR}/src/core/textrenderer
   ${CMAKE_SOURCE_DIR}/src/providers/wms
   ${CMAKE_SOURCE_DIR}/src/providers/postgres
-  ${CMAKE_SOURCE_DIR}/src/providers/arcgisrest
   ${CMAKE_SOURCE_DIR}/src/providers/mdal
   ${CMAKE_SOURCE_DIR}/src/providers/ogr
   ${CMAKE_SOURCE_DIR}/src/test
-  ${CMAKE_SOURCE_DIR}/external
-  ${CMAKE_SOURCE_DIR}/external/nlohmann
-
-  ${CMAKE_BINARY_DIR}/src/core
 )
-INCLUDE_DIRECTORIES(SYSTEM
-  ${QT_INCLUDE_DIR}
-  ${GEOS_INCLUDE_DIR}
-  ${GDAL_INCLUDE_DIR}
+include_directories(SYSTEM
   ${MDAL_INCLUDE_DIR}
-  ${QCA_INCLUDE_DIR}
-  ${QTKEYCHAIN_INCLUDE_DIR}
   ${POSTGRES_INCLUDE_DIR}
 )
 
-#note for tests we should not include the moc of our
-#qtests in the executable file list as the moc is
-#directly included in the sources
-#and should not be compiled twice. Trying to include
-#them in will cause an error at build time
-
-#No relinking and full RPATH for the install tree
-#See: http://www.cmake.org/Wiki/CMake_RPATH_handling#No_relinking_and_full_RPATH_for_the_install_tree
-
-MACRO (ADD_QGIS_TEST testname testsrc)
-  SET(qgis_${testname}_SRCS ${testsrc} ${util_SRCS})
-  ADD_CUSTOM_TARGET(qgis_${testname}moc ALL DEPENDS ${qgis_${testname}_MOC_SRCS})
-  ADD_EXECUTABLE(qgis_${testname} ${qgis_${testname}_SRCS})
-  # weng for qgis test folders. 20.4.27
-  set_target_properties(qgis_${testname} PROPERTIES FOLDER ${QGIS_QGIS_TEST_ROOT_FOLDER}/)
-  TARGET_LINK_LIBRARIES(qgis_${testname}
-    ${Qt5Xml_LIBRARIES}
-    ${Qt5Core_LIBRARIES}
-    ${Qt5Svg_LIBRARIES}
-    ${Qt5Test_LIBRARIES}
-    ${PROJ_LIBRARY}
-    ${GEOS_LIBRARY}
-    ${GDAL_LIBRARY}
-    qgis_core)
-  ADD_TEST(qgis_${testname} ${CMAKE_CURRENT_BINARY_DIR}/../../../output/bin/qgis_${testname} -maxwarnings 10000)
-ENDMACRO (ADD_QGIS_TEST)
 
 #############################################################
 # Tests:
 
-ADD_QGIS_TEST(wcsprovidertest testqgswcsprovider.cpp)
+add_qgis_test(testqgswcsprovider.cpp MODULE provider LINKEDLIBRARIES qgis_core)
 # Temporarily set to old version until server is reconfigured
-#SET(TEST_SERVER_URL "http://wcs.qgis.org/${COMPLETE_VERSION}")
-SET(TEST_SERVER_URL "http://wcs.qgis.org/1.9.0")
-#ADD_DEFINITIONS(-DTEST_SERVER_URL="${TEST_SERVER_URL}")
-SET_TARGET_PROPERTIES(qgis_wcsprovidertest PROPERTIES
+#set(TEST_SERVER_URL "http://wcs.qgis.org/${COMPLETE_VERSION}")
+set(TEST_SERVER_URL "http://wcs.qgis.org/1.9.0")
+#add_definitions(-DTEST_SERVER_URL="${TEST_SERVER_URL}")
+set_target_properties(test_provider_wcsprovider PROPERTIES
   COMPILE_FLAGS "-DTEST_SERVER_URL=\\\"${TEST_SERVER_URL}\\\""
 )
 
-IF (NOT FORCE_STATIC_PROVIDERS)
-  ADD_QGIS_TEST(arcgisrestutilstest testqgsarcgisrestutils.cpp)
-  TARGET_LINK_LIBRARIES(qgis_arcgisrestutilstest arcgisfeatureserverprovider_a)
-ENDIF (NOT FORCE_STATIC_PROVIDERS)
+add_qgis_test(testqgswmscapabilities.cpp MODULE provider LINKEDLIBRARIES provider_wms_a qgis_core)
+add_qgis_test(testqgswmsccapabilities.cpp MODULE provider LINKEDLIBRARIES provider_wms_a qgis_core)
+add_qgis_test(testqgswmsprovider.cpp MODULE provider LINKEDLIBRARIES provider_wms_a qgis_core)
 
-IF(NOT MSVC)
-  SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
-ENDIF(NOT MSVC)
+add_qgis_test(testqgspostgresprovider.cpp MODULE provider LINKEDLIBRARIES provider_postgres_a qgis_core)
+add_qgis_test(testqgspostgresconn.cpp MODULE provider LINKEDLIBRARIES provider_postgres_a qgis_core LABELS "POSTGRES")
 
-ADD_QGIS_TEST(wmscapabilitiestest
-              testqgswmscapabilities.cpp)
-TARGET_LINK_LIBRARIES(qgis_wmscapabilitiestest wmsprovider_a qgis_core)
+if (NOT FORCE_STATIC_PROVIDERS)
+  add_qgis_test(testqgsmdalprovider.cpp MODULE provider LINKEDLIBRARIES qgis_core)
+endif()
 
-ADD_QGIS_TEST(wmsccapabilitiestest
-              testqgswmsccapabilities.cpp)
-TARGET_LINK_LIBRARIES(qgis_wmsccapabilitiestest wmsprovider_a qgis_core)
+if (WITH_EPT)
+  add_qgis_test(testqgseptprovider.cpp MODULE provider LINKEDLIBRARIES qgis_core)
+endif()
 
-ADD_QGIS_TEST(wmsprovidertest
-              testqgswmsprovider.cpp)
-TARGET_LINK_LIBRARIES(qgis_wmsprovidertest wmsprovider_a qgis_core)
-
-ADD_QGIS_TEST(postgresprovidertest testqgspostgresprovider.cpp)
-TARGET_LINK_LIBRARIES(qgis_postgresprovidertest postgresprovider_a qgis_core)
-
-ADD_QGIS_TEST(postgresconntest testqgspostgresconn.cpp)
-TARGET_LINK_LIBRARIES(qgis_postgresconntest postgresprovider_a qgis_core)
-
-IF (NOT FORCE_STATIC_PROVIDERS)
-  ADD_QGIS_TEST(mdalprovidertest testqgsmdalprovider.cpp)
-ENDIF (NOT FORCE_STATIC_PROVIDERS)
+if (WITH_PDAL)
+  include_directories(
+    ${CMAKE_SOURCE_DIR}/src/providers/pdal
+  )
+  add_qgis_test(testqgspdalprovider.cpp MODULE provider LINKEDLIBRARIES provider_pdal_a qgis_core)
+endif()
 
 #############################################################
 # WCS public servers test:
 # No need to test on all platforms
-IF(UNIX AND NOT ANDROID AND CMAKE_BUILD_TYPE MATCHES Debug)
-  SET ( WCSTEST_SRCS
+if(UNIX AND NOT ANDROID AND CMAKE_BUILD_TYPE MATCHES Debug)
+  set ( WCSTEST_SRCS
         ../../../src/providers/wcs/qgswcscapabilities.cpp
         testqgswcspublicservers.cpp
   )
 
-  ADD_EXECUTABLE ( qgis_wcstest ${WCSTEST_SRCS} )
+  add_executable(test_provider_wcs ${WCSTEST_SRCS} )
+  target_compile_features(test_provider_wcs PRIVATE cxx_std_17)
   # weng for qgis test folders. 20.4.27
   set_target_properties(qgis_wcstest PROPERTIES FOLDER ${QGIS_QGIS_TEST_ROOT_FOLDER}/)
 
-  INCLUDE_DIRECTORIES(${CMAKE_CURRENT_SOURCE_DIR}
+  include_directories(${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../src/core
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../src/core/raster
     ${CMAKE_CURRENT_SOURCE_DIR}/../../../src/providers/wcs
   )
 
-  TARGET_LINK_LIBRARIES(qgis_wcstest
-    ${Qt5Core_LIBRARIES}
-    ${Qt5Network_LIBRARIES}
-    ${Qt5Svg_LIBRARIES}
-    ${Qt5Xml_LIBRARIES}
+  target_link_libraries(test_provider_wcs
+    ${QT_VERSION_BASE}::Core
+    ${QT_VERSION_BASE}::Network
+    ${QT_VERSION_BASE}::Svg
+    ${QT_VERSION_BASE}::Xml
     ${OPTIONAL_QTWEBKIT}
     qgis_core
   )
 
-  INSTALL (TARGETS qgis_wcstest
+  install (TARGETS test_provider_wcs
     BUNDLE DESTINATION ${QGIS_BIN_DIR}
     RUNTIME DESTINATION ${QGIS_BIN_DIR}
   )
-  INSTALL(FILES wcs-servers.json DESTINATION ${QGIS_DATA_DIR}/resources)
+  install(FILES wcs-servers.json DESTINATION ${QGIS_DATA_DIR}/resources)
 
-ENDIF(UNIX AND NOT ANDROID AND CMAKE_BUILD_TYPE MATCHES Debug)
+endif()
 
-ADD_SUBDIRECTORY(grass)
+add_subdirectory(grass)

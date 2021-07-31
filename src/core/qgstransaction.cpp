@@ -92,15 +92,15 @@ QString QgsTransaction::removeLayerIdOrName( const QString &str )
 }
 
 ///@cond PRIVATE
-QString QgsTransaction::connectionString( const QString &layerName )
+QString QgsTransaction::connectionString( const QString &layerUri )
 {
-  QString connString = QgsDataSourceUri( layerName ).connectionInfo( false );
+  QString connString = QgsDataSourceUri( layerUri ).connectionInfo( false );
   // In the case of a OGR datasource, connectionInfo() will return an empty
   // string. In that case, use the layer->source() itself, and strip any
   // reference to layers from it.
   if ( connString.isEmpty() )
   {
-    connString = removeLayerIdOrName( layerName );
+    connString = removeLayerIdOrName( layerUri );
   }
   return connString;
 }
@@ -218,7 +218,9 @@ QString QgsTransaction::createSavepoint( QString &error SIP_OUT )
     return QString();
 
   if ( !mLastSavePointIsDirty && !mSavepoints.isEmpty() )
+  {
     return mSavepoints.top();
+  }
 
   const QString name( QStringLiteral( "qgis" ) + ( QUuid::createUuid().toString().mid( 1, 24 ).replace( '-', QString() ) ) );
 
@@ -260,7 +262,10 @@ bool QgsTransaction::rollbackToSavepoint( const QString &name, QString &error SI
     return false;
 
   mSavepoints.resize( idx );
-  mLastSavePointIsDirty = false;
+  // Rolling back always dirties the previous savepoint because
+  // the status of the DB has changed between the previous savepoint and the
+  // one we are rolling back to.
+  mLastSavePointIsDirty = true;
   return executeSql( QStringLiteral( "ROLLBACK TO SAVEPOINT %1" ).arg( QgsExpression::quotedColumnRef( name ) ), error );
 }
 

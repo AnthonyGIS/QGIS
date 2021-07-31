@@ -22,6 +22,7 @@
 #include "qgsvectorlayer.h"
 #include "qgsexpressioncontextutils.h"
 #include "qgsguiutils.h"
+#include "qgsmarkersymbol.h"
 
 //
 // QgsFieldConditionalFormatWidget
@@ -192,11 +193,7 @@ void QgsFieldConditionalFormatWidget::reloadStyles()
 
   const auto constGetStyles = getStyles();
 
-#if QT_VERSION < QT_VERSION_CHECK(5, 11, 0)
-  const QSize size( Qgis::UI_SCALE_FACTOR * fontMetrics().width( 'X' ) * 10, Qgis::UI_SCALE_FACTOR * fontMetrics().height() * 2 );
-#else
   const QSize size( Qgis::UI_SCALE_FACTOR * fontMetrics().horizontalAdvance( 'X' ) * 10, Qgis::UI_SCALE_FACTOR * fontMetrics().height() * 2 );
-#endif
 
   listView->setIconSize( size );
 
@@ -288,7 +285,7 @@ QgsEditConditionalFormatRuleWidget::QgsEditConditionalFormatRuleWidget( QWidget 
   mPresetsModel = new QStandardItemModel( mPresetsList );
   mPresetsList->setModel( mPresetsModel );
 
-  btnChangeIcon->setSymbolType( QgsSymbol::Marker );
+  btnChangeIcon->setSymbolType( Qgis::SymbolType::Marker );
   btnChangeIcon->setSymbol( QgsSymbol::defaultSymbol( QgsWkbTypes::PointGeometry ) );
   connect( checkIcon, &QCheckBox::toggled, btnChangeIcon, &QWidget::setEnabled );
 }
@@ -364,9 +361,9 @@ void QgsEditConditionalFormatRuleWidget::setFormattingFromStyle( const QgsCondit
 {
   btnBackgroundColor->setColor( style.backgroundColor() );
   btnTextColor->setColor( style.textColor() );
-  if ( style.symbol() )
+  if ( auto *lSymbol = style.symbol() )
   {
-    btnChangeIcon->setSymbol( style.symbol()->clone() );
+    btnChangeIcon->setSymbol( lSymbol->clone() );
     checkIcon->setChecked( true );
   }
   else

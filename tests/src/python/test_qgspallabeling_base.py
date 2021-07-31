@@ -11,7 +11,6 @@ the Free Software Foundation; either version 2 of the License, or
 (at your option) any later version.
 """
 
-import collections
 
 __author__ = 'Larry Shaffer'
 __date__ = '07/09/2013'
@@ -24,6 +23,7 @@ import sys
 import datetime
 import glob
 import shutil
+from collections.abc import Callable
 
 from qgis.PyQt.QtCore import QSize, qDebug, Qt
 from qgis.PyQt.QtGui import QFont, QColor
@@ -43,7 +43,12 @@ from qgis.core import (
     QgsVectorLayer,
     QgsVectorLayerSimpleLabeling,
     QgsMultiRenderChecker,
-    QgsUnitTypes
+    QgsUnitTypes,
+    QgsVectorTileLayer,
+    QgsVectorTileBasicLabelingStyle,
+    QgsWkbTypes,
+    QgsVectorTileBasicLabeling,
+    QgsTextFormat
 )
 
 from qgis.testing import start_app, unittest
@@ -239,8 +244,9 @@ class TestQgsPalLabeling(unittest.TestCase):
         lyr.fieldName = 'text'  # default in test data sources
         font = self.getTestFont()
         font.setPointSize(32)
-        format = lyr.format()
+        format = QgsTextFormat()
         format.setFont(font)
+        format.setColor(QColor(0, 0, 0))
         format.setNamedStyle('Roman')
         format.setSize(32)
         format.setSizeUnit(QgsUnitTypes.RenderPoints)
@@ -263,7 +269,7 @@ class TestQgsPalLabeling(unittest.TestCase):
                 value = getattr(lyr, attr)
                 if isinstance(value, (QgsGeometry, QgsStringReplacementCollection, QgsCoordinateTransform)):
                     continue  # ignore these objects
-                if not isinstance(value, collections.Callable):
+                if not isinstance(value, Callable):
                     res[attr] = value
         return res
 
@@ -277,8 +283,8 @@ class TestQgsPalLabeling(unittest.TestCase):
     def saveControlImage(self, tmpimg=''):
         # don't save control images for RenderVsOtherOutput (Vs) tests, since
         # those control images belong to a different test result
-        if ('PAL_CONTROL_IMAGE' not in os.environ or
-                'Vs' in self._TestGroup):
+        if ('PAL_CONTROL_IMAGE' not in os.environ
+                or 'Vs' in self._TestGroup):
             return
         imgpath = self.controlImagePath()
         testdir = os.path.dirname(imgpath)
@@ -398,6 +404,20 @@ class TestPALConfig(TestQgsPalLabeling):
         self.layer.setLabeling(QgsVectorLayerSimpleLabeling(lyr))
         msg = '\nLayer labeling not activated, as reported by labelingEngine'
         self.assertTrue(QgsPalLabeling.staticWillUseLayer(self.layer), msg)
+
+        # also test for vector tile layer
+        tile_layer = QgsVectorTileLayer('x', 'y')
+        self.assertFalse(QgsPalLabeling.staticWillUseLayer(tile_layer))
+
+        st = QgsVectorTileBasicLabelingStyle()
+        st.setStyleName("st1")
+        st.setLayerName("place")
+        st.setFilterExpression("rank = 1 AND class = 'country'")
+        st.setGeometryType(QgsWkbTypes.PointGeometry)
+        labeling = QgsVectorTileBasicLabeling()
+        labeling.setStyles([st])
+        tile_layer.setLabeling(labeling)
+        self.assertTrue(QgsPalLabeling.staticWillUseLayer(tile_layer))
 
     def test_write_read_settings(self):
         # Verify written PAL settings are same when read from layer

@@ -16,71 +16,110 @@
 #include "qgsphongmaterialwidget.h"
 
 #include "qgsphongmaterialsettings.h"
-
+#include "qgis.h"
 
 QgsPhongMaterialWidget::QgsPhongMaterialWidget( QWidget *parent )
-  : QWidget( parent )
+  : QgsMaterialSettingsWidget( parent )
 {
   setupUi( this );
 
-  setMaterial( QgsPhongMaterialSettings() );
-  textureScaleSpinBox->setClearValue( 0 );
-  textureRotationSpinBox->setClearValue( 0 );
+  QgsPhongMaterialSettings defaultMaterial;
+  setSettings( &defaultMaterial, nullptr );
 
   connect( btnDiffuse, &QgsColorButton::colorChanged, this, &QgsPhongMaterialWidget::changed );
   connect( btnAmbient, &QgsColorButton::colorChanged, this, &QgsPhongMaterialWidget::changed );
   connect( btnSpecular, &QgsColorButton::colorChanged, this, &QgsPhongMaterialWidget::changed );
   connect( spinShininess, static_cast<void ( QDoubleSpinBox::* )( double )>( &QDoubleSpinBox::valueChanged ), this, &QgsPhongMaterialWidget::changed );
-  connect( useDiffuseCheckBox, &QCheckBox::stateChanged, this, &QgsPhongMaterialWidget::changed );
-  connect( textureFile, &QgsImageSourceLineEdit::sourceChanged, this, &QgsPhongMaterialWidget::changed );
-  connect( textureScaleSpinBox, static_cast<void ( QDoubleSpinBox::* )( double )>( &QDoubleSpinBox::valueChanged ), this, &QgsPhongMaterialWidget::changed );
-  connect( textureRotationSpinBox, static_cast<void ( QDoubleSpinBox::* )( double )>( &QDoubleSpinBox::valueChanged ), this, &QgsPhongMaterialWidget::changed );
-  this->activateTexturingUI( false );
+  connect( mAmbientDataDefinedButton, &QgsPropertyOverrideButton::changed, this, &QgsPhongMaterialWidget::changed );
+  connect( mDiffuseDataDefinedButton, &QgsPropertyOverrideButton::changed, this, &QgsPhongMaterialWidget::changed );
+  connect( mSpecularDataDefinedButton, &QgsPropertyOverrideButton::changed, this, &QgsPhongMaterialWidget::changed );
 }
 
-void QgsPhongMaterialWidget::setDiffuseVisible( bool visible )
+QgsMaterialSettingsWidget *QgsPhongMaterialWidget::create()
 {
-  lblDiffuse->setVisible( visible );
-  btnDiffuse->setVisible( visible );
+  return new QgsPhongMaterialWidget();
 }
 
-bool QgsPhongMaterialWidget::isDiffuseVisible() const
+void QgsPhongMaterialWidget::setTechnique( QgsMaterialSettingsRenderingTechnique technique )
 {
-  return btnDiffuse->isVisible();
+  switch ( technique )
+  {
+    case QgsMaterialSettingsRenderingTechnique::Triangles:
+    case QgsMaterialSettingsRenderingTechnique::TrianglesFromModel:
+    {
+      lblDiffuse->setVisible( true );
+      btnDiffuse->setVisible( true );
+      mAmbientDataDefinedButton->setVisible( false );
+      mDiffuseDataDefinedButton->setVisible( false );
+      mSpecularDataDefinedButton->setVisible( false );
+      break;
+    }
+    case QgsMaterialSettingsRenderingTechnique::InstancedPoints:
+    case QgsMaterialSettingsRenderingTechnique::Points:
+    {
+      lblDiffuse->setVisible( true );
+      btnDiffuse->setVisible( true );
+      mAmbientDataDefinedButton->setVisible( false );
+      mDiffuseDataDefinedButton->setVisible( false );
+      mSpecularDataDefinedButton->setVisible( false );
+      break;
+    }
+
+    case QgsMaterialSettingsRenderingTechnique::TrianglesWithFixedTexture:
+    {
+      lblDiffuse->setVisible( false );
+      btnDiffuse->setVisible( false );
+      mAmbientDataDefinedButton->setVisible( false );
+      mDiffuseDataDefinedButton->setVisible( false );
+      mSpecularDataDefinedButton->setVisible( false );
+      break;
+    }
+
+    case QgsMaterialSettingsRenderingTechnique::TrianglesDataDefined:
+    {
+      lblDiffuse->setVisible( true );
+      btnDiffuse->setVisible( true );
+      mAmbientDataDefinedButton->setVisible( true );
+      mDiffuseDataDefinedButton->setVisible( true );
+      mSpecularDataDefinedButton->setVisible( true );
+      break;
+    }
+
+    case QgsMaterialSettingsRenderingTechnique::Lines:
+      // not supported
+      break;
+  }
 }
 
-void QgsPhongMaterialWidget::setMaterial( const QgsPhongMaterialSettings &material )
+void QgsPhongMaterialWidget::setSettings( const QgsAbstractMaterialSettings *settings, QgsVectorLayer *layer )
 {
-  btnDiffuse->setColor( material.diffuse() );
-  btnAmbient->setColor( material.ambient() );
-  btnSpecular->setColor( material.specular() );
-  spinShininess->setValue( material.shininess() );
-  useDiffuseCheckBox->setCheckState( material.diffuseTextureEnabled() ? Qt::CheckState::Checked : Qt::CheckState::Unchecked );
-  textureFile->setSource( material.texturePath() );
-  textureScaleSpinBox->setValue( material.textureScale() );
-  textureRotationSpinBox->setValue( material.textureRotation() );
+  const QgsPhongMaterialSettings *phongMaterial = dynamic_cast< const QgsPhongMaterialSettings * >( settings );
+  if ( !phongMaterial )
+    return;
+  btnDiffuse->setColor( phongMaterial->diffuse() );
+  btnAmbient->setColor( phongMaterial->ambient() );
+  btnSpecular->setColor( phongMaterial->specular() );
+  spinShininess->setValue( phongMaterial->shininess() );
+
+  mPropertyCollection = settings->dataDefinedProperties();
+
+  mDiffuseDataDefinedButton->init( QgsAbstractMaterialSettings::Diffuse, mPropertyCollection, settings->propertyDefinitions(), layer, true );
+  mAmbientDataDefinedButton->init( QgsAbstractMaterialSettings::Ambient, mPropertyCollection, settings->propertyDefinitions(), layer, true );
+  mSpecularDataDefinedButton->init( QgsAbstractMaterialSettings::Specular, mPropertyCollection, settings->propertyDefinitions(), layer, true );
 }
 
-QgsPhongMaterialSettings QgsPhongMaterialWidget::material() const
+QgsAbstractMaterialSettings *QgsPhongMaterialWidget::settings()
 {
-  QgsPhongMaterialSettings m;
-  m.setDiffuse( btnDiffuse->color() );
-  m.setAmbient( btnAmbient->color() );
-  m.setSpecular( btnSpecular->color() );
-  m.setShininess( spinShininess->value() );
-  m.setDiffuseTextureEnabled( useDiffuseCheckBox->checkState() == Qt::CheckState::Checked );
-  m.setTexturePath( textureFile->source() );
-  m.setTextureScale( textureScaleSpinBox->value() );
-  m.setTextureRotation( textureRotationSpinBox->value() );
-  return m;
-}
+  std::unique_ptr< QgsPhongMaterialSettings > m = std::make_unique< QgsPhongMaterialSettings >();
+  m->setDiffuse( btnDiffuse->color() );
+  m->setAmbient( btnAmbient->color() );
+  m->setSpecular( btnSpecular->color() );
+  m->setShininess( spinShininess->value() );
 
-void QgsPhongMaterialWidget::activateTexturingUI( bool activated )
-{
-  lblTextureScale->setVisible( activated );
-  lblTextureRotation->setVisible( activated );
-  textureScaleSpinBox->setVisible( activated );
-  textureRotationSpinBox->setVisible( activated );
-  useDiffuseCheckBox->setVisible( activated );
-  textureFile->setVisible( activated );
+  mPropertyCollection.setProperty( QgsAbstractMaterialSettings::Diffuse, mDiffuseDataDefinedButton->toProperty() );
+  mPropertyCollection.setProperty( QgsAbstractMaterialSettings::Ambient, mAmbientDataDefinedButton->toProperty() );
+  mPropertyCollection.setProperty( QgsAbstractMaterialSettings::Specular, mSpecularDataDefinedButton->toProperty() );
+  m->setDataDefinedProperties( mPropertyCollection );
+
+  return m.release();
 }

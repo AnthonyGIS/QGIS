@@ -20,6 +20,7 @@
 
 #include <QString>
 #include <QDateTime>
+#include <QElapsedTimer>
 
 #include "qgis.h"
 #include "qgsdataprovider.h"
@@ -59,9 +60,6 @@ extern "C"
 #include <grass/version.h>
 #if defined(_MSC_VER) && defined(M_PI_4)
 #undef M_PI_4 //avoid redefinition warning
-#endif
-#if defined(PROJ_VERSION_MAJOR) && PROJ_VERSION_MAJOR>=6
-#define ACCEPT_USE_OF_DEPRECATED_PROJ_API_H
 #endif
 #include <grass/gprojects.h>
 #include <grass/gis.h>
@@ -114,7 +112,7 @@ QgsGrassProvider::QgsGrassProvider( const QString &uri )
     return;
   }
 
-  QTime time;
+  QElapsedTimer time;
   time.start();
 
   mPoints = Vect_new_line_struct();
@@ -250,6 +248,10 @@ QgsGrassProvider::QgsGrassProvider( const QString &uri )
                   // << QgsVectorDataProvider::NativeType( tr( "Date" ), "date", QVariant::Date, 8, 8 );
                 );
 
+  // Assign default encoding
+  if ( !textEncoding() )
+    QgsVectorDataProvider::setEncoding( QStringLiteral( "UTF-8" ) );
+
   mValid = true;
 
   QgsDebugMsg( QString( "New GRASS layer opened, time (ms): %1" ).arg( time.elapsed() ) );
@@ -278,7 +280,7 @@ QgsVectorDataProvider::Capabilities QgsGrassProvider::capabilities() const
 #ifndef Q_OS_WIN
   if ( sEditedCount > 0 && !mEditBuffer )
   {
-    return nullptr;
+    return QgsVectorDataProvider::Capabilities();
   }
 #endif
   // for now, only one map may be edited at time
@@ -286,7 +288,7 @@ QgsVectorDataProvider::Capabilities QgsGrassProvider::capabilities() const
   {
     return AddFeatures | DeleteFeatures | ChangeGeometries | AddAttributes | DeleteAttributes | ChangeAttributeValues;
   }
-  return nullptr;
+  return QgsVectorDataProvider::Capabilities();
 }
 
 bool QgsGrassProvider::openLayer()
@@ -426,7 +428,7 @@ QgsWkbTypes::Type QgsGrassProvider::wkbType() const
   return mQgisType;
 }
 
-long QgsGrassProvider::featureCount() const
+long long QgsGrassProvider::featureCount() const
 {
   return mNumberFeatures;
 }
@@ -953,8 +955,7 @@ QgsAttributeMap *QgsGrassProvider::attributes( int field, int cat )
 
   dbString dbstr;
   db_init_string( &dbstr );
-  QString query;
-  query.sprintf( "select * from %s where %s = %d", fi->table, fi->key, cat );
+  QString query = QStringLiteral( "select * from %1 where %2=%3" ).arg( fi->table, fi->key ).arg( cat );
   db_set_string( &dbstr, query.toUtf8().constData() );
 
   QgsDebugMsg( QString( "SQL: %1" ).arg( db_get_string( &dbstr ) ) );

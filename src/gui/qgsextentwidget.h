@@ -36,7 +36,7 @@ class QgsMapLayer;
 
 /**
  * \ingroup gui
- * A widget for configuration of a map extent.
+ * \brief A widget for configuration of a map extent.
  *
  * Besides allowing the user to enter the extent manually, it comes with options to use
  * original extent or extent defined by the current view in map canvas.
@@ -147,8 +147,9 @@ class GUI_EXPORT QgsExtentWidget : public QWidget, private Ui::QgsExtentGroupBox
     /**
      * Sets the map canvas to enable dragging of extent on a canvas.
      * \param canvas the map canvas
+     * \param drawOnCanvasOption set to false to disable to draw on canvas option
      */
-    void setMapCanvas( QgsMapCanvas *canvas );
+    void setMapCanvas( QgsMapCanvas *canvas, bool drawOnCanvasOption = true );
 
     /**
      * Returns the current fixed aspect ratio to be used when dragging extent onto the canvas.

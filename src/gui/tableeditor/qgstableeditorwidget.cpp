@@ -324,7 +324,7 @@ void QgsTableEditorWidget::setTableContents( const QgsTableContents &contents )
       item->setData( CellContent, col.content() ); // can't use EditRole, because Qt. (https://bugreports.qt.io/browse/QTBUG-11549)
       item->setData( Qt::BackgroundRole, col.backgroundColor().isValid() ? col.backgroundColor() : QColor( 255, 255, 255 ) );
       item->setData( PresetBackgroundColorRole, col.backgroundColor().isValid() ? col.backgroundColor() : QVariant() );
-      item->setData( Qt::ForegroundRole, col.foregroundColor().isValid() ? col.foregroundColor() : QVariant() );
+      item->setData( Qt::ForegroundRole, col.textFormat().isValid() ? col.textFormat().color() : QVariant() );
       item->setData( TextFormat, QVariant::fromValue( col.textFormat() ) );
       item->setData( HorizontalAlignment, static_cast< int >( col.horizontalAlignment() ) );
       item->setData( VerticalAlignment, static_cast< int >( col.verticalAlignment() ) );
@@ -333,9 +333,9 @@ void QgsTableEditorWidget::setTableContents( const QgsTableContents &contents )
       if ( col.content().value< QgsProperty >().isActive() )
         item->setFlags( item->flags() & ( ~Qt::ItemIsEditable ) );
 
-      if ( col.numericFormat() )
+      if ( auto *lNumericFormat = col.numericFormat() )
       {
-        mNumericFormats.insert( item, col.numericFormat()->clone() );
+        mNumericFormats.insert( item, lNumericFormat->clone() );
         item->setData( Qt::DisplayRole, mNumericFormats.value( item )->formatDouble( col.content().toDouble(), numericContext ) );
       }
       setItem( rowNumber, colNumber, item );
@@ -372,7 +372,6 @@ QgsTableContents QgsTableEditorWidget::tableContents() const
       {
         cell.setContent( i->data( CellProperty ).value< QgsProperty >().isActive() ? i->data( CellProperty ) : i->data( CellContent ) );
         cell.setBackgroundColor( i->data( PresetBackgroundColorRole ).value< QColor >() );
-        cell.setForegroundColor( i->data( Qt::ForegroundRole ).value< QColor >() );
         cell.setTextFormat( i->data( TextFormat ).value< QgsTextFormat >() );
         cell.setHorizontalAlignment( static_cast< Qt::Alignment >( i->data( HorizontalAlignment ).toInt() ) );
         cell.setVerticalAlignment( static_cast< Qt::Alignment >( i->data( VerticalAlignment ).toInt() ) );
@@ -494,25 +493,8 @@ bool QgsTableEditorWidget::hasMixedSelectionNumericFormat()
 
 QColor QgsTableEditorWidget::selectionForegroundColor()
 {
-  QColor c;
-  bool first = true;
-  const QModelIndexList selection = selectedIndexes();
-  for ( const QModelIndex &index : selection )
-  {
-    QColor indexColor = model()->data( index, Qt::ForegroundRole ).isValid() ? model()->data( index, Qt::ForegroundRole ).value< QColor >() : QColor();
-    if ( first )
-    {
-      c = indexColor;
-      first = false;
-    }
-    else if ( indexColor == c )
-      continue;
-    else
-    {
-      return QColor();
-    }
-  }
-  return c;
+  const QgsTextFormat f = selectionTextFormat();
+  return f.isValid() ? f.color() : QColor();
 }
 
 QColor QgsTableEditorWidget::selectionBackgroundColor()
@@ -963,6 +945,9 @@ void QgsTableEditorWidget::setSelectionForegroundColor( const QColor &color )
       if ( i->data( Qt::ForegroundRole ).value< QColor >() != color )
       {
         i->setData( Qt::ForegroundRole, color.isValid() ? color : QVariant() );
+        QgsTextFormat f = i->data( TextFormat ).value< QgsTextFormat >();
+        f.setColor( color );
+        i->setData( TextFormat, QVariant::fromValue( f ) );
         changed = true;
       }
     }
@@ -970,6 +955,9 @@ void QgsTableEditorWidget::setSelectionForegroundColor( const QColor &color )
     {
       QTableWidgetItem *newItem = new QTableWidgetItem();
       newItem->setData( Qt::ForegroundRole, color.isValid() ? color : QVariant() );
+      QgsTextFormat f;
+      f.setColor( color );
+      newItem->setData( TextFormat, QVariant::fromValue( f ) );
       setItem( index.row(), index.column(), newItem );
       changed = true;
     }
@@ -1138,12 +1126,14 @@ void QgsTableEditorWidget::setSelectionTextFormat( const QgsTextFormat &format )
     if ( QTableWidgetItem *i = item( index.row(), index.column() ) )
     {
       i->setData( TextFormat, QVariant::fromValue( format ) );
+      i->setData( Qt::ForegroundRole, format.color() );
       changed = true;
     }
     else
     {
       QTableWidgetItem *newItem = new QTableWidgetItem();
       newItem->setData( TextFormat, QVariant::fromValue( format ) );
+      newItem->setData( Qt::ForegroundRole, format.color() );
       setItem( index.row(), index.column(), newItem );
       changed = true;
     }
@@ -1306,6 +1296,22 @@ void QgsTableEditorTextEdit::keyPressEvent( QKeyEvent *event )
       break;
     }
 
+    case Qt::Key_Tab:
+    {
+      if ( event->modifiers() & Qt::ControlModifier )
+      {
+        // if tab is pressed then defer to table, unless ctrl modifier is also held
+        // (emulate spreadsheet behavior)
+        insertPlainText( QString( '\t' ) );
+        resizeToContents();
+      }
+      else
+      {
+        event->ignore();
+      }
+      break;
+    }
+
     default:
       QPlainTextEdit::keyPressEvent( event );
   }
@@ -1358,8 +1364,8 @@ void QgsTableEditorTextEdit::resizeToContents()
     int parentWidth = parent->width();
     int maxWidth = isRightToLeft() ? position.x() + oldWidth : parentWidth - position.x();
     int maxHeight = parent->height() - position.y();
-    int newWidth = qBound( mOriginalWidth, hintWidth, maxWidth );
-    int newHeight = qBound( mOriginalHeight, hintHeight, maxHeight );
+    int newWidth = std::clamp( hintWidth, mOriginalWidth, maxWidth );
+    int newHeight = std::clamp( hintHeight, mOriginalHeight, maxHeight );
 
     if ( mWidgetOwnsGeometry )
     {

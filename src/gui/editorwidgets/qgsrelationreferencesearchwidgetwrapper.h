@@ -32,7 +32,7 @@ class QgsRelationReferenceWidget;
 /**
  * \ingroup gui
  * \class QgsRelationReferenceSearchWidgetWrapper
- * Wraps a relation reference search widget.
+ * \brief Wraps a relation reference search widget.
  * \since QGIS 2.16
  */
 
@@ -60,6 +60,11 @@ class GUI_EXPORT QgsRelationReferenceSearchWidgetWrapper : public QgsSearchWidge
     QString expression() const override;
     bool valid() const override;
     QgsSearchWidgetWrapper::FilterFlags supportedFlags() const override;
+
+    /**
+     * Returns the default flags (equalTo)
+     */
+    QgsSearchWidgetWrapper::FilterFlags defaultFlags() const override;
     QString createExpression( QgsSearchWidgetWrapper::FilterFlags flags ) const override;
 
   public slots:

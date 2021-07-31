@@ -28,6 +28,7 @@
 #include "qgsdatasourceuri.h"
 #include "qgswkbtypes.h"
 #include "qgsconfig.h"
+#include "qgsvectordataprovider.h"
 
 extern "C"
 {
@@ -147,7 +148,7 @@ struct QgsPostgresLayerProperty
                  geometryColName,
                  typeString,
                  sridString,
-                 pkCols.join( QStringLiteral( "|" ) ),
+                 pkCols.join( QLatin1Char( '|' ) ),
                  sql )
            .arg( nSpCols );
   }
@@ -187,6 +188,17 @@ class QgsPostgresResult
 
 };
 
+//! Wraps acquireConnection() and releaseConnection() from a QgsPostgresConnPool.
+// This can be used for creating std::shared_ptr<QgsPoolPostgresConn>.
+class QgsPoolPostgresConn
+{
+    class QgsPostgresConn *mPgConn;
+  public:
+    QgsPoolPostgresConn( const QString &connInfo );
+    ~QgsPoolPostgresConn();
+
+    class QgsPostgresConn *get() const { return mPgConn; }
+};
 
 class QgsPostgresConn : public QObject
 {
@@ -199,6 +211,10 @@ class QgsPostgresConn : public QObject
      *        An assertion guards against such programmatic error.
      */
     static QgsPostgresConn *connectDb( const QString &connInfo, bool readOnly, bool shared = true, bool transaction = false );
+
+
+    QgsPostgresConn( const QString &conninfo, bool readOnly, bool shared, bool transaction );
+    ~QgsPostgresConn() override;
 
     void ref();
     void unref();
@@ -249,6 +265,7 @@ class QgsPostgresConn : public QObject
 
     // run a query and check for errors, thread-safe
     PGresult *PQexec( const QString &query, bool logError = true, bool retry = true ) const;
+    int PQCancel();
     void PQfinish();
     QString PQerrorMessage() const;
     int PQstatus() const;
@@ -346,6 +363,12 @@ class QgsPostgresConn : public QObject
     QString connInfo() const { return mConnInfo; }
 
     /**
+     * Returns a list of supported native types for this connection.
+     * \since QGIS 3.16
+     */
+    QList<QgsVectorDataProvider::NativeType> nativeTypes();
+
+    /**
      * Returns the underlying database.
      *
      * \since QGIS 3.0
@@ -384,8 +407,6 @@ class QgsPostgresConn : public QObject
     void unlock() { mLock.unlock(); }
 
   private:
-    QgsPostgresConn( const QString &conninfo, bool readOnly, bool shared, bool transaction );
-    ~QgsPostgresConn() override;
 
     int mRef;
     int mOpenCursors;
@@ -441,12 +462,12 @@ class QgsPostgresConn : public QObject
     /**
      * Flag indicating whether data from binary cursors must undergo an
      * endian conversion prior to use
-     \note
-
-     XXX Umm, it'd be helpful to know what we're swapping from and to.
-     XXX Presumably this means swapping from big-endian (network) byte order
-     XXX to little-endian; but the inverse transaction is possible, too, and
-     XXX that's not reflected in this variable
+     * \note
+     *
+     * XXX Umm, it'd be helpful to know what we're swapping from and to.
+     * XXX Presumably this means swapping from big-endian (network) byte order
+     * XXX to little-endian; but the inverse transaction is possible, too, and
+     * XXX that's not reflected in this variable
      */
     bool mSwapEndian;
     void deduceEndian();
@@ -457,7 +478,11 @@ class QgsPostgresConn : public QObject
 
     bool mTransaction;
 
-    mutable QMutex mLock;
+#if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)
+    mutable QMutex mLock { QMutex::Recursive };
+#else
+    mutable QRecursiveMutex mLock;
+#endif
 };
 
 // clazy:excludeall=qstring-allocations

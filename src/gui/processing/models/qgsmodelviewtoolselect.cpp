@@ -85,7 +85,7 @@ void QgsModelViewToolSelect::modelPressEvent( QgsModelViewMouseEvent *event )
     //not clicking over an item, so start marquee selection
     mIsSelecting = true;
     mMousePressStartPos = event->pos();
-    mRubberBand->start( event->modelPoint(), nullptr );
+    mRubberBand->start( event->modelPoint(), Qt::KeyboardModifiers() );
     return;
   }
 
@@ -147,7 +147,7 @@ void QgsModelViewToolSelect::modelMoveEvent( QgsModelViewMouseEvent *event )
 {
   if ( mIsSelecting )
   {
-    mRubberBand->update( event->modelPoint(), nullptr );
+    mRubberBand->update( event->modelPoint(), Qt::KeyboardModifiers() );
   }
   else
   {
@@ -271,7 +271,7 @@ void QgsModelViewToolSelect::modelReleaseEvent( QgsModelViewMouseEvent *event )
     itemList = scene()->items( rect.center(), selectionMode );
   else
     itemList = scene()->items( rect, selectionMode );
-  for ( QGraphicsItem *item : qgis::as_const( itemList ) )
+  for ( QGraphicsItem *item : std::as_const( itemList ) )
   {
     if ( QgsModelComponentGraphicItem *componentItem = dynamic_cast<QgsModelComponentGraphicItem *>( item ) )
     {

@@ -204,7 +204,7 @@ QWidget *QgsAttributeTableView::createActionWidget( QgsFeatureId fid )
   {
     container = new QWidget();
     container->setLayout( new QHBoxLayout() );
-    container->layout()->setMargin( 0 );
+    container->layout()->setContentsMargins( 0, 0, 0, 0 );
   }
 
   QList< QAction * > actionList;
@@ -456,7 +456,7 @@ void QgsAttributeTableView::actionTriggered()
 
   if ( action->data().toString() == QLatin1String( "user_action" ) )
   {
-    mFilterModel->layer()->actions()->doAction( action->property( "action_id" ).toString(), f );
+    mFilterModel->layer()->actions()->doAction( action->property( "action_id" ).toUuid(), f );
   }
   else if ( action->data().toString() == QLatin1String( "map_layer_action" ) )
   {
@@ -496,4 +496,21 @@ void QgsAttributeTableView::recreateActionWidgets()
     setIndexWidget( it.key(), nullptr );
   }
   mActionWidgets.clear();
+}
+
+void QgsAttributeTableView::scrollToFeature( const QgsFeatureId &fid, int col )
+{
+  QModelIndex index = mFilterModel->fidToIndex( fid );
+
+  if ( !index.isValid() )
+    return;
+
+  scrollTo( index );
+
+  QModelIndex selectionIndex = index.sibling( index.row(), col );
+
+  if ( !selectionIndex.isValid() )
+    return;
+
+  selectionModel()->setCurrentIndex( index, QItemSelectionModel::SelectCurrent );
 }

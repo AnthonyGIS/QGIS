@@ -33,6 +33,7 @@ QgsBasicNumericFormatWidget::QgsBasicNumericFormatWidget( const QgsNumericFormat
   setupUi( this );
   setFormat( format->clone() );
 
+  mDecimalsSpinBox->setClearValue( 6 );
   mThousandsLineEdit->setShowClearButton( true );
   mDecimalLineEdit->setShowClearButton( true );
 
@@ -57,7 +58,7 @@ QgsBasicNumericFormatWidget::QgsBasicNumericFormatWidget( const QgsNumericFormat
       emit changed();
   } );
 
-  connect( mDecimalsSpinBox, qgis::overload<int>::of( &QSpinBox::valueChanged ), this, [ = ]( int value )
+  connect( mDecimalsSpinBox, qOverload<int>( &QSpinBox::valueChanged ), this, [ = ]( int value )
   {
     mFormat->setNumberDecimalPlaces( value );
     if ( !mBlockSignals )
@@ -140,6 +141,7 @@ QgsBearingNumericFormatWidget::QgsBearingNumericFormatWidget( const QgsNumericFo
 {
   setupUi( this );
 
+  mDecimalsSpinBox->setClearValue( 6 );
   mFormatComboBox->addItem( QObject::tr( "0 to 180°, with E/W suffix" ), QgsBearingNumericFormat::UseRange0To180WithEWDirectionalSuffix );
   mFormatComboBox->addItem( QObject::tr( "-180 to +180°" ), QgsBearingNumericFormat::UseRangeNegative180ToPositive180 );
   mFormatComboBox->addItem( QObject::tr( "0 to 360°" ), QgsBearingNumericFormat::UseRange0To360 );
@@ -153,14 +155,14 @@ QgsBearingNumericFormatWidget::QgsBearingNumericFormatWidget( const QgsNumericFo
       emit changed();
   } );
 
-  connect( mDecimalsSpinBox, qgis::overload<int>::of( &QSpinBox::valueChanged ), this, [ = ]( int value )
+  connect( mDecimalsSpinBox, qOverload<int>( &QSpinBox::valueChanged ), this, [ = ]( int value )
   {
     mFormat->setNumberDecimalPlaces( value );
     if ( !mBlockSignals )
       emit changed();
   } );
 
-  connect( mFormatComboBox, qgis::overload<int>::of( &QComboBox::currentIndexChanged ), this, [ = ]( int )
+  connect( mFormatComboBox, qOverload<int>( &QComboBox::currentIndexChanged ), this, [ = ]( int )
   {
     mFormat->setDirectionFormat( static_cast < QgsBearingNumericFormat::FormatDirectionOption >( mFormatComboBox->currentData().toInt() ) );
     if ( !mBlockSignals )
@@ -223,6 +225,7 @@ QgsCurrencyNumericFormatWidget::QgsCurrencyNumericFormatWidget( const QgsNumeric
   : QgsNumericFormatWidget( parent )
 {
   setupUi( this );
+  mDecimalsSpinBox->setClearValue( 2 );
   setFormat( format->clone() );
 
   connect( mShowPlusCheckBox, &QCheckBox::toggled, this, [ = ]( bool checked )
@@ -246,7 +249,7 @@ QgsCurrencyNumericFormatWidget::QgsCurrencyNumericFormatWidget( const QgsNumeric
       emit changed();
   } );
 
-  connect( mDecimalsSpinBox, qgis::overload<int>::of( &QSpinBox::valueChanged ), this, [ = ]( int value )
+  connect( mDecimalsSpinBox, qOverload<int>( &QSpinBox::valueChanged ), this, [ = ]( int value )
   {
     mFormat->setNumberDecimalPlaces( value );
     if ( !mBlockSignals )
@@ -300,6 +303,7 @@ QgsPercentageNumericFormatWidget::QgsPercentageNumericFormatWidget( const QgsNum
 {
   setupUi( this );
 
+  mDecimalsSpinBox->setClearValue( 6 );
   mScalingComboBox->addItem( QObject::tr( "Values are Percentages (e.g. 50)" ), QgsPercentageNumericFormat::ValuesArePercentage );
   mScalingComboBox->addItem( QObject::tr( "Values are Fractions (e.g. 0.5)" ), QgsPercentageNumericFormat::ValuesAreFractions );
 
@@ -326,14 +330,14 @@ QgsPercentageNumericFormatWidget::QgsPercentageNumericFormatWidget( const QgsNum
       emit changed();
   } );
 
-  connect( mDecimalsSpinBox, qgis::overload<int>::of( &QSpinBox::valueChanged ), this, [ = ]( int value )
+  connect( mDecimalsSpinBox, qOverload<int>( &QSpinBox::valueChanged ), this, [ = ]( int value )
   {
     mFormat->setNumberDecimalPlaces( value );
     if ( !mBlockSignals )
       emit changed();
   } );
 
-  connect( mScalingComboBox, qgis::overload<int>::of( &QComboBox::currentIndexChanged ), this, [ = ]( int )
+  connect( mScalingComboBox, qOverload<int>( &QComboBox::currentIndexChanged ), this, [ = ]( int )
   {
     mFormat->setInputValues( static_cast < QgsPercentageNumericFormat::InputValues >( mScalingComboBox->currentData().toInt() ) );
     if ( !mBlockSignals )
@@ -368,6 +372,7 @@ QgsScientificNumericFormatWidget::QgsScientificNumericFormatWidget( const QgsNum
   : QgsNumericFormatWidget( parent )
 {
   setupUi( this );
+  mDecimalsSpinBox->setClearValue( 6 );
   setFormat( format->clone() );
 
   connect( mShowPlusCheckBox, &QCheckBox::toggled, this, [ = ]( bool checked )
@@ -384,7 +389,7 @@ QgsScientificNumericFormatWidget::QgsScientificNumericFormatWidget( const QgsNum
       emit changed();
   } );
 
-  connect( mDecimalsSpinBox, qgis::overload<int>::of( &QSpinBox::valueChanged ), this, [ = ]( int value )
+  connect( mDecimalsSpinBox, qOverload<int>( &QSpinBox::valueChanged ), this, [ = ]( int value )
   {
     mFormat->setNumberDecimalPlaces( value );
     if ( !mBlockSignals )

@@ -45,9 +45,9 @@ extern "C"
 class QgsCoordinateTransform;
 
 /**
-  \brief Read raster value for given coordinates
-
-  Executes qgis.g.info and keeps it open comunicating through pipe. Restarts the command if raster was updated.
+ * \brief Read raster value for given coordinates
+ *
+ * Executes qgis.g.info and keeps it open comunicating through pipe. Restarts the command if raster was updated.
 */
 
 class GRASS_LIB_EXPORT QgsGrassRasterValue
@@ -76,13 +76,13 @@ class GRASS_LIB_EXPORT QgsGrassRasterValue
 };
 
 /**
-
-  \brief Data provider for GRASS raster layers.
-
-  This provider implements the
-  interface defined in the QgsDataProvider class to provide access to spatial
-  data residing in a OGC Web Map Service.
-
+ *
+ * \brief Data provider for GRASS raster layers.
+ *
+ * This provider implements the
+ * interface defined in the QgsDataProvider class to provide access to spatial
+ * data residing in a OGC Web Map Service.
+ *
 */
 class GRASS_LIB_EXPORT QgsGrassRasterProvider : public QgsRasterDataProvider
 {
@@ -102,7 +102,7 @@ class GRASS_LIB_EXPORT QgsGrassRasterProvider : public QgsRasterDataProvider
 
     ~QgsGrassRasterProvider() override;
 
-    QgsRasterInterface *clone() const override;
+    QgsGrassRasterProvider *clone() const override;
 
     /**
      * Returns a provider name
@@ -170,10 +170,10 @@ class GRASS_LIB_EXPORT QgsGrassRasterProvider : public QgsRasterDataProvider
 
     /**
      * Returns a bitmask containing the supported capabilities
-        Note, some capabilities may change depending on which
-        sublayers are visible on this provider, so it may
-        be prudent to check this value per intended operation.
-      */
+     * Note, some capabilities may change depending on which
+     * sublayers are visible on this provider, so it may
+     * be prudent to check this value per intended operation.
+    */
     int capabilities() const override;
 
     Qgis::DataType dataType( int bandNo ) const override;

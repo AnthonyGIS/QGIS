@@ -19,6 +19,7 @@
 #include "qgsmapclippingregion.h"
 #include "qgslogger.h"
 #include <algorithm>
+#include <QPointer>
 
 QList<QgsMapClippingRegion> QgsMapClippingUtils::collectClippingRegionsForLayer( const QgsRenderContext &context, const QgsMapLayer *layer )
 {
@@ -149,6 +150,8 @@ QPainterPath QgsMapClippingUtils::calculatePainterClipRegion( const QList<QgsMap
       case QgsMapLayerType::MeshLayer:
       case QgsMapLayerType::RasterLayer:
       case QgsMapLayerType::PluginLayer:
+      case QgsMapLayerType::PointCloudLayer:
+      case QgsMapLayerType::AnnotationLayer:
         // for these layer types, we ignore the region's featureClip behavior.
         break;
 

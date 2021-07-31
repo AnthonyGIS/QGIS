@@ -28,7 +28,8 @@ from qgis.PyQt.QtGui import QIcon
 from qgis.core import (QgsProcessingException,
                        QgsProcessingParameterRasterLayer,
                        QgsProcessingParameterCrs,
-                       QgsProcessingOutputRasterLayer)
+                       QgsProcessingOutputRasterLayer,
+                       QgsProcessingContext)
 from processing.algs.gdal.GdalAlgorithm import GdalAlgorithm
 from processing.algs.gdal.GdalUtils import GdalUtils
 
@@ -63,6 +64,11 @@ class AssignProjection(GdalAlgorithm):
     def icon(self):
         return QIcon(os.path.join(pluginPath, 'images', 'gdaltools', 'projection-add.png'))
 
+    def tags(self):
+        tags = self.tr('assign,set,transform,reproject,crs,srs').split(',')
+        tags.extend(super().tags())
+        return tags
+
     def group(self):
         return self.tr('Raster projections')
 
@@ -81,19 +87,47 @@ class AssignProjection(GdalAlgorithm):
 
         crs = self.parameterAsCrs(parameters, self.CRS, context)
 
-        arguments = []
-        arguments.append('-a_srs')
-        arguments.append(GdalUtils.gdal_crs_string(crs))
+        arguments = [
+            '-a_srs',
+            GdalUtils.gdal_crs_string(crs),
 
-        arguments.append(fileName)
-
-        if isWindows():
-            commands = ["python3", "-m", self.commandName()]
-        else:
-            commands = [self.commandName() + '.py']
-
-        commands.append(GdalUtils.escapeAndJoin(arguments))
+            fileName
+        ]
 
         self.setOutputValue(self.OUTPUT, fileName)
 
-        return commands
+        return [self.commandName() + ('.bat' if isWindows() else '.py'), GdalUtils.escapeAndJoin(arguments)]
+
+    def postProcessAlgorithm(self, context, feedback):
+        # get output value
+        fileName = self.output_values.get(self.OUTPUT)
+        if not fileName:
+            return {}
+
+        # search in context project's layers
+        if context.project():
+
+            for l in context.project().mapLayers().values():
+
+                # check the source
+                if l.source() != fileName:
+                    continue
+
+                # reload provider's data
+                l.dataProvider().reloadData()
+                l.setCrs(l.dataProvider().crs())
+                l.triggerRepaint()
+
+        # search in context temporary layer store
+        for l in context.temporaryLayerStore().mapLayers().values():
+
+            # check the source
+            if l.source() != fileName:
+                continue
+
+            # reload provider's data
+            l.dataProvider().reloadData()
+            l.setCrs(l.dataProvider().crs())
+            context.temporaryLayerStore().addMapLayer(l)
+
+        return {}

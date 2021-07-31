@@ -60,11 +60,14 @@
      </property>
      <widget class="QWidget" name="mActiveDatasetTab">
       <attribute name="icon">
-       <iconset>
+       <iconset resource="../../../images/images.qrc">
         <normaloff>:/images/themes/default/propertyicons/general.svg</normaloff>:/images/themes/default/propertyicons/general.svg</iconset>
       </attribute>
       <attribute name="title">
        <string/>
+      </attribute>
+      <attribute name="toolTip">
+       <string>Datasets</string>
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_11">
        <property name="leftMargin">
@@ -132,11 +135,14 @@
      </widget>
      <widget class="QWidget" name="mContoursTab">
       <attribute name="icon">
-       <iconset>
+       <iconset resource="../../../images/images.qrc">
         <normaloff>:/images/themes/default/propertyicons/meshcontours.svg</normaloff>:/images/themes/default/propertyicons/meshcontours.svg</iconset>
       </attribute>
       <attribute name="title">
        <string/>
+      </attribute>
+      <attribute name="toolTip">
+       <string>Contours</string>
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_10">
        <property name="leftMargin">
@@ -195,11 +201,14 @@
      </widget>
      <widget class="QWidget" name="mVectorsTab">
       <attribute name="icon">
-       <iconset>
+       <iconset resource="../../../images/images.qrc">
         <normaloff>:/images/themes/default/propertyicons/meshvectors.svg</normaloff>:/images/themes/default/propertyicons/meshvectors.svg</iconset>
       </attribute>
       <attribute name="title">
        <string/>
+      </attribute>
+      <attribute name="toolTip">
+       <string>Vectors</string>
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_2">
        <property name="leftMargin">
@@ -253,11 +262,14 @@
      </widget>
      <widget class="QWidget" name="mMeshTab">
       <attribute name="icon">
-       <iconset>
+       <iconset resource="../../../images/images.qrc">
         <normaloff>:/images/themes/default/propertyicons/meshframe.svg</normaloff>:/images/themes/default/propertyicons/meshframe.svg</iconset>
       </attribute>
       <attribute name="title">
        <string/>
+      </attribute>
+      <attribute name="toolTip">
+       <string>Rendering</string>
       </attribute>
       <layout class="QVBoxLayout" name="verticalLayout_12">
        <property name="leftMargin">
@@ -391,7 +403,7 @@
      </widget>
      <widget class="QWidget" name="mAveragingTab">
       <attribute name="icon">
-       <iconset>
+       <iconset resource="../../../images/images.qrc">
         <normaloff>:/images/themes/default/propertyicons/meshaveraging.svg</normaloff>:/images/themes/default/propertyicons/meshaveraging.svg</iconset>
       </attribute>
       <attribute name="title">
@@ -481,6 +493,8 @@
    <container>1</container>
   </customwidget>
  </customwidgets>
- <resources/>
+ <resources>
+  <include location="../../../images/images.qrc"/>
+ </resources>
  <connections/>
 </ui>

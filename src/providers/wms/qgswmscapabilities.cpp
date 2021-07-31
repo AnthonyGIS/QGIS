@@ -19,6 +19,7 @@
 #include <QFile>
 #include <QDir>
 #include <QNetworkCacheMetaData>
+#include <QRegularExpression>
 
 #include "qgssettings.h"
 #include "qgscoordinatetransform.h"
@@ -29,6 +30,7 @@
 #include "qgsunittypes.h"
 #include "qgsexception.h"
 #include "qgsapplication.h"
+#include "qgstemporalutils.h"
 
 // %%% copied from qgswmsprovider.cpp
 static QString DEFAULT_LATLON_CRS = QStringLiteral( "CRS:84" );
@@ -88,26 +90,62 @@ bool QgsWmsSettings::parseUri( const QString &uriString )
     mTemporalExtent = uri.param( QStringLiteral( "timeDimensionExtent" ) );
     mTimeDimensionExtent = parseTemporalExtent( mTemporalExtent );
 
-    if ( mTimeDimensionExtent.datesResolutionList.first().dates.dateTimes.size() > 0 )
+    if ( !mTimeDimensionExtent.datesResolutionList.isEmpty() &&
+         !mTimeDimensionExtent.datesResolutionList.constFirst().dates.dateTimes.empty() )
     {
-      QDateTime begin = mTimeDimensionExtent.datesResolutionList.first().dates.dateTimes.first();
-      QDateTime end = mTimeDimensionExtent.datesResolutionList.last().dates.dateTimes.last();
+      QDateTime begin = mTimeDimensionExtent.datesResolutionList.constFirst().dates.dateTimes.first();
+      QDateTime end = mTimeDimensionExtent.datesResolutionList.constLast().dates.dateTimes.last();
 
       mFixedRange =  QgsDateTimeRange( begin, end );
     }
     else
       mFixedRange = QgsDateTimeRange();
 
-    if ( uri.param( QStringLiteral( "referenceTimeDimensionExtent" ) ) != QString() )
+    mAllRanges.clear();
+    mAllRanges.reserve( mTimeDimensionExtent.datesResolutionList.size() );
+    for ( const QgsWmstExtentPair &extent : std::as_const( mTimeDimensionExtent.datesResolutionList ) )
+    {
+      if ( extent.dates.dateTimes.empty() )
+        continue;
+
+      const QDateTime begin = extent.dates.dateTimes.first();
+      const QDateTime end = extent.dates.dateTimes.last();
+
+      if ( !extent.resolution.isNull() )
+      {
+        bool maxValuesExceeded = false;
+        const QList< QDateTime > dates = QgsTemporalUtils::calculateDateTimesUsingDuration( begin, end, extent.resolution, maxValuesExceeded, 1000 );
+        // if we have a manageable number of distinct dates, then we'll use those. If not we just use the overall range.
+        // (some servers eg may have data for every minute for decades!)
+        if ( !maxValuesExceeded )
+        {
+          for ( const QDateTime &dt : dates )
+            mAllRanges.append( QgsDateTimeRange( dt, dt ) );
+        }
+        else
+        {
+          mAllRanges.append( QgsDateTimeRange( begin, end ) );
+        }
+
+        mDefaultInterval = extent.resolution.toInterval();
+      }
+      else
+      {
+        mAllRanges.append( QgsDateTimeRange( begin, end ) );
+        mDefaultInterval = QgsInterval( 1, QgsUnitTypes::TemporalIrregularStep );
+      }
+    }
+
+    if ( !uri.param( QStringLiteral( "referenceTimeDimensionExtent" ) ).isEmpty() )
     {
       QString referenceExtent = uri.param( QStringLiteral( "referenceTimeDimensionExtent" ) );
 
       mReferenceTimeDimensionExtent = parseTemporalExtent( referenceExtent );
 
-      if ( mReferenceTimeDimensionExtent.datesResolutionList.first().dates.dateTimes.size() > 0 )
+      if ( mReferenceTimeDimensionExtent.datesResolutionList.constFirst().dates.dateTimes.size() > 0 )
       {
-        QDateTime begin = mReferenceTimeDimensionExtent.datesResolutionList.first().dates.dateTimes.first();
-        QDateTime end = mReferenceTimeDimensionExtent.datesResolutionList.last().dates.dateTimes.last();
+        QDateTime begin = mReferenceTimeDimensionExtent.datesResolutionList.constFirst().dates.dateTimes.first();
+        QDateTime end = mReferenceTimeDimensionExtent.datesResolutionList.constLast().dates.dateTimes.last();
 
         mFixedReferenceRange =  QgsDateTimeRange( begin, end );
       }
@@ -123,7 +161,7 @@ bool QgsWmsSettings::parseUri( const QString &uriString )
 
   mHttpUri = uri.param( QStringLiteral( "url" ) );
   mBaseUrl = QgsWmsProvider::prepareUri( mHttpUri ); // must set here, setImageCrs is using that
-  QgsDebugMsg( "mBaseUrl = " + mBaseUrl );
+  QgsDebugMsgLevel( "mBaseUrl = " + mBaseUrl, 2 );
 
   mIgnoreGetMapUrl = uri.hasParam( QStringLiteral( "IgnoreGetMapUrl" ) );
   mIgnoreGetFeatureInfoUrl = uri.hasParam( QStringLiteral( "IgnoreGetFeatureInfoUrl" ) );
@@ -136,10 +174,30 @@ bool QgsWmsSettings::parseUri( const QString &uriString )
 
   mActiveSubLayers = uri.params( QStringLiteral( "layers" ) );
   mActiveSubStyles = uri.params( QStringLiteral( "styles" ) );
-  QgsDebugMsg( "Entering: layers:" + mActiveSubLayers.join( ", " ) + ", styles:" + mActiveSubStyles.join( ", " ) );
+  QgsDebugMsgLevel( "Entering: layers:" + mActiveSubLayers.join( ", " ) + ", styles:" + mActiveSubStyles.join( ", " ), 2 );
+
+  //opacities
+  if ( uri.hasParam( QStringLiteral( "opacities" ) ) )
+  {
+    mOpacities.clear();
+    const QStringList opacities = uri.params( QStringLiteral( "opacities" ) );
+    for ( const QString &opacity : opacities )
+    {
+      bool ok = false;
+      ( void )opacity.toInt( &ok );
+      if ( ok )
+      {
+        mOpacities.append( opacity );
+      }
+      else
+      {
+        mOpacities.append( QStringLiteral( "255" ) );
+      }
+    }
+  }
 
   mImageMimeType = uri.param( QStringLiteral( "format" ) );
-  QgsDebugMsg( "Setting image encoding to " + mImageMimeType + '.' );
+  QgsDebugMsgLevel( "Setting image encoding to " + mImageMimeType + '.', 2 );
 
   mMaxWidth = 0;
   mMaxHeight = 0;
@@ -168,7 +226,7 @@ bool QgsWmsSettings::parseUri( const QString &uriString )
   if ( uri.hasParam( QStringLiteral( "tileDimensions" ) ) )
   {
     mTiled = true;
-    const auto tileDimensions = uri.param( "tileDimensions" ).split( ';' );
+    const auto tileDimensions = uri.param( QStringLiteral( "tileDimensions" ) ).split( ';' );
     for ( const QString &param : tileDimensions )
     {
       QStringList kv = param.split( '=' );
@@ -182,7 +240,7 @@ bool QgsWmsSettings::parseUri( const QString &uriString )
       }
       else
       {
-        QgsDebugMsg( QStringLiteral( "skipped dimension %1" ).arg( param ) );
+        QgsDebugMsgLevel( QStringLiteral( "skipped dimension %1" ).arg( param ), 2 );
       }
     }
   }
@@ -190,55 +248,40 @@ bool QgsWmsSettings::parseUri( const QString &uriString )
   mCrsId = uri.param( QStringLiteral( "crs" ) );
 
   mEnableContextualLegend = uri.param( QStringLiteral( "contextualWMSLegend" ) ).toInt();
-  QgsDebugMsg( QStringLiteral( "Contextual legend: %1" ).arg( mEnableContextualLegend ) );
+  QgsDebugMsgLevel( QStringLiteral( "Contextual legend: %1" ).arg( mEnableContextualLegend ), 2 );
 
   mFeatureCount = uri.param( QStringLiteral( "featureCount" ) ).toInt(); // default to 0
 
   return true;
 }
 
-QgsWmstDimensionExtent QgsWmsSettings::parseTemporalExtent( QString extent )
+QgsWmstDimensionExtent QgsWmsSettings::parseTemporalExtent( const QString &extent )
 {
   QgsWmstDimensionExtent dimensionExtent;
-  if ( extent.isNull() )
+  if ( extent.isEmpty() )
     return dimensionExtent;
 
-  bool containResolution = false;
+  const QStringList parts = extent.split( ',' );
 
-  QStringList parts;
-
-  if ( extent.contains( ',' ) )
-    parts = extent.split( ',' );
-  else
-    parts.append( extent );
-
-  QStringListIterator iter( parts );
-
-  while ( iter.hasNext() )
+  for ( const QString &part : parts )
   {
-    QString item = iter.next();
-    QStringList itemParts;
+    const QString item = part.trimmed();
 
     // If item contain '/' content separator, it is an interval
     if ( item.contains( '/' ) )
     {
-      itemParts = item.split( '/' );
-      QStringListIterator itemIter( itemParts );
-      QgsWmstExtentPair itemPair;
+      const QStringList itemParts = item.split( '/' );
 
-      QgsWmstResolution itemResolution = itemPair.resolution;
-      QgsWmstDates itemDatesList = itemPair.dates;
+      QgsTimeDuration itemResolution;
+      QgsWmstDates itemDatesList;
 
-      bool itemContainResolution = false;
-
-      while ( itemIter.hasNext() )
+      for ( const QString &itemPart : itemParts )
       {
-        QString itemContent = itemIter.next();
+        QString itemContent = itemPart.trimmed();
 
         if ( itemContent.startsWith( 'P' ) )
         {
           itemResolution = parseWmstResolution( itemContent );
-          itemContainResolution = true;
         }
         else
         {
@@ -246,40 +289,29 @@ QgsWmstDimensionExtent QgsWmsSettings::parseTemporalExtent( QString extent )
         }
       }
 
-      if ( itemContainResolution )
-        dimensionExtent.datesResolutionList.append( QgsWmstExtentPair( itemDatesList, itemResolution ) );
+      dimensionExtent.datesResolutionList.append( QgsWmstExtentPair( itemDatesList, itemResolution ) );
+    }
+    else
+    {
+      QgsTimeDuration resolution;
+      QgsWmstDates datesList;
+      if ( item.startsWith( 'P' ) )
+      {
+        resolution = parseWmstResolution( item );
+      }
       else
-        dimensionExtent.datesResolutionList.append( QgsWmstExtentPair( itemDatesList, QgsWmstResolution() ) );
-      itemContainResolution = false;
-      continue;
-    }
+      {
+        datesList.dateTimes.append( parseWmstDateTimes( item ) );
+      }
 
-    QgsWmstExtentPair pair;
-
-    QgsWmstResolution resolution = pair.resolution;
-    QgsWmstDates datesList = pair.dates;
-
-    if ( item.startsWith( 'P' ) )
-    {
-      resolution = parseWmstResolution( item );
-      containResolution = true;
-    }
-    else
-    {
-      datesList.dateTimes.append( parseWmstDateTimes( item ) );
-    }
-
-    if ( containResolution )
       dimensionExtent.datesResolutionList.append( QgsWmstExtentPair( datesList, resolution ) );
-    else
-      dimensionExtent.datesResolutionList.append( QgsWmstExtentPair( datesList, QgsWmstResolution() ) );
-    containResolution = false;
+    }
   }
 
   return dimensionExtent;
 }
 
-void QgsWmsSettings::setTimeDimensionExtent( QgsWmstDimensionExtent timeDimensionExtent )
+void QgsWmsSettings::setTimeDimensionExtent( const QgsWmstDimensionExtent &timeDimensionExtent )
 {
   mTimeDimensionExtent = timeDimensionExtent;
 }
@@ -289,163 +321,77 @@ QgsWmstDimensionExtent QgsWmsSettings::timeDimensionExtent() const
   return mTimeDimensionExtent;
 }
 
-QDateTime QgsWmsSettings::addTime( QDateTime dateTime, QgsWmstResolution resolution )
-{
-  QDateTime resultDateTime = QDateTime( dateTime );
-
-  if ( resolution.year != -1 )
-    resultDateTime = resultDateTime.addYears( resolution.year );
-  if ( resolution.month != -1 )
-    resultDateTime = resultDateTime.addMonths( resolution.month );
-  if ( resolution.day != -1 )
-    resultDateTime = resultDateTime.addDays( resolution.day );
-  if ( resolution.hour != -1 )
-    resultDateTime = resultDateTime.addSecs( resolution.hour * 60 * 60 );
-  if ( resolution.minutes != -1 )
-    resultDateTime = resultDateTime.addSecs( resolution.minutes * 60 );
-  if ( resolution.seconds != -1 )
-    resultDateTime = resultDateTime.addSecs( resolution.seconds );
-
-  return resultDateTime;
-}
-
-QDateTime QgsWmsSettings::findLeastClosestDateTime( QDateTime dateTime, bool dateOnly ) const
+QDateTime QgsWmsSettings::findLeastClosestDateTime( const QDateTime &dateTime, bool dateOnly ) const
 {
   QDateTime closest = dateTime;
 
   long long seconds;
 
   if ( dateOnly )
-    seconds = QDateTime::fromString( closest.date().toString() ).toSecsSinceEpoch();
+    seconds = QDateTime( closest.date(), QTime( 0, 0, 0 ) ).toSecsSinceEpoch();
   else
     seconds = closest.toSecsSinceEpoch();
 
-  for ( QgsWmstExtentPair pair : mTimeDimensionExtent.datesResolutionList )
+  for ( const QgsWmstExtentPair &pair : mTimeDimensionExtent.datesResolutionList )
   {
-    if ( pair.dates.dateTimes.size() < 2 )
+    if ( pair.dates.dateTimes.empty() )
+    {
       continue;
+    }
+    else if ( pair.dates.dateTimes.size() == 1 )
+    {
+      long long startSeconds = pair.dates.dateTimes.at( 0 ).toSecsSinceEpoch();
 
-    long long startSeconds = pair.dates.dateTimes.at( 0 ).toSecsSinceEpoch();
-    long long endSeconds = pair.dates.dateTimes.at( 1 ).toSecsSinceEpoch();
+      // if out of bounds
+      if ( seconds < startSeconds )
+        continue;
 
-    // if out of bounds
-    if ( seconds < startSeconds || seconds > endSeconds )
-      continue;
-    if ( seconds == endSeconds )
-      break;
+      closest = pair.dates.dateTimes.at( 0 );
+    }
+    else
+    {
+      long long startSeconds = pair.dates.dateTimes.at( 0 ).toSecsSinceEpoch();
+      long long endSeconds = pair.dates.dateTimes.at( 1 ).toSecsSinceEpoch();
 
-    long long resolutionSeconds = pair.resolution.interval();
+      // if out of bounds
+      if ( seconds < startSeconds || seconds > endSeconds )
+        continue;
+      if ( seconds == endSeconds )
+        break;
 
-    if ( resolutionSeconds <= 0 )
-      continue;
-    long long step = std::floor( ( seconds - startSeconds ) / resolutionSeconds );
-    long long resultSeconds = startSeconds + ( step * resolutionSeconds );
+      long long resolutionSeconds = pair.resolution.toSeconds();
 
-    closest.setSecsSinceEpoch( resultSeconds );
+      if ( resolutionSeconds <= 0 )
+        continue;
+      long long step = std::floor( ( seconds - startSeconds ) / resolutionSeconds );
+      long long resultSeconds = startSeconds + ( step * resolutionSeconds );
+
+      closest.setSecsSinceEpoch( resultSeconds );
+    }
   }
 
   return closest;
 }
 
-QgsWmstResolution QgsWmsSettings::parseWmstResolution( QString item )
+QgsTimeDuration QgsWmsSettings::parseWmstResolution( const QString &itemText )
 {
-  QgsWmstResolution resolution;
-  bool found = false;
-
-  for ( char datesSymbol : { 'Y', 'M', 'D' } )
-  {
-    QString number = item.left( item.indexOf( datesSymbol ) );
-    int resolutionValue = number.remove( 'P' ).toInt();
-
-    if ( datesSymbol  == 'Y' && item.contains( 'Y' ) )
-    {
-      resolution.year = resolutionValue;
-      found = true;
-    }
-    if ( datesSymbol  == 'M' && item.contains( 'M' ) )
-    {
-      // Symbol M is used to both represent either month or minutes
-      // The check below is for determining whether it means month or minutes
-      if ( item.contains( 'T' ) &&
-           item.indexOf( 'T' ) < item.indexOf( 'M' ) )
-        continue;
-      resolution.month = resolutionValue;
-      found = true;
-    }
-    if ( datesSymbol  == 'D' && item.contains( 'D' ) )
-    {
-      resolution.day = resolutionValue;
-      found = true;
-    }
-
-    if ( found )
-    {
-      int symbolIndex = item.indexOf( datesSymbol );
-      item.remove( symbolIndex, 1 );
-      item.remove( symbolIndex - number.length(),
-                   number.length() );
-      found = false;
-    }
-  }
-  if ( !item.contains( 'T' ) )
-    return resolution;
-  else
-    item.remove( 'T' );
-
-  bool foundTime = false;
-
-  for ( char timeSymbol : { 'H', 'M', 'S' } )
-  {
-    QString number = item.left( item.indexOf( timeSymbol ) );
-    int resolutionValue = number.remove( 'P' ).toInt();
-
-    if ( timeSymbol == 'H' && item.contains( 'H' ) )
-    {
-      resolution.hour = resolutionValue;
-      foundTime = true;
-    }
-    if ( timeSymbol == 'M' && item.contains( 'M' ) )
-    {
-      resolution.minutes = resolutionValue;
-      foundTime = true;
-    }
-    if ( timeSymbol == 'S' && item.contains( 'S' ) )
-    {
-      resolution.seconds = resolutionValue;
-      foundTime = true;
-    }
-
-    if ( foundTime )
-    {
-      int symbolIndex = item.indexOf( timeSymbol );
-      item.remove( symbolIndex, 1 );
-      item.remove( symbolIndex - number.length(),
-                   number.length() );
-      foundTime = false;
-    }
-  }
+  bool ok = false;
+  QgsTimeDuration resolution = QgsTimeDuration::fromString( itemText, ok );
   return resolution;
 }
 
-QDateTime QgsWmsSettings::parseWmstDateTimes( QString item )
+QDateTime QgsWmsSettings::parseWmstDateTimes( const QString &item )
 {
   // Standard item will have YYYY-MM-DDTHH:mm:ss.SSSZ
   //  format a Qt::ISODateWithMs
 
-  QString format = "yyyy-MM-ddTHH:mm:ss.SSSZ";
-
   // Check if it does not have time part
   if ( !item.contains( 'T' ) )
-    return QDateTime::fromString( item, "yyyy-MM-dd" );
+    return QDateTime::fromString( item, QStringLiteral( "yyyy-MM-dd" ) );
+  else if ( item.contains( '.' ) )
+    return QDateTime::fromString( item, Qt::ISODateWithMs );
   else
-  {
-    if ( item.contains( '.' ) )
-      return QDateTime::fromString( item, Qt::ISODateWithMs );
-    else
-      return QDateTime::fromString( item, Qt::ISODate );
-  }
-
-  return QDateTime::fromString( item, format );
+    return QDateTime::fromString( item, Qt::ISODate );
 }
 
 
@@ -485,7 +431,7 @@ bool QgsWmsCapabilities::parseResponse( const QByteArray &response, QgsWmsParser
   }
 
 
-  QgsDebugMsg( QStringLiteral( "Converting to Dom." ) );
+  QgsDebugMsgLevel( QStringLiteral( "Converting to Dom." ), 2 );
 
   bool domOK;
   domOK = parseCapabilitiesDom( response, mCapabilities );
@@ -503,10 +449,10 @@ bool QgsWmsCapabilities::parseResponse( const QByteArray &response, QgsWmsParser
   }
 
   // get identify formats
-  for ( const QString &f : qgis::as_const( mCapabilities.capability.request.getFeatureInfo.format ) )
+  for ( const QString &f : std::as_const( mCapabilities.capability.request.getFeatureInfo.format ) )
   {
     // Don't use mSupportedGetFeatureFormats, there are too many possibilities
-    QgsDebugMsg( "supported format = " + f );
+    QgsDebugMsgLevel( "supported format = " + f, 2 );
     // 1.0: MIME - server shall choose format, we presume it to be plain text
     //      GML.1, GML.2, or GML.3
     // 1.1.0, 1.3.0 - mime types, GML should use application/vnd.ogc.gml
@@ -572,7 +518,7 @@ bool QgsWmsCapabilities::parseCapabilitiesDom( const QByteArray &xml, QgsWmsCapa
   QDomElement docElement = capabilitiesDom.documentElement();
 
   // Assert that the DTD is what we expected (i.e. a WMS Capabilities document)
-  QgsDebugMsg( "testing tagName " + docElement.tagName() );
+  QgsDebugMsgLevel( "testing tagName " + docElement.tagName(), 2 );
 
   if (
     docElement.tagName() != QLatin1String( "WMS_Capabilities" )  && // (1.3 vintage)
@@ -603,21 +549,21 @@ bool QgsWmsCapabilities::parseCapabilitiesDom( const QByteArray &xml, QgsWmsCapa
     QDomElement element = node.toElement();
     if ( !element.isNull() )
     {
-      QgsDebugMsg( element.tagName() ); // the node really is an element.
+      QgsDebugMsgLevel( element.tagName(), 2 ); // the node really is an element.
 
       if ( element.tagName() == QLatin1String( "Service" ) || element.tagName() == QLatin1String( "ows:ServiceProvider" ) || element.tagName() == QLatin1String( "ows:ServiceIdentification" ) )
       {
-        QgsDebugMsg( QStringLiteral( "  Service." ) );
+        QgsDebugMsgLevel( QStringLiteral( "  Service." ), 2 );
         parseService( element, capabilitiesProperty.service );
       }
       else if ( element.tagName() == QLatin1String( "Capability" ) || element.tagName() == QLatin1String( "ows:OperationsMetadata" ) )
       {
-        QgsDebugMsg( QStringLiteral( "  Capability." ) );
+        QgsDebugMsgLevel( QStringLiteral( "  Capability." ), 2 );
         parseCapability( element, capabilitiesProperty.capability );
       }
       else if ( element.tagName() == QLatin1String( "Contents" ) )
       {
-        QgsDebugMsg( QStringLiteral( "  Contents." ) );
+        QgsDebugMsgLevel( QStringLiteral( "  Contents." ), 2 );
         parseWMTSContents( element );
       }
     }
@@ -637,7 +583,6 @@ void QgsWmsCapabilities::parseService( const QDomElement &element, QgsWmsService
     QDomElement nodeElement = node.toElement();
     if ( !nodeElement.isNull() )
     {
-      // QgsDebugMsg( "  "  + e1.tagName() ); // the node really is an element.
       QString tagName = nodeElement.tagName();
       if ( tagName.startsWith( QLatin1String( "wms:" ) ) )
         tagName = tagName.mid( 4 );
@@ -719,7 +664,7 @@ void QgsWmsCapabilities::parseKeywordList( const QDomElement &element, QStringLi
 
       if ( tagName == QLatin1String( "Keyword" ) )
       {
-        QgsDebugMsg( QStringLiteral( "      Keyword." ) );
+        QgsDebugMsgLevel( QStringLiteral( "      Keyword." ), 2 );
         keywordListProperty += nodeElement.text();
       }
     }
@@ -873,7 +818,7 @@ void QgsWmsCapabilities::parseCapability( const QDomElement &element, QgsWmsCapa
     if ( tagName.startsWith( QLatin1String( "wms:" ) ) )
       tagName = tagName.mid( 4 );
 
-    QgsDebugMsg( "  "  + nodeElement.tagName() ); // the node really is an element.
+    QgsDebugMsgLevel( "  "  + nodeElement.tagName(), 2 ); // the node really is an element.
 
     if ( tagName == QLatin1String( "Request" ) )
     {
@@ -958,7 +903,7 @@ void QgsWmsCapabilities::parseCapability( const QDomElement &element, QgsWmsCapa
     QHash<QString, QString> abstracts;
 
     // Build layer identifier - title|abstract mapping
-    for ( const QgsWmsLayerProperty &layer : qgis::as_const( mLayersSupported ) )
+    for ( const QgsWmsLayerProperty &layer : std::as_const( mLayersSupported ) )
     {
       if ( !layer.name.isEmpty() )
       {
@@ -1007,17 +952,17 @@ void QgsWmsCapabilities::parseRequest( const QDomElement &element, QgsWmsRequest
 
       if ( operation == QLatin1String( "GetMap" ) )
       {
-        QgsDebugMsg( QStringLiteral( "      GetMap." ) );
+        QgsDebugMsgLevel( QStringLiteral( "      GetMap." ), 2 );
         parseOperationType( nodeElement, requestProperty.getMap );
       }
       else if ( operation == QLatin1String( "GetFeatureInfo" ) )
       {
-        QgsDebugMsg( QStringLiteral( "      GetFeatureInfo." ) );
+        QgsDebugMsgLevel( QStringLiteral( "      GetFeatureInfo." ), 2 );
         parseOperationType( nodeElement, requestProperty.getFeatureInfo );
       }
       else if ( operation == QLatin1String( "GetLegendGraphic" ) || operation == QLatin1String( "sld:GetLegendGraphic" ) )
       {
-        QgsDebugMsg( QStringLiteral( "      GetLegendGraphic." ) );
+        QgsDebugMsgLevel( QStringLiteral( "      GetLegendGraphic." ), 2 );
         parseOperationType( nodeElement, requestProperty.getLegendGraphic );
       }
     }
@@ -1171,16 +1116,12 @@ void QgsWmsCapabilities::parseLayer( const QDomElement &element, QgsWmsLayerProp
     QDomElement nodeElement = node.toElement();
     if ( !nodeElement.isNull() )
     {
-      //QgsDebugMsg( "    "  + nodeElement.tagName() ); // the node really is an element.
-
       QString tagName = nodeElement.tagName();
       if ( tagName.startsWith( QLatin1String( "wms:" ) ) )
         tagName = tagName.mid( 4 );
 
       if ( tagName == QLatin1String( "Layer" ) )
       {
-        //QgsDebugMsg( QStringLiteral( "      Nested layer." ) );
-
         QgsWmsLayerProperty subLayerProperty;
 
         // Inherit things into the sublayer
@@ -1215,19 +1156,22 @@ void QgsWmsCapabilities::parseLayer( const QDomElement &element, QgsWmsLayerProp
       {
         // CRS can contain several definitions separated by whitespace
         // though this was deprecated in WMS 1.1.1
-        const QStringList crsList = nodeElement.text().split( QRegExp( "\\s+" ) );
+        const QStringList crsList = nodeElement.text().split( QRegularExpression( "\\s+" ) );
         for ( const QString &srs : crsList )
         {
-          layerProperty.crs.push_back( srs );
+          if ( !layerProperty.crs.contains( srs ) )
+            layerProperty.crs.push_back( srs );
         }
       }
       else if ( tagName == QLatin1String( "LatLonBoundingBox" ) )    // legacy from earlier versions of WMS
       {
+        // boundingBox element can conatain comma as decimal separator and layer extent is not
+        // calculated at all. Fixing by replacing comma with point.
         layerProperty.ex_GeographicBoundingBox = QgsRectangle(
-              nodeElement.attribute( QStringLiteral( "minx" ) ).toDouble(),
-              nodeElement.attribute( QStringLiteral( "miny" ) ).toDouble(),
-              nodeElement.attribute( QStringLiteral( "maxx" ) ).toDouble(),
-              nodeElement.attribute( QStringLiteral( "maxy" ) ).toDouble()
+              nodeElement.attribute( QStringLiteral( "minx" ) ).replace( ',', '.' ).toDouble(),
+              nodeElement.attribute( QStringLiteral( "miny" ) ).replace( ',', '.' ).toDouble(),
+              nodeElement.attribute( QStringLiteral( "maxx" ) ).replace( ',', '.' ).toDouble(),
+              nodeElement.attribute( QStringLiteral( "maxy" ) ).replace( ',', '.' ).toDouble()
             );
 
         if ( nodeElement.hasAttribute( QStringLiteral( "SRS" ) ) && nodeElement.attribute( QStringLiteral( "SRS" ) ) != DEFAULT_LATLON_CRS )
@@ -1266,10 +1210,12 @@ void QgsWmsCapabilities::parseLayer( const QDomElement &element, QgsWmsLayerProp
 
         double wBLong, eBLong, sBLat, nBLat;
         bool wBOk, eBOk, sBOk, nBOk;
-        wBLong = wBoundLongitudeElem.text().toDouble( &wBOk );
-        eBLong = eBoundLongitudeElem.text().toDouble( &eBOk );
-        sBLat = sBoundLatitudeElem.text().toDouble( &sBOk );
-        nBLat = nBoundLatitudeElem.text().toDouble( &nBOk );
+        // boundingBox element can conatain comma as decimal separator and layer extent is not
+        // calculated at all. Fixing by replacing comma with point.
+        wBLong = wBoundLongitudeElem.text().replace( ',', '.' ).toDouble( &wBOk );
+        eBLong = eBoundLongitudeElem.text().replace( ',', '.' ).toDouble( &eBOk );
+        sBLat = sBoundLatitudeElem.text().replace( ',', '.' ).toDouble( &sBOk );
+        nBLat = nBoundLatitudeElem.text().replace( ',', '.' ).toDouble( &nBOk );
         if ( wBOk && eBOk && sBOk && nBOk )
         {
           layerProperty.ex_GeographicBoundingBox = QgsRectangle( wBLong, sBLat, eBLong, nBLat );
@@ -1278,10 +1224,10 @@ void QgsWmsCapabilities::parseLayer( const QDomElement &element, QgsWmsLayerProp
       else if ( tagName == QLatin1String( "BoundingBox" ) )
       {
         QgsWmsBoundingBoxProperty bbox;
-        bbox.box = QgsRectangle( nodeElement.attribute( QStringLiteral( "minx" ) ).toDouble(),
-                                 nodeElement.attribute( QStringLiteral( "miny" ) ).toDouble(),
-                                 nodeElement.attribute( QStringLiteral( "maxx" ) ).toDouble(),
-                                 nodeElement.attribute( QStringLiteral( "maxy" ) ).toDouble()
+        bbox.box = QgsRectangle( nodeElement.attribute( QStringLiteral( "minx" ) ).replace( ',', '.' ).toDouble(),
+                                 nodeElement.attribute( QStringLiteral( "miny" ) ).replace( ',', '.' ).toDouble(),
+                                 nodeElement.attribute( QStringLiteral( "maxx" ) ).replace( ',', '.' ).toDouble(),
+                                 nodeElement.attribute( QStringLiteral( "maxy" ) ).replace( ',', '.' ).toDouble()
                                );
         if ( nodeElement.hasAttribute( QStringLiteral( "CRS" ) ) || nodeElement.hasAttribute( QStringLiteral( "SRS" ) ) )
         {
@@ -1472,12 +1418,12 @@ void QgsWmsCapabilities::parseOperationType( const QDomElement &element, QgsWmsO
 
       if ( tagName == QLatin1String( "Format" ) )
       {
-        QgsDebugMsg( QStringLiteral( "      Format." ) );
+        QgsDebugMsgLevel( QStringLiteral( "      Format." ), 2 );
         operationType.format += nodeElement.text();
       }
       else if ( tagName == QLatin1String( "DCPType" ) )
       {
-        QgsDebugMsg( QStringLiteral( "      DCPType." ) );
+        QgsDebugMsgLevel( QStringLiteral( "      DCPType." ), 2 );
         QgsWmsDcpTypeProperty dcp;
         parseDcpType( nodeElement, dcp );
         operationType.dcpType.push_back( dcp );
@@ -1499,7 +1445,7 @@ void QgsWmsCapabilities::parseDcpType( const QDomElement &element, QgsWmsDcpType
     {
       if ( nodeElement.tagName() == QLatin1String( "HTTP" ) )
       {
-        QgsDebugMsg( QStringLiteral( "      HTTP." ) );
+        QgsDebugMsgLevel( QStringLiteral( "      HTTP." ), 2 );
         parseHttp( nodeElement, dcpType.http );
       }
     }
@@ -1522,12 +1468,12 @@ void QgsWmsCapabilities::parseHttp( const QDomElement &element, QgsWmsHttpProper
 
       if ( tagName == QLatin1String( "Get" ) )
       {
-        QgsDebugMsg( QStringLiteral( "      Get." ) );
+        QgsDebugMsgLevel( QStringLiteral( "      Get." ), 2 );
         parseGet( nodeElement, httpProperty.get );
       }
       else if ( tagName == QLatin1String( "Post" ) )
       {
-        QgsDebugMsg( QStringLiteral( "      Post." ) );
+        QgsDebugMsgLevel( QStringLiteral( "      Post." ), 2 );
         parsePost( nodeElement, httpProperty.post );
       }
     }
@@ -1550,7 +1496,7 @@ void QgsWmsCapabilities::parseGet( const QDomElement &element, QgsWmsGetProperty
 
       if ( tagName == QLatin1String( "OnlineResource" ) )
       {
-        QgsDebugMsg( QStringLiteral( "      OnlineResource." ) );
+        QgsDebugMsgLevel( QStringLiteral( "      OnlineResource." ), 2 );
         parseOnlineResource( nodeElement, getProperty.onlineResource );
       }
     }
@@ -1573,7 +1519,7 @@ void QgsWmsCapabilities::parsePost( const QDomElement &element, QgsWmsPostProper
 
       if ( tagName == QLatin1String( "OnlineResource" ) )
       {
-        QgsDebugMsg( QStringLiteral( "      OnlineResource." ) );
+        QgsDebugMsgLevel( QStringLiteral( "      OnlineResource." ), 2 );
         parseOnlineResource( nodeElement, postProperty.onlineResource );
       }
     }
@@ -1596,7 +1542,7 @@ void QgsWmsCapabilities::parseTileSetProfile( const QDomElement &element )
   {
     QDomElement nodeElement = node.toElement();
     {
-      QgsDebugMsg( "    "  + nodeElement.tagName() ); // the node really is an element.
+      QgsDebugMsgLevel( "    "  + nodeElement.tagName(), 2 ); // the node really is an element.
 
       QString tagName = nodeElement.tagName();
       if ( tagName.startsWith( QLatin1String( "wms:" ) ) )
@@ -1629,11 +1575,13 @@ void QgsWmsCapabilities::parseTileSetProfile( const QDomElement &element )
       else if ( tagName == QLatin1String( "BoundingBox" ) )
       {
         QgsWmsBoundingBoxProperty boundingBoxProperty;
+        // boundingBox element can conatain comma as decimal separator and layer extent is not
+        // calculated at all. Fixing by replacing comma with point.
         boundingBoxProperty.box = QgsRectangle(
-                                    nodeElement.attribute( QStringLiteral( "minx" ) ).toDouble(),
-                                    nodeElement.attribute( QStringLiteral( "miny" ) ).toDouble(),
-                                    nodeElement.attribute( QStringLiteral( "maxx" ) ).toDouble(),
-                                    nodeElement.attribute( QStringLiteral( "maxy" ) ).toDouble()
+                                    nodeElement.attribute( QStringLiteral( "minx" ) ).replace( ',', '.' ).toDouble(),
+                                    nodeElement.attribute( QStringLiteral( "miny" ) ).replace( ',', '.' ).toDouble(),
+                                    nodeElement.attribute( QStringLiteral( "maxx" ) ).replace( ',', '.' ).toDouble(),
+                                    nodeElement.attribute( QStringLiteral( "maxy" ) ).replace( ',', '.' ).toDouble()
                                   );
         if ( nodeElement.hasAttribute( QStringLiteral( "SRS" ) ) )
           boundingBoxProperty.crs = nodeElement.attribute( QStringLiteral( "SRS" ) );
@@ -1659,7 +1607,11 @@ void QgsWmsCapabilities::parseTileSetProfile( const QDomElement &element )
       }
       else if ( tagName == QLatin1String( "Resolutions" ) )
       {
+#if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)
         resolutions = nodeElement.text().trimmed().split( ' ', QString::SkipEmptyParts );
+#else
+        resolutions = nodeElement.text().trimmed().split( ' ', Qt::SkipEmptyParts );
+#endif
       }
       else
       {
@@ -1669,11 +1621,11 @@ void QgsWmsCapabilities::parseTileSetProfile( const QDomElement &element )
     node = node.nextSibling();
   }
 
-  matrixSet.identifier = QStringLiteral( "%1-wmsc-%2" ).arg( layers.join( QStringLiteral( "_" ) ) ).arg( mTileLayersSupported.size() );
+  matrixSet.identifier = QStringLiteral( "%1-wmsc-%2" ).arg( layers.join( QLatin1Char( '_' ) ) ).arg( mTileLayersSupported.size() );
 
-  tileLayer.identifier = layers.join( QStringLiteral( "," ) );
+  tileLayer.identifier = layers.join( QLatin1Char( ',' ) );
   QgsWmtsStyle style;
-  style.identifier = styles.join( QStringLiteral( "," ) );
+  style.identifier = styles.join( QLatin1Char( ',' ) );
   tileLayer.styles.insert( style.identifier, style );
   tileLayer.defaultStyle = style.identifier;
 
@@ -1731,13 +1683,13 @@ void QgsWmsCapabilities::parseWMTSContents( const QDomElement &element )
     if ( mParserSettings.invertAxisOrientation )
       invert = !invert;
 
-    QgsDebugMsg( QStringLiteral( "tilematrix set: %1 (supportedCRS:%2 crs:%3; metersPerUnit:%4 axisInverted:%5)" )
-                 .arg( set.identifier,
-                       supportedCRS,
-                       set.crs )
-                 .arg( metersPerUnit, 0, 'f' )
-                 .arg( invert ? "yes" : "no" )
-               );
+    QgsDebugMsgLevel( QStringLiteral( "tilematrix set: %1 (supportedCRS:%2 crs:%3; metersPerUnit:%4 axisInverted:%5)" )
+                      .arg( set.identifier,
+                            supportedCRS,
+                            set.crs )
+                      .arg( metersPerUnit, 0, 'f' )
+                      .arg( invert ? "yes" : "no" ), 2
+                    );
 
     for ( QDomElement secondChildElement = childElement.firstChildElement( QStringLiteral( "TileMatrix" ) );
           !secondChildElement.isNull();
@@ -1779,13 +1731,13 @@ void QgsWmsCapabilities::parseWMTSContents( const QDomElement &element )
       // in WMTS (and WMS 1.3) standard, being 0.28 pixel
       tileMatrix.tres = tileMatrix.scaleDenom * 0.00028 / metersPerUnit;
 
-      QgsDebugMsg( QStringLiteral( " %1: scale=%2 res=%3 tile=%4x%5 matrix=%6x%7 topLeft=%8" )
-                   .arg( tileMatrix.identifier )
-                   .arg( tileMatrix.scaleDenom ).arg( tileMatrix.tres )
-                   .arg( tileMatrix.tileWidth ).arg( tileMatrix.tileHeight )
-                   .arg( tileMatrix.matrixWidth ).arg( tileMatrix.matrixHeight )
-                   .arg( tileMatrix.topLeft.toString() )
-                 );
+      QgsDebugMsgLevel( QStringLiteral( " %1: scale=%2 res=%3 tile=%4x%5 matrix=%6x%7 topLeft=%8" )
+                        .arg( tileMatrix.identifier )
+                        .arg( tileMatrix.scaleDenom ).arg( tileMatrix.tres )
+                        .arg( tileMatrix.tileWidth ).arg( tileMatrix.tileHeight )
+                        .arg( tileMatrix.matrixWidth ).arg( tileMatrix.matrixHeight )
+                        .arg( tileMatrix.topLeft.toString() ), 2
+                      );
 
       set.tileMatrices.insert( tileMatrix.tres, tileMatrix );
     }
@@ -1804,7 +1756,7 @@ void QgsWmsCapabilities::parseWMTSContents( const QDomElement &element )
   {
 #ifdef QGISDEBUG
     QString id = childElement.firstChildElement( QStringLiteral( "ows:Identifier" ) ).text();  // clazy:exclude=unused-non-trivial-variable
-    QgsDebugMsg( QStringLiteral( "Layer %1" ).arg( id ) );
+    QgsDebugMsgLevel( QStringLiteral( "Layer %1" ).arg( id ), 2 );
 #endif
 
     QgsWmtsTileLayer tileLayer;
@@ -1947,7 +1899,7 @@ void QgsWmsCapabilities::parseWMTSContents( const QDomElement &element )
 
       QgsRaster::IdentifyFormat fmt = QgsRaster::IdentifyFormatUndefined;
 
-      QgsDebugMsg( QStringLiteral( "format=%1" ).arg( format ) );
+      QgsDebugMsgLevel( QStringLiteral( "format=%1" ).arg( format ), 2 );
 
       if ( format == QLatin1String( "MIME" ) )
         fmt = QgsRaster::IdentifyFormatText; // 1.0
@@ -1969,7 +1921,7 @@ void QgsWmsCapabilities::parseWMTSContents( const QDomElement &element )
         continue;
       }
 
-      QgsDebugMsg( QStringLiteral( "fmt=%1" ).arg( fmt ) );
+      QgsDebugMsgLevel( QStringLiteral( "fmt=%1" ).arg( fmt ), 2 );
       mIdentifyFormats.insert( fmt, format );
     }
 
@@ -2055,13 +2007,13 @@ void QgsWmsCapabilities::parseWMTSContents( const QDomElement &element )
             QgsDebugMsg( QStringLiteral( "   TileMatrix id:%1 not found." ).arg( id ) );
           }
 
-          QgsDebugMsg( QStringLiteral( "   TileMatrixLimit id:%1 row:%2-%3 col:%4-%5 matrix:%6x%7 %8" )
-                       .arg( id )
-                       .arg( limit.minTileRow ).arg( limit.maxTileRow )
-                       .arg( limit.minTileCol ).arg( limit.maxTileCol )
-                       .arg( matrixWidth ).arg( matrixHeight )
-                       .arg( isValid ? "valid" : "INVALID" )
-                     );
+          QgsDebugMsgLevel( QStringLiteral( "   TileMatrixLimit id:%1 row:%2-%3 col:%4-%5 matrix:%6x%7 %8" )
+                            .arg( id )
+                            .arg( limit.minTileRow ).arg( limit.maxTileRow )
+                            .arg( limit.minTileCol ).arg( limit.maxTileCol )
+                            .arg( matrixWidth ).arg( matrixHeight )
+                            .arg( isValid ? "valid" : "INVALID" ), 2
+                          );
 
           if ( isValid )
           {
@@ -2081,10 +2033,10 @@ void QgsWmsCapabilities::parseWMTSContents( const QDomElement &element )
 
       if ( format.isEmpty() || resourceType.isEmpty() || tmpl.isEmpty() )
       {
-        QgsDebugMsg( QStringLiteral( "SKIPPING ResourceURL format=%1 resourceType=%2 template=%3" )
-                     .arg( format,
-                           resourceType,
-                           tmpl ) );
+        QgsDebugMsgLevel( QStringLiteral( "SKIPPING ResourceURL format=%1 resourceType=%2 template=%3" )
+                          .arg( format,
+                                resourceType,
+                                tmpl ), 2 );
         continue;
       }
 
@@ -2098,7 +2050,7 @@ void QgsWmsCapabilities::parseWMTSContents( const QDomElement &element )
 
         QgsRaster::IdentifyFormat fmt = QgsRaster::IdentifyFormatUndefined;
 
-        QgsDebugMsg( QStringLiteral( "format=%1" ).arg( format ) );
+        QgsDebugMsgLevel( QStringLiteral( "format=%1" ).arg( format ), 2 );
 
         if ( format == QLatin1String( "MIME" ) )
           fmt = QgsRaster::IdentifyFormatText; // 1.0
@@ -2120,7 +2072,7 @@ void QgsWmsCapabilities::parseWMTSContents( const QDomElement &element )
           continue;
         }
 
-        QgsDebugMsg( QStringLiteral( "fmt=%1" ).arg( fmt ) );
+        QgsDebugMsgLevel( QStringLiteral( "fmt=%1" ).arg( fmt ), 2 );
         mIdentifyFormats.insert( fmt, format );
       }
       else
@@ -2132,7 +2084,7 @@ void QgsWmsCapabilities::parseWMTSContents( const QDomElement &element )
       }
     }
 
-    QgsDebugMsg( QStringLiteral( "add layer %1" ).arg( id ) );
+    QgsDebugMsgLevel( QStringLiteral( "add layer %1" ).arg( id ), 2 );
     mTileLayersSupported << tileLayer;
   }
 
@@ -2242,7 +2194,7 @@ bool QgsWmsCapabilities::detectTileLayerBoundingBox( QgsWmtsTileLayer &tileLayer
     return false;
 
   // take most coarse tile matrix ...
-  QMap<double, QgsWmtsTileMatrix>::const_iterator tmIt = tmsIt->tileMatrices.constEnd() - 1;
+  QMap<double, QgsWmtsTileMatrix>::const_iterator tmIt = --tmsIt->tileMatrices.constEnd();
   if ( tmIt == tmsIt->tileMatrices.constEnd() )
     return false;
 
@@ -2254,8 +2206,8 @@ bool QgsWmsCapabilities::detectTileLayerBoundingBox( QgsWmtsTileLayer &tileLayer
   QgsPointXY bottomRight( tm.topLeft.x() + res * tm.tileWidth * tm.matrixWidth,
                           tm.topLeft.y() - res * tm.tileHeight * tm.matrixHeight );
 
-  QgsDebugMsg( QStringLiteral( "detecting WMTS layer bounding box: tileset %1 matrix %2 crs %3 res %4" )
-               .arg( tmsIt->identifier, tm.identifier, tmsIt->crs ).arg( res ) );
+  QgsDebugMsgLevel( QStringLiteral( "detecting WMTS layer bounding box: tileset %1 matrix %2 crs %3 res %4" )
+                    .arg( tmsIt->identifier, tm.identifier, tmsIt->crs ).arg( res ), 2 );
 
   QgsRectangle extent( tm.topLeft, bottomRight );
   extent.normalize();
@@ -2401,7 +2353,7 @@ void QgsWmsCapabilitiesDownload::abort()
 void QgsWmsCapabilitiesDownload::capabilitiesReplyProgress( qint64 bytesReceived, qint64 bytesTotal )
 {
   QString message = tr( "%1 of %2 bytes of capabilities downloaded." ).arg( bytesReceived ).arg( bytesTotal < 0 ? QStringLiteral( "unknown number of" ) : QString::number( bytesTotal ) );
-  QgsDebugMsg( message );
+  QgsDebugMsgLevel( message, 2 );
   emit statusChanged( message );
 }
 
@@ -2411,7 +2363,7 @@ void QgsWmsCapabilitiesDownload::capabilitiesReplyFinished()
   {
     if ( mCapabilitiesReply->error() == QNetworkReply::NoError )
     {
-      QgsDebugMsg( QStringLiteral( "reply OK" ) );
+      QgsDebugMsgLevel( QStringLiteral( "reply OK" ), 2 );
       QVariant redirect = mCapabilitiesReply->attribute( QNetworkRequest::RedirectionTargetAttribute );
       if ( !redirect.isNull() )
       {
@@ -2443,7 +2395,7 @@ void QgsWmsCapabilitiesDownload::capabilitiesReplyFinished()
           mCapabilitiesReply->deleteLater();
           mCapabilitiesReply = nullptr;
 
-          QgsDebugMsg( QStringLiteral( "redirected getcapabilities: %1 forceRefresh=%2" ).arg( redirect.toString() ).arg( mForceRefresh ) );
+          QgsDebugMsgLevel( QStringLiteral( "redirected getcapabilities: %1 forceRefresh=%2" ).arg( redirect.toString() ).arg( mForceRefresh ), 2 );
           mCapabilitiesReply = QgsNetworkAccessManager::instance()->get( request );
 
           if ( !mAuth.setAuthorizationReply( mCapabilitiesReply ) )
@@ -2479,7 +2431,7 @@ void QgsWmsCapabilitiesDownload::capabilitiesReplyFinished()
           }
           cmd.setRawHeaders( hl );
 
-          QgsDebugMsg( QStringLiteral( "expirationDate:%1" ).arg( cmd.expirationDate().toString() ) );
+          QgsDebugMsgLevel( QStringLiteral( "expirationDate:%1" ).arg( cmd.expirationDate().toString() ), 2 );
           if ( cmd.expirationDate().isNull() )
           {
             QgsSettings s;
@@ -2490,12 +2442,12 @@ void QgsWmsCapabilitiesDownload::capabilitiesReplyFinished()
         }
         else
         {
-          QgsDebugMsg( QStringLiteral( "No cache for capabilities!" ) );
+          QgsDebugMsgLevel( QStringLiteral( "No cache for capabilities!" ), 2 );
         }
 
 #ifdef QGISDEBUG
         bool fromCache = mCapabilitiesReply->attribute( QNetworkRequest::SourceIsFromCacheAttribute ).toBool();
-        QgsDebugMsg( QStringLiteral( "Capabilities reply was cached: %1" ).arg( fromCache ) );
+        QgsDebugMsgLevel( QStringLiteral( "Capabilities reply was cached: %1" ).arg( fromCache ), 2 );
 #endif
 
         mHttpCapabilitiesResponse = mCapabilitiesReply->readAll();
@@ -2557,16 +2509,12 @@ void QgsWmtsTileMatrix::viewExtentIntersection( const QgsRectangle &viewExtent, 
     maxTileCol = tml->maxTileCol;
     minTileRow = tml->minTileRow;
     maxTileRow = tml->maxTileRow;
-    //QgsDebugMsg( QStringLiteral( "%1 %2: TileMatrixLimits col %3-%4 row %5-%6" )
-    //             .arg( tileMatrixSet->identifier, identifier )
-    //             .arg( minTileCol ).arg( maxTileCol )
-    //             .arg( minTileRow ).arg( maxTileRow ) );
   }
 
-  col0 = qBound( minTileCol, ( int ) std::floor( ( viewExtent.xMinimum() - topLeft.x() ) / twMap ), maxTileCol );
-  row0 = qBound( minTileRow, ( int ) std::floor( ( topLeft.y() - viewExtent.yMaximum() ) / thMap ), maxTileRow );
-  col1 = qBound( minTileCol, ( int ) std::floor( ( viewExtent.xMaximum() - topLeft.x() ) / twMap ), maxTileCol );
-  row1 = qBound( minTileRow, ( int ) std::floor( ( topLeft.y() - viewExtent.yMinimum() ) / thMap ), maxTileRow );
+  col0 = std::clamp( ( int ) std::floor( ( viewExtent.xMinimum() - topLeft.x() ) / twMap ),  minTileCol, maxTileCol );
+  row0 = std::clamp( ( int ) std::floor( ( topLeft.y() - viewExtent.yMaximum() ) / thMap ),  minTileRow, maxTileRow );
+  col1 = std::clamp( ( int ) std::floor( ( viewExtent.xMaximum() - topLeft.x() ) / twMap ),  minTileCol, maxTileCol );
+  row1 = std::clamp( ( int ) std::floor( ( topLeft.y() - viewExtent.yMinimum() ) / thMap ),  minTileRow, maxTileRow );
 }
 
 const QgsWmtsTileMatrix *QgsWmtsTileMatrixSet::findNearestResolution( double vres ) const
@@ -2574,7 +2522,6 @@ const QgsWmtsTileMatrix *QgsWmtsTileMatrixSet::findNearestResolution( double vre
   QMap<double, QgsWmtsTileMatrix>::const_iterator prev, it = tileMatrices.constBegin();
   while ( it != tileMatrices.constEnd() && it.key() < vres )
   {
-    //QgsDebugMsg( QStringLiteral( "res:%1 >= %2" ).arg( it.key() ).arg( vres ) );
     prev = it;
     ++it;
   }
@@ -2582,7 +2529,6 @@ const QgsWmtsTileMatrix *QgsWmtsTileMatrixSet::findNearestResolution( double vre
   if ( it == tileMatrices.constEnd() ||
        ( it != tileMatrices.constBegin() && vres - prev.key() < it.key() - vres ) )
   {
-    //QgsDebugMsg( QStringLiteral( "back to previous res" ) );
     it = prev;
   }
 

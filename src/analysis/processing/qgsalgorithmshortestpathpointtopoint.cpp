@@ -80,13 +80,13 @@ QVariantMap QgsShortestPathPointToPointAlgorithm::processAlgorithm( const QVaria
   mDirector->makeGraph( mBuilder.get(), points, snappedPoints, feedback );
 
   feedback->pushInfo( QObject::tr( "Calculating shortest path…" ) );
-  QgsGraph *graph = mBuilder->graph();
+  std::unique_ptr< QgsGraph > graph( mBuilder->takeGraph() );
   int idxStart = graph->findVertex( snappedPoints[0] );
   int idxEnd = graph->findVertex( snappedPoints[1] );
 
   QVector< int > tree;
   QVector< double > costs;
-  QgsGraphAnalyzer::dijkstra( graph, idxStart, 0, &tree, &costs );
+  QgsGraphAnalyzer::dijkstra( graph.get(), idxStart, 0, &tree, &costs );
 
   if ( tree.at( idxEnd ) == -1 )
   {
@@ -110,7 +110,8 @@ QVariantMap QgsShortestPathPointToPointAlgorithm::processAlgorithm( const QVaria
   attributes << startPoint.toString() << endPoint.toString() << cost / mMultiplier;
   feat.setGeometry( geom );
   feat.setAttributes( attributes );
-  sink->addFeature( feat, QgsFeatureSink::FastInsert );
+  if ( !sink->addFeature( feat, QgsFeatureSink::FastInsert ) )
+    throw QgsProcessingException( writeFeatureError( sink.get(), parameters, QStringLiteral( "OUTPUT" ) ) );
 
   QVariantMap outputs;
   outputs.insert( QStringLiteral( "OUTPUT" ), dest );

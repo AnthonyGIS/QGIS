@@ -81,6 +81,33 @@ QgsProjectLayerGroupDialog::QgsProjectLayerGroupDialog( QWidget *parent, const Q
   connect( mButtonBox, &QDialogButtonBox::helpRequested, this, &QgsProjectLayerGroupDialog::showHelp );
 }
 
+QgsProjectLayerGroupDialog::QgsProjectLayerGroupDialog( const QgsProject *project, QWidget *parent, Qt::WindowFlags f )
+  : QDialog( parent, f )
+{
+
+  // Preconditions
+  Q_ASSERT( project );
+  Q_ASSERT( project->layerTreeRoot() );
+
+  setupUi( this );
+  QgsGui::enableAutoGeometryRestore( this );
+
+  mRootGroup = project->layerTreeRoot()->clone();
+  QgsEmbeddedLayerTreeModel *model = new QgsEmbeddedLayerTreeModel( mRootGroup, this );
+  mTreeView->setModel( model );
+
+  mProjectFileWidget->hide();
+  mButtonBox->button( QDialogButtonBox::Ok )->setEnabled( true );
+
+  removeEmbeddedNodes( mRootGroup );
+
+  connect( mTreeView->selectionModel(), &QItemSelectionModel::selectionChanged, this, &QgsProjectLayerGroupDialog::onTreeViewSelectionChanged );
+  connect( mButtonBox, &QDialogButtonBox::accepted, this, &QgsProjectLayerGroupDialog::mButtonBox_accepted );
+  connect( mButtonBox, &QDialogButtonBox::rejected, this, &QDialog::reject );
+  connect( mButtonBox, &QDialogButtonBox::helpRequested, this, &QgsProjectLayerGroupDialog::showHelp );
+
+}
+
 QgsProjectLayerGroupDialog::~QgsProjectLayerGroupDialog()
 {
   delete mRootGroup;
@@ -89,11 +116,10 @@ QgsProjectLayerGroupDialog::~QgsProjectLayerGroupDialog()
 QStringList QgsProjectLayerGroupDialog::selectedGroups() const
 {
   QStringList groups;
-  QgsLayerTreeModel *model = mTreeView->layerTreeModel();
   const auto constSelectedIndexes = mTreeView->selectionModel()->selectedIndexes();
   for ( const QModelIndex &index : constSelectedIndexes )
   {
-    QgsLayerTreeNode *node = model->index2node( index );
+    QgsLayerTreeNode *node = mTreeView->index2node( index );
     if ( QgsLayerTree::isGroup( node ) )
       groups << QgsLayerTree::toGroup( node )->name();
   }
@@ -103,11 +129,10 @@ QStringList QgsProjectLayerGroupDialog::selectedGroups() const
 QStringList QgsProjectLayerGroupDialog::selectedLayerIds() const
 {
   QStringList layerIds;
-  QgsLayerTreeModel *model = mTreeView->layerTreeModel();
   const auto constSelectedIndexes = mTreeView->selectionModel()->selectedIndexes();
   for ( const QModelIndex &index : constSelectedIndexes )
   {
-    QgsLayerTreeNode *node = model->index2node( index );
+    QgsLayerTreeNode *node = mTreeView->index2node( index );
     if ( QgsLayerTree::isLayer( node ) )
       layerIds << QgsLayerTree::toLayer( node )->layerId();
   }
@@ -117,11 +142,10 @@ QStringList QgsProjectLayerGroupDialog::selectedLayerIds() const
 QStringList QgsProjectLayerGroupDialog::selectedLayerNames() const
 {
   QStringList layerNames;
-  QgsLayerTreeModel *model = mTreeView->layerTreeModel();
   const auto constSelectedIndexes = mTreeView->selectionModel()->selectedIndexes();
   for ( const QModelIndex &index : constSelectedIndexes )
   {
-    QgsLayerTreeNode *node = model->index2node( index );
+    QgsLayerTreeNode *node = mTreeView->index2node( index );
     if ( QgsLayerTree::isLayer( node ) )
       layerNames << QgsLayerTree::toLayer( node )->name();
   }
@@ -135,7 +159,7 @@ QString QgsProjectLayerGroupDialog::selectedProjectFile() const
 
 bool QgsProjectLayerGroupDialog::isValid() const
 {
-  return nullptr != mTreeView->layerTreeModel();
+  return static_cast< bool >( mTreeView->layerTreeModel() );
 }
 
 void QgsProjectLayerGroupDialog::changeProjectFile()
@@ -171,7 +195,7 @@ void QgsProjectLayerGroupDialog::changeProjectFile()
   if ( QgsZipUtils::isZipFile( mProjectFileWidget->filePath() ) )
   {
 
-    archive = qgis::make_unique<QgsProjectArchive>();
+    archive = std::make_unique<QgsProjectArchive>();
 
     // unzip the archive
     if ( !archive->unzip( mProjectFileWidget->filePath() ) )
@@ -207,7 +231,10 @@ void QgsProjectLayerGroupDialog::changeProjectFile()
   QDomElement layerTreeElem = projectDom.documentElement().firstChildElement( QStringLiteral( "layer-tree-group" ) );
   if ( !layerTreeElem.isNull() )
   {
-    mRootGroup->readChildrenFromXml( layerTreeElem, QgsReadWriteContext() );
+    // Use a temporary tree to read the nodes to prevent signals being delivered to the models
+    QgsLayerTree tempTree;
+    tempTree.readChildrenFromXml( layerTreeElem,  QgsReadWriteContext() );
+    mRootGroup->insertChildNodes( -1, tempTree.abandonChildren() );
   }
   else
   {

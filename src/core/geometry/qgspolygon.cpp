@@ -46,7 +46,7 @@ QString QgsPolygon::geometryType() const
 
 QgsPolygon *QgsPolygon::createEmptyWithSameType() const
 {
-  auto result = qgis::make_unique< QgsPolygon >();
+  auto result = std::make_unique< QgsPolygon >();
   result->mWkbType = mWkbType;
   return result.release();
 }
@@ -121,7 +121,7 @@ bool QgsPolygon::fromWkb( QgsConstWkbPtr &wkbPtr )
   return true;
 }
 
-QByteArray QgsPolygon::asWkb( QgsAbstractGeometry::WkbFlags flags ) const
+int QgsPolygon::wkbSize( QgsAbstractGeometry::WkbFlags ) const
 {
   int binarySize = sizeof( char ) + sizeof( quint32 ) + sizeof( quint32 );
 
@@ -135,8 +135,13 @@ QByteArray QgsPolygon::asWkb( QgsAbstractGeometry::WkbFlags flags ) const
     binarySize += sizeof( quint32 ) + curve->numPoints() * ( 2 + curve->is3D() + curve->isMeasure() ) * sizeof( double );
   }
 
+  return binarySize;
+}
+
+QByteArray QgsPolygon::asWkb( QgsAbstractGeometry::WkbFlags flags ) const
+{
   QByteArray wkbArray;
-  wkbArray.resize( binarySize );
+  wkbArray.resize( QgsPolygon::wkbSize() );
   QgsWkbPtr wkb( wkbArray );
   wkb << static_cast<char>( QgsApplication::endian() );
 
@@ -238,7 +243,7 @@ void QgsPolygon::setExteriorRing( QgsCurve *ring )
   setZMTypeFromSubGeometry( ring, QgsWkbTypes::Polygon );
 
   //match dimensionality for rings
-  for ( QgsCurve *ring : qgis::as_const( mInteriorRings ) )
+  for ( QgsCurve *ring : std::as_const( mInteriorRings ) )
   {
     ring->convertTo( mExteriorRing->wkbType() );
   }

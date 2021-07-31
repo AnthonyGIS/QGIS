@@ -2,7 +2,7 @@
 ########################################################
 # Files
 
-SET (WMTS_SRCS
+set (WMTS_SRCS
   qgswmts.cpp
   qgswmtsutils.cpp
   qgswmtsgetcapabilities.cpp
@@ -11,41 +11,30 @@ SET (WMTS_SRCS
   qgswmtsparameters.cpp
 )
 
-SET (WMTS_HDRS
+set (WMTS_HDRS
   qgswmtsparameters.h
 )
 
 ########################################################
 # Build
 
-ADD_LIBRARY (wmts MODULE ${WMTS_SRCS} ${WMTS_HDRS})
+add_library (wmts MODULE ${WMTS_SRCS} ${WMTS_HDRS})
 
+# require c++17
+target_compile_features(wmts PRIVATE cxx_std_17)
 
-INCLUDE_DIRECTORIES(SYSTEM
+include_directories(SYSTEM
   ${GDAL_INCLUDE_DIR}
   ${POSTGRES_INCLUDE_DIR}
 )
 
-INCLUDE_DIRECTORIES(
-  ${CMAKE_SOURCE_DIR}/external
-  ${CMAKE_SOURCE_DIR}/external/nlohmann
+include_directories(
 
-  ${CMAKE_SOURCE_DIR}/src/core
-  ${CMAKE_SOURCE_DIR}/src/core/dxf
-  ${CMAKE_SOURCE_DIR}/src/core/expression
-  ${CMAKE_SOURCE_DIR}/src/core/geometry
-  ${CMAKE_SOURCE_DIR}/src/core/labeling
-  ${CMAKE_SOURCE_DIR}/src/core/metadata
-  ${CMAKE_SOURCE_DIR}/src/core/raster
-  ${CMAKE_SOURCE_DIR}/src/core/symbology
-  ${CMAKE_SOURCE_DIR}/src/core/effects
-  ${CMAKE_SOURCE_DIR}/src/core/layertree
   ${CMAKE_SOURCE_DIR}/src/server/
   ${CMAKE_SOURCE_DIR}/src/server/services
   ${CMAKE_SOURCE_DIR}/src/server/services/wmts
   ${CMAKE_SOURCE_DIR}/src/server/services/wms
 
-  ${CMAKE_BINARY_DIR}/src/core
   ${CMAKE_BINARY_DIR}/src/python
   ${CMAKE_BINARY_DIR}/src/analysis
   ${CMAKE_BINARY_DIR}/src/server
@@ -55,7 +44,7 @@ INCLUDE_DIRECTORIES(
 )
 
 
-TARGET_LINK_LIBRARIES(wmts
+target_link_libraries(wmts
   qgis_core
   qgis_server
 )
@@ -64,7 +53,7 @@ TARGET_LINK_LIBRARIES(wmts
 ########################################################
 # Install
 
-INSTALL(TARGETS wmts
+install(TARGETS wmts
     RUNTIME DESTINATION ${QGIS_SERVER_MODULE_DIR}
     LIBRARY DESTINATION ${QGIS_SERVER_MODULE_DIR}
 )

@@ -1,115 +1,80 @@
-INCLUDE_DIRECTORIES(
-  ${CMAKE_SOURCE_DIR}/src/core
-  ${CMAKE_SOURCE_DIR}/src/core/auth
-  ${CMAKE_SOURCE_DIR}/src/core/expression
-  ${CMAKE_SOURCE_DIR}/src/core/geometry
-  ${CMAKE_SOURCE_DIR}/src/core/labeling
-  ${CMAKE_SOURCE_DIR}/src/core/raster
-  ${CMAKE_SOURCE_DIR}/src/core/metadata
-  ${CMAKE_SOURCE_DIR}/src/core/symbology
-  ${CMAKE_SOURCE_DIR}/src/core/effects
-  ${CMAKE_SOURCE_DIR}/src/core/pal
-  ${CMAKE_SOURCE_DIR}/src/core/textrenderer
-  ${CMAKE_SOURCE_DIR}/src/gui
-  ${CMAKE_SOURCE_DIR}/src/gui/auth
-  ${CMAKE_SOURCE_DIR}/external
-  ${CMAKE_SOURCE_DIR}/external/nlohmann
+include_directories(
 
   ${CMAKE_BINARY_DIR}/src/ui
-  ${CMAKE_BINARY_DIR}/src/core
-  ${CMAKE_BINARY_DIR}/src/gui
-
 )
 
-INCLUDE_DIRECTORIES(SYSTEM
-  ${GEOS_INCLUDE_DIR}
-  ${QCA_INCLUDE_DIR}
-  ${QTKEYCHAIN_INCLUDE_DIR}
-)
-
-IF (WITH_GUI)
-  INCLUDE_DIRECTORIES(SYSTEM
+if (WITH_GUI)
+  include_directories(SYSTEM
     ${QSCINTILLA_INCLUDE_DIR}
   )
-ENDIF ()
+endif()
 
 ###############################################################################
 
-SET (AFS_SRCS
-  qgsarcgisrestutils.cpp
-  qgsafsdataitems.cpp
+set (AFS_SRCS
   qgsafsfeatureiterator.cpp
   qgsafsprovider.cpp
   qgsafsshareddata.cpp
+  qgsarcgisrestdataitems.cpp
 )
-IF (WITH_GUI)
-  SET(AFS_SRCS ${AFS_SRCS}
-    qgsafsprovidergui.cpp
-    qgsafsdataitemguiprovider.cpp
-    qgsafssourceselect.cpp
-    qgsarcgisservicesourceselect.cpp
+if (WITH_GUI)
+  set(AFS_SRCS ${AFS_SRCS}
+    qgsarcgisrestdataitemguiprovider.cpp
+    qgsarcgisrestprovidergui.cpp
+    qgsarcgisrestsourceselect.cpp
+    qgsarcgisrestsourcewidget.cpp
+    qgsnewarcgisrestconnection.cpp
   )
-ENDIF ()
+endif()
 
-ADD_LIBRARY (arcgisfeatureserverprovider_a STATIC ${AFS_SRCS})
-ADD_LIBRARY(arcgisfeatureserverprovider MODULE ${AFS_SRCS})
+add_library (provider_arcgisfeatureserver_a STATIC ${AFS_SRCS})
+add_library(provider_arcgisfeatureserver MODULE ${AFS_SRCS})
 
-TARGET_LINK_LIBRARIES(arcgisfeatureserverprovider
+# require c++17
+target_compile_features(provider_arcgisfeatureserver_a PRIVATE cxx_std_17)
+target_compile_features(provider_arcgisfeatureserver PRIVATE cxx_std_17)
+
+target_link_libraries(provider_arcgisfeatureserver
   qgis_core
   ${QCA_LIBRARY}
 )
 
-TARGET_LINK_LIBRARIES (arcgisfeatureserverprovider_a
+target_link_libraries (provider_arcgisfeatureserver_a
   qgis_core
   ${QCA_LIBRARY}
 )
 
-IF (WITH_GUI)
-  TARGET_LINK_LIBRARIES(arcgisfeatureserverprovider
+if (WITH_GUI)
+  target_link_libraries(provider_arcgisfeatureserver
     qgis_gui
   )
-  TARGET_LINK_LIBRARIES(arcgisfeatureserverprovider_a
+  target_link_libraries(provider_arcgisfeatureserver_a
     qgis_gui
   )
-  ADD_DEPENDENCIES(arcgisfeatureserverprovider ui)
-  ADD_DEPENDENCIES(arcgisfeatureserverprovider_a ui)
-ENDIF ()
+  add_dependencies(provider_arcgisfeatureserver ui)
+  add_dependencies(provider_arcgisfeatureserver_a ui)
+endif()
 
-INSTALL (TARGETS arcgisfeatureserverprovider
+install (TARGETS provider_arcgisfeatureserver
   RUNTIME DESTINATION ${QGIS_PLUGIN_DIR}
   LIBRARY DESTINATION ${QGIS_PLUGIN_DIR})
 
 ###############################################################################
 
-SET (AMS_SRCS
-  qgsarcgisrestutils.cpp
-  qgsamsdataitems.cpp
+set (AMS_SRCS
   qgsamsprovider.cpp
 )
 
-IF (WITH_GUI)
-  SET(AMS_SRCS ${AMS_SRCS}
-    qgsamsprovidergui.cpp
-    qgsamsdataitemguiprovider.cpp
-    qgsamssourceselect.cpp
-    qgsarcgisservicesourceselect.cpp
-  )
-ENDIF ()
+add_library(provider_arcgismapserver MODULE ${AMS_SRCS})
 
-ADD_LIBRARY(arcgismapserverprovider MODULE ${AMS_SRCS})
+# require c++17
+target_compile_features(provider_arcgismapserver PRIVATE cxx_std_17)
 
-TARGET_LINK_LIBRARIES(arcgismapserverprovider
+target_link_libraries(provider_arcgismapserver
   qgis_core
   ${QCA_LIBRARY}
 )
 
-IF (WITH_GUI)
-  TARGET_LINK_LIBRARIES(arcgismapserverprovider
-    qgis_gui
-  )
-  ADD_DEPENDENCIES(arcgismapserverprovider ui)
-ENDIF ()
-
-INSTALL (TARGETS arcgismapserverprovider
+install (TARGETS provider_arcgismapserver
   RUNTIME DESTINATION ${QGIS_PLUGIN_DIR}
   LIBRARY DESTINATION ${QGIS_PLUGIN_DIR})

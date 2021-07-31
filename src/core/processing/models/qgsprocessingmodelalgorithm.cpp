@@ -31,7 +31,7 @@
 
 #include <QFile>
 #include <QTextStream>
-
+#include <QRegularExpression>
 ///@cond NOT_STABLE
 
 QgsProcessingModelAlgorithm::QgsProcessingModelAlgorithm( const QString &name, const QString &group, const QString &groupId )
@@ -42,9 +42,6 @@ QgsProcessingModelAlgorithm::QgsProcessingModelAlgorithm( const QString &name, c
 
 void QgsProcessingModelAlgorithm::initAlgorithm( const QVariantMap & )
 {
-  std::unique_ptr< QgsProcessingParameterBoolean > verboseLog = qgis::make_unique< QgsProcessingParameterBoolean >( QStringLiteral( "VERBOSE_LOG" ), QObject::tr( "Verbose logging" ), false, true );
-  verboseLog->setFlags( verboseLog->flags() | QgsProcessingParameterDefinition::FlagHidden );
-  addParameter( verboseLog.release() );
 }
 
 QString QgsProcessingModelAlgorithm::name() const
@@ -264,11 +261,20 @@ QVariantMap QgsProcessingModelAlgorithm::processAlgorithm( const QVariantMap &pa
 {
   QSet< QString > toExecute;
   QMap< QString, QgsProcessingModelChildAlgorithm >::const_iterator childIt = mChildAlgorithms.constBegin();
+  QSet< QString > broken;
   for ( ; childIt != mChildAlgorithms.constEnd(); ++childIt )
   {
-    if ( childIt->isActive() && childIt->algorithm() )
-      toExecute.insert( childIt->childId() );
+    if ( childIt->isActive() )
+    {
+      if ( childIt->algorithm() )
+        toExecute.insert( childIt->childId() );
+      else
+        broken.insert( childIt->childId() );
+    }
   }
+
+  if ( !broken.empty() )
+    throw QgsProcessingException( QCoreApplication::translate( "QgsProcessingModelAlgorithm", "Cannot run model, the following algorithms are not available on this system: %1" ).arg( broken.values().join( QLatin1String( ", " ) ) ) );
 
   QElapsedTimer totalTime;
   totalTime.start();
@@ -279,7 +285,7 @@ QVariantMap QgsProcessingModelAlgorithm::processAlgorithm( const QVariantMap &pa
   QVariantMap childResults;
   QVariantMap childInputs;
 
-  const bool verboseLog = parameterAsBool( parameters, QStringLiteral( "VERBOSE_LOG" ), context );
+  const bool verboseLog = context.logLevel() == QgsProcessingContext::Verbose;
 
   QVariantMap finalResults;
   QSet< QString > executed;
@@ -287,7 +293,7 @@ QVariantMap QgsProcessingModelAlgorithm::processAlgorithm( const QVariantMap &pa
   while ( executedAlg && executed.count() < toExecute.count() )
   {
     executedAlg = false;
-    for ( const QString &childId : qgis::as_const( toExecute ) )
+    for ( const QString &childId : std::as_const( toExecute ) )
     {
       if ( feedback && feedback->isCanceled() )
         break;
@@ -338,7 +344,7 @@ QVariantMap QgsProcessingModelAlgorithm::processAlgorithm( const QVariantMap &pa
       if ( feedback && !skipGenericLogging )
       {
         feedback->pushInfo( QObject::tr( "Input Parameters:" ) );
-        feedback->pushCommandInfo( QStringLiteral( "{ %1 }" ).arg( params.join( QStringLiteral( ", " ) ) ) );
+        feedback->pushCommandInfo( QStringLiteral( "{ %1 }" ).arg( params.join( QLatin1String( ", " ) ) ) );
       }
 
       QElapsedTimer childTime;
@@ -392,7 +398,7 @@ QVariantMap QgsProcessingModelAlgorithm::processAlgorithm( const QVariantMap &pa
       {
         // check if any dependent algorithms should be canceled based on the outputs of this algorithm run
         // first find all direct dependencies of this algorithm by looking through all remaining child algorithms
-        for ( const QString &candidateId : qgis::as_const( toExecute ) )
+        for ( const QString &candidateId : std::as_const( toExecute ) )
         {
           if ( executed.contains( candidateId ) )
             continue;
@@ -796,7 +802,7 @@ QStringList QgsProcessingModelAlgorithm::asPythonCode( const QgsProcessing::Pyth
         }
 
         bool found = false;
-        for ( const QString &line : qgis::as_const( lines ) )
+        for ( const QString &line : std::as_const( lines ) )
         {
           if ( line.contains( it.key() ) )
           {
@@ -832,6 +838,7 @@ QMap<QString, QgsProcessingModelAlgorithm::VariableDefinition> QgsProcessingMode
   // "static"/single value sources
   QgsProcessingModelChildParameterSources sources = availableSourcesForChild( childId, QStringList() << QgsProcessingParameterNumber::typeName()
       << QgsProcessingParameterDistance::typeName()
+      << QgsProcessingParameterDuration::typeName()
       << QgsProcessingParameterScale::typeName()
       << QgsProcessingParameterBoolean::typeName()
       << QgsProcessingParameterEnum::typeName()
@@ -842,6 +849,7 @@ QMap<QString, QgsProcessingModelAlgorithm::VariableDefinition> QgsProcessingMode
       << QgsProcessingParameterCrs::typeName()
       << QgsProcessingParameterRange::typeName()
       << QgsProcessingParameterPoint::typeName()
+      << QgsProcessingParameterGeometry::typeName()
       << QgsProcessingParameterFile::typeName()
       << QgsProcessingParameterFolderDestination::typeName()
       << QgsProcessingParameterBand::typeName()
@@ -858,7 +866,7 @@ QMap<QString, QgsProcessingModelAlgorithm::VariableDefinition> QgsProcessingMode
       << QgsProcessingOutputString::typeName()
       << QgsProcessingOutputBoolean::typeName() );
 
-  for ( const QgsProcessingModelChildParameterSource &source : qgis::as_const( sources ) )
+  for ( const QgsProcessingModelChildParameterSource &source : std::as_const( sources ) )
   {
     QString name;
     QVariant value;
@@ -903,7 +911,7 @@ QMap<QString, QgsProcessingModelAlgorithm::VariableDefinition> QgsProcessingMode
                                       << QgsProcessingOutputRasterLayer::typeName()
                                       << QgsProcessingOutputMapLayer::typeName() );
 
-  for ( const QgsProcessingModelChildParameterSource &source : qgis::as_const( sources ) )
+  for ( const QgsProcessingModelChildParameterSource &source : std::as_const( sources ) )
   {
     QString name;
     QVariant value;
@@ -962,7 +970,7 @@ QMap<QString, QgsProcessingModelAlgorithm::VariableDefinition> QgsProcessingMode
 
   sources = availableSourcesForChild( childId, QStringList()
                                       << QgsProcessingParameterFeatureSource::typeName() );
-  for ( const QgsProcessingModelChildParameterSource &source : qgis::as_const( sources ) )
+  for ( const QgsProcessingModelChildParameterSource &source : std::as_const( sources ) )
   {
     QString name;
     QVariant value;
@@ -1176,7 +1184,7 @@ bool QgsProcessingModelAlgorithm::validate( QStringList &issues ) const
     QStringList childIssues;
     res = validateChildAlgorithm( it->childId(), childIssues ) && res;
 
-    for ( const QString &issue : qgis::as_const( childIssues ) )
+    for ( const QString &issue : std::as_const( childIssues ) )
     {
       issues << QStringLiteral( "<b>%1</b>: %2" ).arg( it->description(), issue );
     }
@@ -1410,7 +1418,16 @@ bool QgsProcessingModelAlgorithm::loadVariant( const QVariant &model )
     // otherwise models may become unusable (e.g. due to removed plugins providing algs/parameters)
     // with no way for users to repair them
     if ( param )
+    {
+      if ( param->name() == QLatin1String( "VERBOSE_LOG" ) )
+        return; // internal parameter -- some versions of QGIS incorrectly stored this in the model definition file
+
+      // set parameter help from help content
+      param->setHelp( mHelpContent.value( param->name() ).toString() );
+
+      // add parameter
       addParameter( param.release() );
+    }
     else
     {
       QVariantMap map = value.toMap();
@@ -1423,7 +1440,7 @@ bool QgsProcessingModelAlgorithm::loadVariant( const QVariant &model )
 
   QSet< QString > loadedParams;
   // first add parameters respecting mParameterOrder
-  for ( const QString &name : qgis::as_const( mParameterOrder ) )
+  for ( const QString &name : std::as_const( mParameterOrder ) )
   {
     if ( paramDefMap.contains( name ) )
     {
@@ -1926,11 +1943,7 @@ void QgsProcessingModelAlgorithm::setVariables( const QVariantMap &variables )
 
 QVariantMap QgsProcessingModelAlgorithm::designerParameterValues() const
 {
-  QVariantMap res = mDesignerParameterValues;
-  // when running through the designer, we show a detailed verbose log to aid in model debugging
-  res.insert( QStringLiteral( "VERBOSE_LOG" ), true );
-  return res;
+  return mDesignerParameterValues;
 }
 
 ///@endcond
-

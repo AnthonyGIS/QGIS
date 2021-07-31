@@ -25,7 +25,7 @@
 /**
  * \ingroup gui
  * \class QgsCompoundColorWidget
- * A custom QGIS widget for selecting a color, including options for selecting colors via
+ * \brief A custom QGIS widget for selecting a color, including options for selecting colors via
  * hue wheel, color swatches, and a color sampler.
  * \since QGIS 2.16
  */
@@ -135,6 +135,8 @@ class GUI_EXPORT QgsCompoundColorWidget : public QgsPanelWidget, private Ui::Qgs
     void setPreviousColor( const QColor &color );
 
   protected:
+
+    void hideEvent( QHideEvent *e ) override;
 
     void mousePressEvent( QMouseEvent *e ) override;
 

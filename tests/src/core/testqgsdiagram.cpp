@@ -41,6 +41,8 @@
 #include "qgspallabeling.h"
 #include "qgsproject.h"
 #include "qgsshadoweffect.h"
+#include "qgslinesymbol.h"
+#include "qgsmarkersymbol.h"
 
 /**
  * \ingroup UnitTests
@@ -90,7 +92,7 @@ class TestQgsDiagram : public QObject
                                          myPointFileInfo.completeBaseName(), QStringLiteral( "ogr" ) );
 
       //we don't want to render the points themselves, just the diagrams
-      QgsStringMap symbolProps;
+      QVariantMap symbolProps;
       symbolProps.insert( QStringLiteral( "color" ), QStringLiteral( "0,0,0,0" ) );
       symbolProps.insert( QStringLiteral( "outline_style" ), QStringLiteral( "no" ) );
       QgsMarkerSymbol *symbol = QgsMarkerSymbol::createSimple( symbolProps );
@@ -307,7 +309,7 @@ class TestQgsDiagram : public QObject
       ds.rotationOffset = 0;
       ds.setShowAxis( true );
 
-      QgsStringMap props;
+      QVariantMap props;
       props.insert( QStringLiteral( "width" ), QStringLiteral( "2" ) );
       props.insert( QStringLiteral( "color" ), QStringLiteral( "#ff00ff" ) );
       ds.setAxisLineSymbol( QgsLineSymbol::createSimple( props ) );
@@ -507,7 +509,7 @@ class TestQgsDiagram : public QObject
       ds.setSpacing( 3 );
       ds.setShowAxis( true );
 
-      QgsStringMap props;
+      QVariantMap props;
       props.insert( QStringLiteral( "width" ), QStringLiteral( "2" ) );
       props.insert( QStringLiteral( "color" ), QStringLiteral( "#ff00ff" ) );
       ds.setAxisLineSymbol( QgsLineSymbol::createSimple( props ) );
@@ -540,6 +542,62 @@ class TestQgsDiagram : public QObject
       ds.diagramOrientation = QgsDiagramSettings::Right;
       dr->setDiagramSettings( ds );
       QVERIFY( imageCheck( "stacked_axis_right" ) );
+    }
+
+    void testStackedNegative()
+    {
+      QgsDiagramSettings ds;
+      QColor col1 = Qt::red;
+      QColor col2 = Qt::yellow;
+      col1.setAlphaF( 0.5 );
+      col2.setAlphaF( 0.5 );
+      ds.categoryColors = QList<QColor>() << col1 << col2;
+      ds.categoryAttributes = QList<QString>() << QStringLiteral( "\"Pilots\"" ) << QStringLiteral( "-\"Cabin Crew\"" );
+      ds.minimumScale = -1;
+      ds.maximumScale = -1;
+      ds.minimumSize = 0;
+      ds.penColor = Qt::green;
+      ds.penWidth = .5;
+      ds.scaleByArea = true;
+      ds.sizeType = QgsUnitTypes::RenderMillimeters;
+      ds.size = QSizeF( 5, 5 );
+      ds.rotationOffset = 0;
+      ds.setSpacing( 3 );
+      ds.setShowAxis( true );
+
+      QVariantMap props;
+      props.insert( QStringLiteral( "width" ), QStringLiteral( "2" ) );
+      props.insert( QStringLiteral( "color" ), QStringLiteral( "#ff00ff" ) );
+      ds.setAxisLineSymbol( QgsLineSymbol::createSimple( props ) );
+
+      QgsLinearlyInterpolatedDiagramRenderer *dr = new QgsLinearlyInterpolatedDiagramRenderer();
+      dr->setLowerValue( 0.0 );
+      dr->setLowerSize( QSizeF( 0.0, 0.0 ) );
+      dr->setUpperValue( 10 );
+      dr->setUpperSize( QSizeF( 40, 40 ) );
+      dr->setClassificationField( QStringLiteral( "Staff" ) );
+      dr->setDiagram( new QgsStackedBarDiagram() );
+      dr->setDiagramSettings( ds );
+      mPointsLayer->setDiagramRenderer( dr );
+
+      QgsDiagramLayerSettings dls = QgsDiagramLayerSettings();
+      dls.setPlacement( QgsDiagramLayerSettings::OverPoint );
+      dls.setShowAllDiagrams( true );
+      mPointsLayer->setDiagramLayerSettings( dls );
+
+      QVERIFY( imageCheck( "stacked_negative_up" ) );
+
+      ds.diagramOrientation = QgsDiagramSettings::Down;
+      dr->setDiagramSettings( ds );
+      QVERIFY( imageCheck( "stacked_negative_down" ) );
+
+      ds.diagramOrientation = QgsDiagramSettings::Left;
+      dr->setDiagramSettings( ds );
+      QVERIFY( imageCheck( "stacked_negative_left" ) );
+
+      ds.diagramOrientation = QgsDiagramSettings::Right;
+      dr->setDiagramSettings( ds );
+      QVERIFY( imageCheck( "stacked_negative_right" ) );
     }
 
     void testPieDiagramExpression()
@@ -955,7 +1013,7 @@ class TestQgsDiagram : public QObject
       const QString filename = QStringLiteral( TEST_DATA_DIR ) + "/lines.shp";
       std::unique_ptr< QgsVectorLayer> vl2( new QgsVectorLayer( filename, QStringLiteral( "lines" ), QStringLiteral( "ogr" ) ) );
 
-      QgsStringMap props;
+      QVariantMap props;
       props.insert( QStringLiteral( "outline_color" ), QStringLiteral( "#487bb6" ) );
       props.insert( QStringLiteral( "outline_width" ), QStringLiteral( "1" ) );
       std::unique_ptr< QgsLineSymbol > symbol( QgsLineSymbol::createSimple( props ) );

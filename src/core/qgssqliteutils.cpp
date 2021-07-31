@@ -22,7 +22,7 @@
 #include <QVariant>
 #include <QSet>
 
-// Temporary solution until GDAL Unique suppport is available
+// Temporary solution until GDAL Unique support is available
 #include <regex>
 #include <sstream>
 #include <algorithm>
@@ -126,9 +126,9 @@ QSet<QString> QgsSqliteUtils::uniqueFields( sqlite3 *connection, const QString &
   QSet<QString> uniqueFieldsResults;
   char *zErrMsg = 0;
   std::vector<std::string> rows;
-  QByteArray tableNameUtf8 = quotedIdentifier( tableName ).toUtf8();
-  QString sql = QgsSqlite3Mprintf( "select sql from sqlite_master "
-                                   "where type='table' and name=%q", tableNameUtf8.constData() );
+  QByteArray tableNameUtf8 = tableName.toUtf8();
+  QString sql = qgs_sqlite3_mprintf( "select sql from sqlite_master "
+                                     "where type='table' and name='%q'", tableNameUtf8.constData() );
   auto cb = [ ](
               void *data /* Data provided in the 4th argument of sqlite3_exec() */,
               int /* The number of columns in row */,
@@ -173,8 +173,8 @@ QSet<QString> QgsSqliteUtils::uniqueFields( sqlite3 *connection, const QString &
   rows.clear();
 
   // Search indexes:
-  sql = QgsSqlite3Mprintf( "SELECT sql FROM sqlite_master WHERE type='index' AND"
-                           " tbl_name='%q' AND sql LIKE 'CREATE UNIQUE INDEX%%'", tableNameUtf8.constData() );
+  sql = qgs_sqlite3_mprintf( "SELECT sql FROM sqlite_master WHERE type='index' AND"
+                             " tbl_name='%q' AND sql LIKE 'CREATE UNIQUE INDEX%%'", tableNameUtf8.constData() );
   rc = sqlite3_exec( connection, sql.toUtf8(), cb, ( void * )&rows, &zErrMsg );
   if ( rc != SQLITE_OK )
   {
@@ -309,7 +309,7 @@ QStringList QgsSqliteUtils::systemTables()
          << QStringLiteral( "ElementaryGeometries" );
 }
 
-QString QgsSqlite3Mprintf( const char *format, ... )
+QString qgs_sqlite3_mprintf( const char *format, ... )
 {
   va_list ap;
   va_start( ap, format );

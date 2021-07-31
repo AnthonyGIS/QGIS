@@ -15,7 +15,8 @@
  *                                                                         *
  ***************************************************************************/
 #include <QMessageBox>
-#include <QRegExpValidator>
+#include <QRegularExpressionValidator>
+#include <QRegularExpression>
 
 #include "qgsnewogrconnection.h"
 #include "qgslogger.h"
@@ -83,7 +84,7 @@ QgsNewOgrConnection::QgsNewOgrConnection( QWidget *parent, const QString &connTy
     txtName->setEnabled( false );
     cmbDatabaseTypes->setEnabled( false );
   }
-  txtName->setValidator( new QRegExpValidator( QRegExp( "[^\\/]+" ), txtName ) );
+  txtName->setValidator( new QRegularExpressionValidator( QRegularExpression( "[^\\/]+" ), txtName ) );
   mAuthSettingsDatabase->setDataprovider( QStringLiteral( "ogr" ) );
   mAuthSettingsDatabase->showStoreCheckboxes( true );
 }
@@ -123,12 +124,12 @@ void QgsNewOgrConnection::showHelp()
 
 void QgsNewOgrConnection::updateOkButtonState()
 {
-  bool enabled = !txtName->text().isEmpty() && !txtHost->text().isEmpty() && !txtDatabase->text().isEmpty() && !txtPort->text().isEmpty();
+  bool enabled = !txtName->text().isEmpty();
   buttonBox->button( QDialogButtonBox::Ok )->setEnabled( enabled );
 }
 
 
-//! Autoconnected SLOTS *
+//! Autoconnected SLOTS
 void QgsNewOgrConnection::accept()
 {
   QgsSettings settings;
@@ -170,4 +171,4 @@ void QgsNewOgrConnection::btnConnect_clicked()
   testConnection();
 }
 
-//! End  Autoconnected SLOTS *
+//! End  Autoconnected SLOTS

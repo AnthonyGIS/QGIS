@@ -35,6 +35,7 @@ class QToolBar;
 class QDockWidget;
 class QMainWindow;
 class QWidget;
+class QActionGroup;
 
 class QgsAdvancedDigitizingDockWidget;
 class QgsAttributeDialog;
@@ -52,23 +53,27 @@ class QgsMapCanvas;
 class QgsMapLayer;
 enum class QgsMapLayerType;
 class QgsMapLayerConfigWidgetFactory;
+class QgsMapDecoration;
 class QgsMessageBar;
 class QgsPluginManagerInterface;
 class QgsRasterLayer;
 class QgsVectorLayer;
 class QgsVectorLayerTools;
 class QgsVectorTileLayer;
+class QgsPointCloudLayer;
 class QgsOptionsWidgetFactory;
 class QgsLocatorFilter;
 class QgsStatusBar;
 class QgsMeshLayer;
 class QgsBrowserGuiModel;
 class QgsDevToolWidgetFactory;
-
+class QgsGpsConnection;
+class QgsApplicationExitBlockerInterface;
+class QgsAbstractMapToolHandler;
 
 /**
  * \ingroup gui
- * QgisInterface
+ * \brief QgisInterface
  * Abstract base class defining interfaces exposed by QgisApp and
  * made available to plugins.
  *
@@ -160,6 +165,12 @@ class GUI_EXPORT QgisInterface : public QObject
 
     //! Returns a pointer to the map canvas
     virtual QgsMapCanvas *mapCanvas() = 0;
+
+    /**
+     * Returns a list of the active decorations.
+     * \since QGIS 3.22
+     */
+    virtual QList<QgsMapDecoration *> activeDecorations() = 0;
 
     /**
      * Returns a pointer to the layer tree canvas bridge
@@ -432,6 +443,16 @@ class GUI_EXPORT QgisInterface : public QObject
     */
     virtual QAction *actionVertexToolActiveLayer() = 0;
 
+    /**
+     * Returns the action group for map tools.
+     *
+     * Any actions added by plugins for toggling a map tool should also be added to this action
+     * group so that they behave identically to the native, in-built map tool actions.
+     *
+     * \since QGIS 3.16
+     */
+    virtual QActionGroup *mapToolActionGroup() = 0;
+
     // View menu actions
     //! Returns the native pan action. Call trigger() on it to set the default pan map tool.
     virtual QAction *actionPan() = 0;
@@ -461,8 +482,20 @@ class GUI_EXPORT QgisInterface : public QObject
     virtual QAction *actionMeasureArea() = 0;
     //! Returns the native zoom full extent action. Call trigger() on it to zoom to the full extent.
     virtual QAction *actionZoomFullExtent() = 0;
-    //! Returns the native zoom to layer action. Call trigger() on it to zoom to the active layer.
-    virtual QAction *actionZoomToLayer() = 0;
+
+    /**
+     *  Returns the native zoom to layer action. Call trigger() on it to zoom to the active layer.
+     *
+     *  \deprecated Use actionZoomToLayers() instead.
+     */
+    Q_DECL_DEPRECATED virtual QAction *actionZoomToLayer() = 0 SIP_DEPRECATED;
+
+    /**
+     * Returns the native zoom to layers action. Call trigger() on it to zoom to the selected layers.
+     * \since QGIS 3.18
+     */
+    virtual QAction *actionZoomToLayers() = 0;
+
     //! Returns the native zoom to selected action. Call trigger() on it to zoom to the current selection.
     virtual QAction *actionZoomToSelected() = 0;
     //! Returns the native zoom last action. Call trigger() on it to zoom to last.
@@ -498,10 +531,19 @@ class GUI_EXPORT QgisInterface : public QObject
      * \since QGIS 3.14
      */
     virtual QAction *actionAddVectorTileLayer() = 0;
-    //! Returns the native Add ArcGIS FeatureServer action.
+
+    /**
+     * Returns the native Add Point Cloud Layer action.
+     * \since QGIS 3.18
+     */
+    virtual QAction *actionAddPointCloudLayer() = 0;
+
+    //! Returns the native Add ArcGIS REST Server action.
     virtual QAction *actionAddAfsLayer() = 0;
-    //! Returns the native Add ArcGIS MapServer action.
+
+    //! Returns the native Add ArcGIS REST Server action.
     virtual QAction *actionAddAmsLayer() = 0;
+
     virtual QAction *actionCopyLayerStyle() = 0;
     virtual QAction *actionPasteLayerStyle() = 0;
     virtual QAction *actionOpenTable() = 0;
@@ -687,6 +729,12 @@ class GUI_EXPORT QgisInterface : public QObject
      */
     virtual QgsVectorTileLayer *addVectorTileLayer( const QString &url, const QString &baseName ) = 0;
 
+    /**
+     * Adds a point cloud layer to the current project.
+     * \since QGIS 3.18
+     */
+    virtual QgsPointCloudLayer *addPointCloudLayer( const QString &url, const QString &baseName, const QString &providerKey ) = 0;
+
     //! Adds (opens) a project
     virtual bool addProject( const QString &project ) = 0;
 
@@ -848,6 +896,13 @@ class GUI_EXPORT QgisInterface : public QObject
     virtual void showOptionsDialog( QWidget *parent = nullptr, const QString &currentPage = QString() ) = 0;
 
     /**
+     * Opens the project properties dialog. The \a currentPage argument can be used to force
+     * the dialog to open at a specific page.
+     * \since QGIS 3.16
+     */
+    virtual void showProjectPropertiesDialog( const QString &currentPage = QString() ) = 0;
+
+    /**
      * Generate stylesheet
      * \param opts generated default option values, or a changed copy of them
      */
@@ -903,7 +958,7 @@ class GUI_EXPORT QgisInterface : public QObject
     /**
      * Add a dock widget to the given area and tabify it (if other dock widgets
      * exist in the same \a area). The new tab will be below other tabs unless
-     * \a raiseTab is passed as true.
+     * \a raiseTab is passed as TRUE.
      *
      * \a tabifyWith is a list of dock widget object names, ordered by
      * priority, with which the new dock widget should be tabified. Only the
@@ -923,8 +978,39 @@ class GUI_EXPORT QgisInterface : public QObject
      */
     virtual void removeDockWidget( QDockWidget *dockwidget ) = 0;
 
-    //! Open layer properties dialog
-    virtual void showLayerProperties( QgsMapLayer *l ) = 0;
+    /**
+     * Opens layer properties dialog for the layer \a l.
+     * Optionally, a \a page to open can be specified (since QGIS 3.20).
+     * The list below contains valid page names:
+     *
+     * Vector Layer:
+     * mOptsPage_Information, mOptsPage_Source, mOptsPage_Style, mOptsPage_Labels,
+     * mOptsPage_Masks, mOptsPage_Diagrams, mOptsPage_SourceFields, mOptsPage_AttributesForm,
+     * mOptsPage_Joins, mOptsPage_AuxiliaryStorage, mOptsPage_Actions, mOptsPage_Display,
+     * mOptsPage_Rendering, mOptsPage_Temporal, mOptsPage_Variables, mOptsPage_Metadata,
+     * mOptsPage_DataDependencies, mOptsPage_Legend, mOptsPage_Server
+     *
+     * Raster Layer:
+     * mOptsPage_Information, mOptsPage_Source, mOptsPage_Style, mOptsPage_Transparency,
+     * mOptsPage_Histogram, mOptsPage_Rendering, mOptsPage_Temporal, mOptsPage_Pyramids,
+     * mOptsPage_Metadata, mOptsPage_Legend, mOptsPage_Server
+     *
+     * Mesh Layer:
+     * mOptsPage_Information, mOptsPage_Source, mOptsPage_Style, mOptsPage_StyleContent,
+     * mOptsPage_Rendering, mOptsPage_Temporal, mOptsPage_Metadata
+     *
+     * Point Cloud Layer:
+     * mOptsPage_Information, mOptsPage_Source, mOptsPage_Metadata, mOptsPage_Statistics
+     *
+     * Vector Tile Layer:
+     * mOptsPage_Information, mOptsPage_Style, mOptsPage_Labeling, mOptsPage_Metadata
+     *
+     * \note Page names are subject to change without notice between QGIS versions,
+     * they are not considered part of the stable API.
+     *
+     * \note More strings may be available depending on the context, e.g. via plugins.
+     */
+    virtual void showLayerProperties( QgsMapLayer *l, const QString &page = QString() ) = 0;
 
     //! Open attribute table dialog
     virtual QDialog *showAttributeTable( QgsVectorLayer *l, const QString &filterExpression = QString() ) = 0;
@@ -984,6 +1070,24 @@ class GUI_EXPORT QgisInterface : public QObject
     virtual void unregisterOptionsWidgetFactory( QgsOptionsWidgetFactory *factory ) = 0;
 
     /**
+     * Register a new tab in the project properties dialog.
+     * \note Ownership of the factory is not transferred, and the factory must
+     *       be unregistered when plugin is unloaded.
+     * \see QgsOptionsWidgetFactory
+     * \see unregisterProjectPropertiesWidgetFactory()
+     * \since QGIS 3.16
+     */
+    virtual void registerProjectPropertiesWidgetFactory( QgsOptionsWidgetFactory *factory ) = 0;
+
+    /**
+     * Unregister a previously registered tab in the options dialog.
+     * \see QgsOptionsWidgetFactory
+     * \see registerProjectPropertiesWidgetFactory()
+     * \since QGIS 3.16
+    */
+    virtual void unregisterProjectPropertiesWidgetFactory( QgsOptionsWidgetFactory *factory ) = 0;
+
+    /**
      * Register a new tool in the development/debugging tools dock.
      * \note Ownership of the factory is not transferred, and the factory must
      *       be unregistered when plugin is unloaded.
@@ -998,6 +1102,46 @@ class GUI_EXPORT QgisInterface : public QObject
      * \since QGIS 3.14
     */
     virtual void unregisterDevToolWidgetFactory( QgsDevToolWidgetFactory *factory ) = 0;
+
+    /**
+     * Register a new application exit blocker, which can be used to prevent the QGIS application
+     * from exiting while a plugin or script has unsaved changes.
+     *
+     * \note Ownership of \a blocker is not transferred, and the blocker must
+     *       be unregistered when plugin is unloaded.
+     *
+     * \see unregisterApplicationExitBlocker()
+     * \since QGIS 3.16
+     */
+    virtual void registerApplicationExitBlocker( QgsApplicationExitBlockerInterface *blocker ) = 0;
+
+    /**
+     * Unregister a previously registered application exit \a blocker.
+     * \see registerApplicationExitBlocker()
+     * \since QGIS 3.16
+    */
+    virtual void unregisterApplicationExitBlocker( QgsApplicationExitBlockerInterface *blocker ) = 0;
+
+    /**
+     * Register a new application map tool \a handler, which can be used to automatically setup all connections
+     * and logic required to switch to a custom map tool whenever the state of the QGIS application
+     * permits.
+     *
+     * \note Ownership of \a handler is not transferred, and the handler must
+     *       be unregistered when plugin is unloaded.
+     *
+     * \see QgsAbstractMapToolHandler
+     * \see unregisterMapToolHandler()
+     * \since QGIS 3.16
+     */
+    virtual void registerMapToolHandler( QgsAbstractMapToolHandler *handler ) = 0;
+
+    /**
+     * Unregister a previously registered map tool \a handler.
+     * \see registerMapToolHandler()
+     * \since QGIS 3.16
+    */
+    virtual void unregisterMapToolHandler( QgsAbstractMapToolHandler *handler ) = 0;
 
     /**
      * Register a new custom drop \a handler.
@@ -1071,7 +1215,7 @@ class GUI_EXPORT QgisInterface : public QObject
 
     /**
      * Opens a new feature form.
-     * Returns true if dialog was accepted (if shown modal, TRUE otherwise).
+     * Returns TRUE if dialog was accepted (if shown modal, TRUE otherwise).
      * \param l vector layer
      * \param f feature to show/modify
      * \param updateFeatureOnly only update the feature update (don't change any attributes of the layer) [UNUSED]
@@ -1157,6 +1301,16 @@ class GUI_EXPORT QgisInterface : public QObject
      */
     virtual QgsBrowserGuiModel *browserModel() = 0;
 
+    /**
+     * Sets a GPS \a connection to use within the GPS Panel widget.
+     *
+     * Any existing GPS connection used by the widget will be disconnect and replaced with this connection. The connection
+     * is automatically registered within the QgsApplication::gpsConnectionRegistry().
+     *
+     * \since QGIS 3.16
+     */
+    virtual void setGpsPanelConnection( QgsGpsConnection *connection ) = 0;
+
   signals:
 
     /**
@@ -1204,7 +1358,7 @@ class GUI_EXPORT QgisInterface : public QObject
     /**
      * Emitted when a project file is successfully read.
      * \note This is useful for plugins that store properties with project files.
-     *       A plugin can connect to this signal. When it is emitted, the plugin
+     *       A plugin can connect to this signal. When it is emitted the plugin
      *       knows to then check the project properties for any relevant state.
      */
     void projectRead();

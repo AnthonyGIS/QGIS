@@ -70,20 +70,25 @@ QgsRendererRasterPropertiesWidget::QgsRendererRasterPropertiesWidget( QgsMapLaye
 
   connect( mSliderBrightness, &QAbstractSlider::valueChanged, mBrightnessSpinBox, &QSpinBox::setValue );
   connect( mBrightnessSpinBox, static_cast < void ( QSpinBox::* )( int ) > ( &QSpinBox::valueChanged ), mSliderBrightness, &QAbstractSlider::setValue );
+  mBrightnessSpinBox->setClearValue( 0 );
 
   connect( mSliderContrast, &QAbstractSlider::valueChanged, mContrastSpinBox, &QSpinBox::setValue );
   connect( mContrastSpinBox, static_cast < void ( QSpinBox::* )( int ) > ( &QSpinBox::valueChanged ), mSliderContrast, &QAbstractSlider::setValue );
+  mContrastSpinBox->setClearValue( 0 );
 
   connect( mSliderGamma, &QAbstractSlider::valueChanged, this, &QgsRendererRasterPropertiesWidget::updateGammaSpinBox );
   connect( mGammaSpinBox, static_cast < void ( QDoubleSpinBox::* )( double ) > ( &QDoubleSpinBox::valueChanged ), this, &QgsRendererRasterPropertiesWidget::updateGammaSlider );
+  mGammaSpinBox->setClearValue( 1.0 );
 
   // Connect saturation slider and spin box
   connect( sliderSaturation, &QAbstractSlider::valueChanged, spinBoxSaturation, &QSpinBox::setValue );
   connect( spinBoxSaturation, static_cast < void ( QSpinBox::* )( int ) > ( &QSpinBox::valueChanged ), sliderSaturation, &QAbstractSlider::setValue );
+  spinBoxSaturation->setClearValue( 0 );
 
   // Connect colorize strength slider and spin box
   connect( sliderColorizeStrength, &QAbstractSlider::valueChanged, spinColorizeStrength, &QSpinBox::setValue );
   connect( spinColorizeStrength, static_cast < void ( QSpinBox::* )( int ) > ( &QSpinBox::valueChanged ), sliderColorizeStrength, &QAbstractSlider::setValue );
+  spinColorizeStrength->setClearValue( 100 );
 
   // enable or disable saturation slider and spin box depending on grayscale combo choice
   connect( comboGrayscale, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, &QgsRendererRasterPropertiesWidget::toggleSaturationControls );
@@ -98,6 +103,7 @@ QgsRendererRasterPropertiesWidget::QgsRendererRasterPropertiesWidget( QgsMapLaye
   connect( spinBoxSaturation, static_cast < void ( QSpinBox::* )( int ) > ( &QSpinBox::valueChanged ), this, &QgsPanelWidget::widgetChanged );
   connect( spinColorizeStrength, static_cast < void ( QSpinBox::* )( int ) > ( &QSpinBox::valueChanged ), this, &QgsPanelWidget::widgetChanged );
   connect( btnColorizeColor, &QgsColorButton::colorChanged, this, &QgsPanelWidget::widgetChanged );
+  connect( mInvertColorsCheck, &QAbstractButton::toggled, this, &QgsPanelWidget::widgetChanged );
 
   connect( mBlendModeComboBox, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, &QgsPanelWidget::widgetChanged );
   connect( mZoomedInResamplingComboBox, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, &QgsPanelWidget::widgetChanged );
@@ -155,6 +161,7 @@ void QgsRendererRasterPropertiesWidget::apply()
     hueSaturationFilter->setColorizeOn( mColorizeCheck->checkState() );
     hueSaturationFilter->setColorizeColor( btnColorizeColor->color() );
     hueSaturationFilter->setColorizeStrength( sliderColorizeStrength->value() );
+    hueSaturationFilter->setInvertColors( mInvertColorsCheck->isChecked() );
   }
 
   mResamplingUtils.refreshLayerFromWidgets();
@@ -214,6 +221,8 @@ void QgsRendererRasterPropertiesWidget::syncToLayer( QgsRasterLayer *layer )
     btnColorizeColor->setColor( hueSaturationFilter->colorizeColor() );
     toggleColorizeControls( hueSaturationFilter->colorizeOn() );
     sliderColorizeStrength->setValue( hueSaturationFilter->colorizeStrength() );
+
+    mInvertColorsCheck->setChecked( hueSaturationFilter->invertColors() );
   }
 
   //blend mode
@@ -347,20 +356,20 @@ void QgsRendererRasterPropertiesWidget::refreshAfterStyleChanged()
       const QgsContrastEnhancement *redCe = mbcr->redContrastEnhancement();
       if ( redCe )
       {
-        mRendererWidget->setMin( QString::number( redCe->minimumValue() ), 0 );
-        mRendererWidget->setMax( QString::number( redCe->maximumValue() ), 0 );
+        mRendererWidget->setMin( QLocale().toString( redCe->minimumValue() ), 0 );
+        mRendererWidget->setMax( QLocale().toString( redCe->maximumValue() ), 0 );
       }
       const QgsContrastEnhancement *greenCe = mbcr->greenContrastEnhancement();
       if ( greenCe )
       {
-        mRendererWidget->setMin( QString::number( greenCe->minimumValue() ), 1 );
-        mRendererWidget->setMax( QString::number( greenCe->maximumValue() ), 1 );
+        mRendererWidget->setMin( QLocale().toString( greenCe->minimumValue() ), 1 );
+        mRendererWidget->setMax( QLocale().toString( greenCe->maximumValue() ), 1 );
       }
       const QgsContrastEnhancement *blueCe = mbcr->blueContrastEnhancement();
       if ( blueCe )
       {
-        mRendererWidget->setMin( QString::number( blueCe->minimumValue() ), 2 );
-        mRendererWidget->setMax( QString::number( blueCe->maximumValue() ), 2 );
+        mRendererWidget->setMin( QLocale().toString( blueCe->minimumValue() ), 2 );
+        mRendererWidget->setMax( QLocale().toString( blueCe->maximumValue() ), 2 );
       }
     }
     else if ( QgsSingleBandGrayRenderer *sbgr = dynamic_cast<QgsSingleBandGrayRenderer *>( renderer ) )
@@ -368,8 +377,8 @@ void QgsRendererRasterPropertiesWidget::refreshAfterStyleChanged()
       const QgsContrastEnhancement *ce = sbgr->contrastEnhancement();
       if ( ce )
       {
-        mRendererWidget->setMin( QString::number( ce->minimumValue() ) );
-        mRendererWidget->setMax( QString::number( ce->maximumValue() ) );
+        mRendererWidget->setMin( QLocale().toString( ce->minimumValue() ) );
+        mRendererWidget->setMax( QLocale().toString( ce->maximumValue() ) );
       }
     }
   }

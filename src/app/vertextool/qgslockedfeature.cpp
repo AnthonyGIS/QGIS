@@ -18,7 +18,7 @@
 
 #include "qgsfeatureiterator.h"
 #include "qgspoint.h"
-#include "qgssettings.h"
+#include "qgssettingsregistrycore.h"
 #include "qgslogger.h"
 #include "qgsvertexmarker.h"
 #include "qgsgeometryvalidator.h"
@@ -39,9 +39,6 @@ QgsLockedFeature::QgsLockedFeature( QgsFeatureId featureId,
   , mLayer( layer )
   , mCanvas( canvas )
 {
-  // signal changing of current layer
-  connect( QgisApp::instance()->layerTreeView(), &QgsLayerTreeView::currentLayerChanged, this, &QgsLockedFeature::currentLayerChanged );
-
   replaceVertexMap();
 }
 
@@ -63,12 +60,6 @@ QgsLockedFeature::~QgsLockedFeature()
   }
 
   delete mGeometry;
-}
-
-void QgsLockedFeature::currentLayerChanged( QgsMapLayer *layer )
-{
-  if ( layer == mLayer )
-    deleteLater();
 }
 
 void QgsLockedFeature::updateGeometry( const QgsGeometry *geom )
@@ -112,11 +103,6 @@ void QgsLockedFeature::endGeometryChange()
   connect( mLayer, &QgsVectorLayer::geometryChanged, this, &QgsLockedFeature::geometryChanged );
 }
 
-void QgsLockedFeature::canvasLayersChanged()
-{
-  currentLayerChanged( mCanvas->currentLayer() );
-}
-
 void QgsLockedFeature::featureDeleted( QgsFeatureId fid )
 {
   if ( fid == mFeatureId )
@@ -137,8 +123,7 @@ void QgsLockedFeature::geometryChanged( QgsFeatureId fid, const QgsGeometry &geo
 
 void QgsLockedFeature::validateGeometry( QgsGeometry *g )
 {
-  QgsSettings settings;
-  if ( settings.value( QStringLiteral( "qgis/digitizing/validate_geometries" ), 1 ).toInt() == 0 )
+  if ( QgsSettingsRegistryCore::settingsDigitizingValidateGeometries.value() == 0 )
     return;
 
   if ( !g )
@@ -163,7 +148,7 @@ void QgsLockedFeature::validateGeometry( QgsGeometry *g )
   }
 
   QgsGeometry::ValidationMethod method = QgsGeometry::ValidatorQgisInternal;
-  if ( settings.value( QStringLiteral( "qgis/digitizing/validate_geometries" ), 1 ).toInt() == 2 )
+  if ( QgsSettingsRegistryCore::settingsDigitizingValidateGeometries.value() == 2 )
     method = QgsGeometry::ValidatorGeos;
   mValidator = new QgsGeometryValidator( *g, nullptr, method );
   connect( mValidator, &QgsGeometryValidator::errorFound, this, &QgsLockedFeature::addError );

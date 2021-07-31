@@ -46,9 +46,27 @@ class QgsAppDirectoryItemGuiProvider : public QObject, public QgsDataItemGuiProv
     void addFavorite( QgsDirectoryItem *item );
     void removeFavorite( QgsFavoriteItem *favorite );
     void renameFavorite( QgsFavoriteItem *favorite );
+    void changeDirectoryColor( QgsDirectoryItem *item );
+    void clearDirectoryColor( QgsDirectoryItem *item );
     void hideDirectory( QgsDirectoryItem *item );
     void toggleFastScan( QgsDirectoryItem *item );
+    void toggleMonitor( QgsDirectoryItem *item );
     void showProperties( QgsDirectoryItem *item, QgsDataItemGuiContext context );
+};
+
+class QgsAppFileItemGuiProvider : public QObject, public QgsDataItemGuiProvider
+{
+    Q_OBJECT
+
+  public:
+
+    QgsAppFileItemGuiProvider() = default;
+
+    QString name() override;
+
+    void populateContextMenu( QgsDataItem *item, QMenu *menu,
+                              const QList<QgsDataItem *> &selectedItems, QgsDataItemGuiContext context ) override;
+    int precedenceWhenPopulatingMenus() const override;
 };
 
 
@@ -96,6 +114,7 @@ class QgsLayerItemGuiProvider : public QObject, public QgsDataItemGuiProvider
 
     void populateContextMenu( QgsDataItem *item, QMenu *menu,
                               const QList<QgsDataItem *> &selectedItems, QgsDataItemGuiContext context ) override;
+    int precedenceWhenPopulatingMenus() const override;
     bool handleDoubleClick( QgsDataItem *item, QgsDataItemGuiContext context ) override;
 
   private:
@@ -130,6 +149,22 @@ class QgsFieldItemGuiProvider : public QObject, public QgsDataItemGuiProvider
   public:
 
     QgsFieldItemGuiProvider() = default;
+
+    QString name() override;
+
+    void populateContextMenu( QgsDataItem *item, QMenu *menu,
+                              const QList<QgsDataItem *> &selectedItems, QgsDataItemGuiContext context ) override;
+
+};
+
+
+class QgsDatabaseItemGuiProvider : public QObject, public QgsDataItemGuiProvider
+{
+    Q_OBJECT
+
+  public:
+
+    QgsDatabaseItemGuiProvider() = default;
 
     QString name() override;
 

@@ -52,7 +52,7 @@ QString QgsAccessControl::resolveFilterFeatures( const QgsVectorLayer *layer ) c
   QString expression;
   if ( !expressions.isEmpty() )
   {
-    expression = QStringLiteral( "((" ).append( expressions.join( QStringLiteral( ") AND (" ) ) ).append( "))" );
+    expression = QStringLiteral( "((" ).append( expressions.join( QLatin1String( ") AND (" ) ) ).append( "))" );
   }
 
   return expression;
@@ -64,7 +64,7 @@ void QgsAccessControl::filterFeatures( const QgsVectorLayer *layer, QgsFeatureRe
 
   QString expression;
 
-  if ( mResolved && mFilterFeaturesExpressions.keys().contains( layer->id() ) )
+  if ( mResolved && mFilterFeaturesExpressions.contains( layer->id() ) )
   {
     expression = mFilterFeaturesExpressions[layer->id()];
   }
@@ -75,7 +75,7 @@ void QgsAccessControl::filterFeatures( const QgsVectorLayer *layer, QgsFeatureRe
 
   if ( !expression.isEmpty() )
   {
-    featureRequest.setFilterExpression( expression );
+    featureRequest.combineFilterExpression( expression );
   }
 }
 
@@ -98,7 +98,7 @@ QString QgsAccessControl::extraSubsetString( const QgsVectorLayer *layer ) const
       sqls.append( sql );
     }
   }
-  return sqls.isEmpty() ? QString() : QStringLiteral( "((" ).append( sqls.join( QStringLiteral( ") AND (" ) ) ).append( "))" );
+  return sqls.isEmpty() ? QString() : QStringLiteral( "((" ).append( sqls.join( QLatin1String( ") AND (" ) ) ).append( "))" );
 }
 
 //! Returns the layer read right
@@ -190,12 +190,11 @@ bool QgsAccessControl::fillCacheKey( QStringList &cacheKey ) const
   for ( acIterator = mPluginsAccessControls->constBegin(); acIterator != mPluginsAccessControls->constEnd(); ++acIterator )
   {
     QString newKey = acIterator.value()->cacheKey();
-    if ( newKey.length() == 0 )
+    if ( ! newKey.isEmpty() )
     {
       cacheKey.clear();
       return false;
     }
-    cacheKey << newKey;
   }
   return true;
 }

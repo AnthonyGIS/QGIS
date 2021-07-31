@@ -22,6 +22,8 @@
 #include "qgsnumericformat.h"
 #include "qgssymbol.h"
 #include "qgssymbollayerutils.h"
+#include "qgslinesymbol.h"
+
 #include <QFontMetricsF>
 #include <QPainter>
 
@@ -43,7 +45,7 @@ void QgsScaleBarRenderer::drawDefaultLabels( QgsRenderContext &context, const Qg
 
   QString firstLabel = firstLabelString( settings );
   QFontMetricsF fontMetrics = QgsTextRenderer::fontMetrics( context, format );
-  double xOffset = fontMetrics.width( firstLabel ) / 2.0;
+  double xOffset = fontMetrics.horizontalAdvance( firstLabel ) / 2.0;
 
   double scaledBoxContentSpace = context.convertToPainterUnits( settings.boxContentSpace(), QgsUnitTypes::RenderMillimeters );
   double scaledLabelBarSpace = context.convertToPainterUnits( settings.labelBarSpace(), QgsUnitTypes::RenderMillimeters );
@@ -96,7 +98,7 @@ void QgsScaleBarRenderer::drawDefaultLabels( QgsRenderContext &context, const Qg
     }
 
     //don't draw label for intermediate left segments or the zero label when it needs to be skipped
-    if ( ( segmentCounter == 0 || segmentCounter >= nSegmentsLeft ) && ( currentNumericLabel != QStringLiteral( "0" ) || drawZero ) )
+    if ( ( segmentCounter == 0 || segmentCounter >= nSegmentsLeft ) && ( currentNumericLabel != QLatin1String( "0" ) || drawZero ) )
     {
       scaleScope->addVariable( QgsExpressionContextScope::StaticVariable( QStringLiteral( "scale_value" ), currentNumericLabel, true, false ) );
       QPointF pos;
@@ -145,7 +147,7 @@ void QgsScaleBarRenderer::drawDefaultLabels( QgsRenderContext &context, const Qg
     else
     {
       pos.setX( context.convertToPainterUnits( positions.at( positions.size() - 1 ) + scaleContext.segmentWidth, QgsUnitTypes::RenderMillimeters ) + xOffset
-                - fontMetrics.width( currentNumericLabel ) / 2.0 );
+                - fontMetrics.horizontalAdvance( currentNumericLabel ) / 2.0 );
       QgsTextRenderer::drawText( pos, 0, QgsTextRenderer::AlignLeft, QStringList() << ( currentNumericLabel + ' ' + settings.unitLabel() ), context, format );
     }
   }
@@ -155,7 +157,7 @@ void QgsScaleBarRenderer::drawDefaultLabels( QgsRenderContext &context, const Qg
 
 QgsScaleBarRenderer::Flags QgsScaleBarRenderer::flags() const
 {
-  return nullptr;
+  return QgsScaleBarRenderer::Flags();
 }
 
 int QgsScaleBarRenderer::sortKey() const

@@ -29,6 +29,11 @@
 #include "qgslinesymbollayer.h"
 #include "qgsfillsymbollayer.h"
 #include "qgsruntimeprofiler.h"
+#include "qgsabstract3dsymbol.h"
+#include "qgs3dsymbolregistry.h"
+#include "qgsfillsymbol.h"
+#include "qgsmarkersymbol.h"
+#include "qgslinesymbol.h"
 
 #include <QDomDocument>
 #include <QDomElement>
@@ -37,6 +42,7 @@
 #include <QFile>
 #include <QTextStream>
 #include <QByteArray>
+#include <QFileInfo>
 
 #include <sqlite3.h>
 #include "qgssqliteutils.h"
@@ -54,22 +60,33 @@ enum LegendPatchTable
   LegendPatchTableFavoriteId, //!< Legend patch is favorite flag
 };
 
+/**
+ * Columns available in the 3d symbol table.
+ */
+enum Symbol3DTable
+{
+  Symbol3DTableId, //!< 3d symbol ID
+  Symbol3DTableName, //!< 3d symbol name
+  Symbol3DTableXML, //!< 3d symbol definition (as XML)
+  Symbol3DTableFavoriteId, //!< 3d symbol is favorite flag
+};
+
 
 QgsStyle *QgsStyle::sDefaultStyle = nullptr;
 
 QgsStyle::QgsStyle()
 {
-  std::unique_ptr< QgsSimpleMarkerSymbolLayer > simpleMarker = qgis::make_unique< QgsSimpleMarkerSymbolLayer >( QgsSimpleMarkerSymbolLayerBase::Circle,
-      1.6, 0, QgsSymbol::ScaleArea, QColor( 84, 176, 74 ), QColor( 61, 128, 53 ) );
+  std::unique_ptr< QgsSimpleMarkerSymbolLayer > simpleMarker = std::make_unique< QgsSimpleMarkerSymbolLayer >( QgsSimpleMarkerSymbolLayerBase::Circle,
+      1.6, 0, Qgis::ScaleMethod::ScaleArea, QColor( 84, 176, 74 ), QColor( 61, 128, 53 ) );
   simpleMarker->setStrokeWidth( 0.4 );
-  mPatchMarkerSymbol = qgis::make_unique< QgsMarkerSymbol >( QgsSymbolLayerList() << simpleMarker.release() );
+  mPatchMarkerSymbol = std::make_unique< QgsMarkerSymbol >( QgsSymbolLayerList() << simpleMarker.release() );
 
-  std::unique_ptr< QgsSimpleLineSymbolLayer > simpleLine = qgis::make_unique< QgsSimpleLineSymbolLayer >( QColor( 84, 176, 74 ), 0.6 );
-  mPatchLineSymbol = qgis::make_unique< QgsLineSymbol >( QgsSymbolLayerList() << simpleLine.release() );
+  std::unique_ptr< QgsSimpleLineSymbolLayer > simpleLine = std::make_unique< QgsSimpleLineSymbolLayer >( QColor( 84, 176, 74 ), 0.6 );
+  mPatchLineSymbol = std::make_unique< QgsLineSymbol >( QgsSymbolLayerList() << simpleLine.release() );
 
-  std::unique_ptr< QgsGradientFillSymbolLayer > gradientFill = qgis::make_unique< QgsGradientFillSymbolLayer >( QColor( 66, 150, 63 ), QColor( 84, 176, 74 ) );
-  std::unique_ptr< QgsSimpleLineSymbolLayer > simpleOutline = qgis::make_unique< QgsSimpleLineSymbolLayer >( QColor( 56, 128, 54 ), 0.26 );
-  mPatchFillSymbol = qgis::make_unique< QgsFillSymbol >( QgsSymbolLayerList() << gradientFill.release() << simpleOutline.release() );
+  std::unique_ptr< QgsGradientFillSymbolLayer > gradientFill = std::make_unique< QgsGradientFillSymbolLayer >( QColor( 66, 150, 63 ), QColor( 84, 176, 74 ) );
+  std::unique_ptr< QgsSimpleLineSymbolLayer > simpleOutline = std::make_unique< QgsSimpleLineSymbolLayer >( QColor( 56, 128, 54 ), 0.26 );
+  mPatchFillSymbol = std::make_unique< QgsFillSymbol >( QgsSymbolLayerList() << gradientFill.release() << simpleOutline.release() );
 }
 
 QgsStyle::~QgsStyle()
@@ -99,6 +116,9 @@ bool QgsStyle::addEntity( const QString &name, const QgsStyleEntityInterface *en
 
     case LegendPatchShapeEntity:
       return addLegendPatchShape( name, static_cast< const QgsStyleLegendPatchShapeEntity * >( entity )->shape(), update );
+
+    case Symbol3DEntity:
+      return addSymbol3D( name, static_cast< const QgsStyleSymbol3DEntity * >( entity )->symbol()->clone(), update );
 
     case TagEntity:
     case SmartgroupEntity:
@@ -147,10 +167,12 @@ void QgsStyle::clear()
 {
   qDeleteAll( mSymbols );
   qDeleteAll( mColorRamps );
+  qDeleteAll( m3dSymbols );
 
   mSymbols.clear();
   mColorRamps.clear();
   mTextFormats.clear();
+  m3dSymbols.clear();
 
   mCachedTags.clear();
   mCachedFavorites.clear();
@@ -193,10 +215,12 @@ bool QgsStyle::saveSymbol( const QString &name, QgsSymbol *symbol, bool favorite
 
   QByteArray xmlArray;
   QTextStream stream( &xmlArray );
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
   stream.setCodec( "UTF-8" );
+#endif
   symEl.save( stream, 4 );
-  auto query = QgsSqlite3Mprintf( "INSERT INTO symbol VALUES (NULL, '%q', '%q', %d);",
-                                  name.toUtf8().constData(), xmlArray.constData(), ( favorite ? 1 : 0 ) );
+  QString query = qgs_sqlite3_mprintf( "INSERT INTO symbol VALUES (NULL, '%q', '%q', %d);",
+                                       name.toUtf8().constData(), xmlArray.constData(), ( favorite ? 1 : 0 ) );
 
   if ( !runEmptyQuery( query ) )
   {
@@ -237,6 +261,9 @@ bool QgsStyle::renameEntity( QgsStyle::StyleEntity type, const QString &oldName,
 
     case LegendPatchShapeEntity:
       return renameLegendPatchShape( oldName, newName );
+
+    case Symbol3DEntity:
+      return renameSymbol3D( oldName, newName );
 
     case TagEntity:
     case SmartgroupEntity:
@@ -354,6 +381,27 @@ bool QgsStyle::addLegendPatchShape( const QString &name, const QgsLegendPatchSha
   return true;
 }
 
+bool QgsStyle::addSymbol3D( const QString &name, QgsAbstract3DSymbol *symbol, bool update )
+{
+  // delete previous symbol (if any)
+  if ( m3dSymbols.contains( name ) )
+  {
+    // TODO remove groups and tags?
+    delete m3dSymbols.take( name );
+    m3dSymbols.insert( name, symbol );
+    if ( update )
+      updateSymbol( Symbol3DEntity, name );
+  }
+  else
+  {
+    m3dSymbols.insert( name, symbol );
+    if ( update )
+      saveSymbol3D( name, symbol, false, QStringList() );
+  }
+
+  return true;
+}
+
 bool QgsStyle::saveColorRamp( const QString &name, QgsColorRamp *ramp, bool favorite, const QStringList &tags )
 {
   // insert it into the database
@@ -368,10 +416,12 @@ bool QgsStyle::saveColorRamp( const QString &name, QgsColorRamp *ramp, bool favo
 
   QByteArray xmlArray;
   QTextStream stream( &xmlArray );
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
   stream.setCodec( "UTF-8" );
+#endif
   rampEl.save( stream, 4 );
-  auto query = QgsSqlite3Mprintf( "INSERT INTO colorramp VALUES (NULL, '%q', '%q', %d);",
-                                  name.toUtf8().constData(), xmlArray.constData(), ( favorite ? 1 : 0 ) );
+  QString query = qgs_sqlite3_mprintf( "INSERT INTO colorramp VALUES (NULL, '%q', '%q', %d);",
+                                       name.toUtf8().constData(), xmlArray.constData(), ( favorite ? 1 : 0 ) );
   if ( !runEmptyQuery( query ) )
   {
     QgsDebugMsg( QStringLiteral( "Couldn't insert colorramp into the database!" ) );
@@ -412,6 +462,27 @@ int QgsStyle::colorRampCount()
 QStringList QgsStyle::colorRampNames() const
 {
   return mColorRamps.keys();
+}
+
+void QgsStyle::handleDeferred3DSymbolCreation()
+{
+  for ( auto it = mDeferred3DsymbolElements.constBegin(); it != mDeferred3DsymbolElements.constEnd(); ++it )
+  {
+    const QString symbolType = it.value().attribute( QStringLiteral( "type" ) );
+    std::unique_ptr< QgsAbstract3DSymbol > symbol( QgsApplication::symbol3DRegistry()->createSymbol( symbolType ) );
+    if ( symbol )
+    {
+      symbol->readXml( it.value(), QgsReadWriteContext() );
+      addSymbol3D( it.key(), symbol.release(), false );
+      emit entityAdded( Symbol3DEntity, it.key() );
+    }
+    else
+    {
+      QgsDebugMsg( "Cannot open 3d symbol " + it.key() );
+      continue;
+    }
+  }
+  mDeferred3DsymbolElements.clear();
 }
 
 bool QgsStyle::openDatabase( const QString &filename )
@@ -458,53 +529,61 @@ bool QgsStyle::createMemoryDatabase()
 
 void QgsStyle::createTables()
 {
-  auto query = QgsSqlite3Mprintf( "CREATE TABLE symbol("\
-                                  "id INTEGER PRIMARY KEY,"\
-                                  "name TEXT UNIQUE,"\
-                                  "xml TEXT,"\
-                                  "favorite INTEGER);"\
-                                  "CREATE TABLE colorramp("\
-                                  "id INTEGER PRIMARY KEY,"\
-                                  "name TEXT UNIQUE,"\
-                                  "xml TEXT,"\
-                                  "favorite INTEGER);"\
-                                  "CREATE TABLE textformat("\
-                                  "id INTEGER PRIMARY KEY,"\
-                                  "name TEXT UNIQUE,"\
-                                  "xml TEXT,"\
-                                  "favorite INTEGER);"\
-                                  "CREATE TABLE labelsettings("\
-                                  "id INTEGER PRIMARY KEY,"\
-                                  "name TEXT UNIQUE,"\
-                                  "xml TEXT,"\
-                                  "favorite INTEGER);"\
-                                  "CREATE TABLE legendpatchshapes("\
-                                  "id INTEGER PRIMARY KEY,"\
-                                  "name TEXT UNIQUE,"\
-                                  "xml TEXT,"\
-                                  "favorite INTEGER);"\
-                                  "CREATE TABLE tag("\
-                                  "id INTEGER PRIMARY KEY,"\
-                                  "name TEXT);"\
-                                  "CREATE TABLE tagmap("\
-                                  "tag_id INTEGER NOT NULL,"\
-                                  "symbol_id INTEGER);"\
-                                  "CREATE TABLE ctagmap("\
-                                  "tag_id INTEGER NOT NULL,"\
-                                  "colorramp_id INTEGER);"\
-                                  "CREATE TABLE tftagmap("\
-                                  "tag_id INTEGER NOT NULL,"\
-                                  "textformat_id INTEGER);"\
-                                  "CREATE TABLE lstagmap("\
-                                  "tag_id INTEGER NOT NULL,"\
-                                  "labelsettings_id INTEGER);"\
-                                  "CREATE TABLE lpstagmap("\
-                                  "tag_id INTEGER NOT NULL,"\
-                                  "legendpatchshape_id INTEGER);"\
-                                  "CREATE TABLE smartgroup("\
-                                  "id INTEGER PRIMARY KEY,"\
-                                  "name TEXT,"\
-                                  "xml TEXT);" );
+  QString query = qgs_sqlite3_mprintf( "CREATE TABLE symbol("\
+                                       "id INTEGER PRIMARY KEY,"\
+                                       "name TEXT UNIQUE,"\
+                                       "xml TEXT,"\
+                                       "favorite INTEGER);"\
+                                       "CREATE TABLE colorramp("\
+                                       "id INTEGER PRIMARY KEY,"\
+                                       "name TEXT UNIQUE,"\
+                                       "xml TEXT,"\
+                                       "favorite INTEGER);"\
+                                       "CREATE TABLE textformat("\
+                                       "id INTEGER PRIMARY KEY,"\
+                                       "name TEXT UNIQUE,"\
+                                       "xml TEXT,"\
+                                       "favorite INTEGER);"\
+                                       "CREATE TABLE labelsettings("\
+                                       "id INTEGER PRIMARY KEY,"\
+                                       "name TEXT UNIQUE,"\
+                                       "xml TEXT,"\
+                                       "favorite INTEGER);"\
+                                       "CREATE TABLE legendpatchshapes("\
+                                       "id INTEGER PRIMARY KEY,"\
+                                       "name TEXT UNIQUE,"\
+                                       "xml TEXT,"\
+                                       "favorite INTEGER);"\
+                                       "CREATE TABLE symbol3d("\
+                                       "id INTEGER PRIMARY KEY,"\
+                                       "name TEXT UNIQUE,"\
+                                       "xml TEXT,"\
+                                       "favorite INTEGER);"\
+                                       "CREATE TABLE tag("\
+                                       "id INTEGER PRIMARY KEY,"\
+                                       "name TEXT);"\
+                                       "CREATE TABLE tagmap("\
+                                       "tag_id INTEGER NOT NULL,"\
+                                       "symbol_id INTEGER);"\
+                                       "CREATE TABLE ctagmap("\
+                                       "tag_id INTEGER NOT NULL,"\
+                                       "colorramp_id INTEGER);"\
+                                       "CREATE TABLE tftagmap("\
+                                       "tag_id INTEGER NOT NULL,"\
+                                       "textformat_id INTEGER);"\
+                                       "CREATE TABLE lstagmap("\
+                                       "tag_id INTEGER NOT NULL,"\
+                                       "labelsettings_id INTEGER);"\
+                                       "CREATE TABLE lpstagmap("\
+                                       "tag_id INTEGER NOT NULL,"\
+                                       "legendpatchshape_id INTEGER);"\
+                                       "CREATE TABLE symbol3dtagmap("\
+                                       "tag_id INTEGER NOT NULL,"\
+                                       "symbol3d_id INTEGER);"\
+                                       "CREATE TABLE smartgroup("\
+                                       "id INTEGER PRIMARY KEY,"\
+                                       "name TEXT,"\
+                                       "xml TEXT);" );
   runEmptyQuery( query );
 }
 
@@ -521,66 +600,82 @@ bool QgsStyle::load( const QString &filename )
   }
 
   // make sure text format table exists
-  auto query = QgsSqlite3Mprintf( "SELECT name FROM sqlite_master WHERE name='textformat'" );
+  QString query = qgs_sqlite3_mprintf( "SELECT name FROM sqlite_master WHERE name='textformat'" );
   sqlite3_statement_unique_ptr statement;
   int rc;
   statement = mCurrentDB.prepare( query, rc );
   if ( rc != SQLITE_OK || sqlite3_step( statement.get() ) != SQLITE_ROW )
   {
-    query = QgsSqlite3Mprintf( "CREATE TABLE textformat("\
-                               "id INTEGER PRIMARY KEY,"\
-                               "name TEXT UNIQUE,"\
-                               "xml TEXT,"\
-                               "favorite INTEGER);"\
-                               "CREATE TABLE tftagmap("\
-                               "tag_id INTEGER NOT NULL,"\
-                               "textformat_id INTEGER);" );
+    query = qgs_sqlite3_mprintf( "CREATE TABLE textformat("\
+                                 "id INTEGER PRIMARY KEY,"\
+                                 "name TEXT UNIQUE,"\
+                                 "xml TEXT,"\
+                                 "favorite INTEGER);"\
+                                 "CREATE TABLE tftagmap("\
+                                 "tag_id INTEGER NOT NULL,"\
+                                 "textformat_id INTEGER);" );
     runEmptyQuery( query );
   }
   // make sure label settings table exists
-  query = QgsSqlite3Mprintf( "SELECT name FROM sqlite_master WHERE name='labelsettings'" );
+  query = qgs_sqlite3_mprintf( "SELECT name FROM sqlite_master WHERE name='labelsettings'" );
   statement = mCurrentDB.prepare( query, rc );
   if ( rc != SQLITE_OK || sqlite3_step( statement.get() ) != SQLITE_ROW )
   {
-    query = QgsSqlite3Mprintf( "CREATE TABLE labelsettings("\
-                               "id INTEGER PRIMARY KEY,"\
-                               "name TEXT UNIQUE,"\
-                               "xml TEXT,"\
-                               "favorite INTEGER);"\
-                               "CREATE TABLE lstagmap("\
-                               "tag_id INTEGER NOT NULL,"\
-                               "labelsettings_id INTEGER);" );
+    query = qgs_sqlite3_mprintf( "CREATE TABLE labelsettings("\
+                                 "id INTEGER PRIMARY KEY,"\
+                                 "name TEXT UNIQUE,"\
+                                 "xml TEXT,"\
+                                 "favorite INTEGER);"\
+                                 "CREATE TABLE lstagmap("\
+                                 "tag_id INTEGER NOT NULL,"\
+                                 "labelsettings_id INTEGER);" );
     runEmptyQuery( query );
   }
   // make sure legend patch shape table exists
-  query = QgsSqlite3Mprintf( "SELECT name FROM sqlite_master WHERE name='legendpatchshapes'" );
+  query = qgs_sqlite3_mprintf( "SELECT name FROM sqlite_master WHERE name='legendpatchshapes'" );
   statement = mCurrentDB.prepare( query, rc );
   if ( rc != SQLITE_OK || sqlite3_step( statement.get() ) != SQLITE_ROW )
   {
-    query = QgsSqlite3Mprintf( "CREATE TABLE legendpatchshapes("\
-                               "id INTEGER PRIMARY KEY,"\
-                               "name TEXT UNIQUE,"\
-                               "xml TEXT,"\
-                               "favorite INTEGER);"\
-                               "CREATE TABLE lpstagmap("\
-                               "tag_id INTEGER NOT NULL,"\
-                               "legendpatchshape_id INTEGER);" );
+    query = qgs_sqlite3_mprintf( "CREATE TABLE legendpatchshapes("\
+                                 "id INTEGER PRIMARY KEY,"\
+                                 "name TEXT UNIQUE,"\
+                                 "xml TEXT,"\
+                                 "favorite INTEGER);"\
+                                 "CREATE TABLE lpstagmap("\
+                                 "tag_id INTEGER NOT NULL,"\
+                                 "legendpatchshape_id INTEGER);" );
+    runEmptyQuery( query );
+  }
+  // make sure 3d symbol table exists
+  query = qgs_sqlite3_mprintf( "SELECT name FROM sqlite_master WHERE name='symbol3d'" );
+  statement = mCurrentDB.prepare( query, rc );
+  if ( rc != SQLITE_OK || sqlite3_step( statement.get() ) != SQLITE_ROW )
+  {
+    query = qgs_sqlite3_mprintf( "CREATE TABLE symbol3d("\
+                                 "id INTEGER PRIMARY KEY,"\
+                                 "name TEXT UNIQUE,"\
+                                 "xml TEXT,"\
+                                 "favorite INTEGER);"\
+                                 "CREATE TABLE symbol3dtagmap("\
+                                 "tag_id INTEGER NOT NULL,"\
+                                 "symbol3d_id INTEGER);" );
     runEmptyQuery( query );
   }
 
   // Make sure there are no Null fields in parenting symbols and groups
-  query = QgsSqlite3Mprintf( "UPDATE symbol SET favorite=0 WHERE favorite IS NULL;"
-                             "UPDATE colorramp SET favorite=0 WHERE favorite IS NULL;"
-                             "UPDATE textformat SET favorite=0 WHERE favorite IS NULL;"
-                             "UPDATE labelsettings SET favorite=0 WHERE favorite IS NULL;"
-                             "UPDATE legendpatchshapes SET favorite=0 WHERE favorite IS NULL;"
-                           );
+  query = qgs_sqlite3_mprintf( "UPDATE symbol SET favorite=0 WHERE favorite IS NULL;"
+                               "UPDATE colorramp SET favorite=0 WHERE favorite IS NULL;"
+                               "UPDATE textformat SET favorite=0 WHERE favorite IS NULL;"
+                               "UPDATE labelsettings SET favorite=0 WHERE favorite IS NULL;"
+                               "UPDATE legendpatchshapes SET favorite=0 WHERE favorite IS NULL;"
+                               "UPDATE symbol3d SET favorite=0 WHERE favorite IS NULL;"
+                             );
   runEmptyQuery( query );
 
   {
     QgsScopedRuntimeProfile profile( tr( "Load symbols" ) );
     // First create all the main symbols
-    query = QgsSqlite3Mprintf( "SELECT * FROM symbol" );
+    query = qgs_sqlite3_mprintf( "SELECT * FROM symbol" );
     statement = mCurrentDB.prepare( query, rc );
 
     while ( rc == SQLITE_OK && sqlite3_step( statement.get() ) == SQLITE_ROW )
@@ -604,7 +699,7 @@ bool QgsStyle::load( const QString &filename )
 
   {
     QgsScopedRuntimeProfile profile( tr( "Load color ramps" ) );
-    query = QgsSqlite3Mprintf( "SELECT * FROM colorramp" );
+    query = qgs_sqlite3_mprintf( "SELECT * FROM colorramp" );
     statement = mCurrentDB.prepare( query, rc );
     while ( rc == SQLITE_OK && sqlite3_step( statement.get() ) == SQLITE_ROW )
     {
@@ -626,7 +721,7 @@ bool QgsStyle::load( const QString &filename )
 
   {
     QgsScopedRuntimeProfile profile( tr( "Load text formats" ) );
-    query = QgsSqlite3Mprintf( "SELECT * FROM textformat" );
+    query = qgs_sqlite3_mprintf( "SELECT * FROM textformat" );
     statement = mCurrentDB.prepare( query, rc );
     while ( rc == SQLITE_OK && sqlite3_step( statement.get() ) == SQLITE_ROW )
     {
@@ -648,7 +743,7 @@ bool QgsStyle::load( const QString &filename )
 
   {
     QgsScopedRuntimeProfile profile( tr( "Load label settings" ) );
-    query = QgsSqlite3Mprintf( "SELECT * FROM labelsettings" );
+    query = qgs_sqlite3_mprintf( "SELECT * FROM labelsettings" );
     statement = mCurrentDB.prepare( query, rc );
     while ( rc == SQLITE_OK && sqlite3_step( statement.get() ) == SQLITE_ROW )
     {
@@ -670,7 +765,7 @@ bool QgsStyle::load( const QString &filename )
 
   {
     QgsScopedRuntimeProfile profile( tr( "Load legend patch shapes" ) );
-    query = QgsSqlite3Mprintf( "SELECT * FROM legendpatchshapes" );
+    query = qgs_sqlite3_mprintf( "SELECT * FROM legendpatchshapes" );
     statement = mCurrentDB.prepare( query, rc );
     while ( rc == SQLITE_OK && sqlite3_step( statement.get() ) == SQLITE_ROW )
     {
@@ -687,6 +782,48 @@ bool QgsStyle::load( const QString &filename )
       QgsLegendPatchShape shape;
       shape.readXml( settingsElement, QgsReadWriteContext() );
       mLegendPatchShapes.insert( settingsName, shape );
+    }
+  }
+
+  {
+    QgsScopedRuntimeProfile profile( tr( "Load 3D symbols shapes" ) );
+    query = qgs_sqlite3_mprintf( "SELECT * FROM symbol3d" );
+    statement = mCurrentDB.prepare( query, rc );
+
+    const bool registry3dPopulated = !QgsApplication::symbol3DRegistry()->symbolTypes().empty();
+
+    while ( rc == SQLITE_OK && sqlite3_step( statement.get() ) == SQLITE_ROW )
+    {
+      QDomDocument doc;
+      const QString settingsName = statement.columnAsText( Symbol3DTableName );
+      QgsScopedRuntimeProfile profile( settingsName );
+      const QString xmlstring = statement.columnAsText( Symbol3DTableXML );
+      if ( !doc.setContent( xmlstring ) )
+      {
+        QgsDebugMsg( "Cannot open 3d symbol " + settingsName );
+        continue;
+      }
+      QDomElement settingsElement = doc.documentElement();
+
+      if ( !registry3dPopulated )
+      {
+        mDeferred3DsymbolElements.insert( settingsName, settingsElement );
+      }
+      else
+      {
+        const QString symbolType = settingsElement.attribute( QStringLiteral( "type" ) );
+        std::unique_ptr< QgsAbstract3DSymbol > symbol( QgsApplication::symbol3DRegistry()->createSymbol( symbolType ) );
+        if ( symbol )
+        {
+          symbol->readXml( settingsElement, QgsReadWriteContext() );
+          m3dSymbols.insert( settingsName, symbol.release() );
+        }
+        else
+        {
+          QgsDebugMsg( "Cannot open 3d symbol " + settingsName );
+          continue;
+        }
+      }
     }
   }
 
@@ -800,7 +937,7 @@ bool QgsStyle::renameColorRamp( const QString &oldName, const QString &newName )
 
   int rampid = 0;
   sqlite3_statement_unique_ptr statement;
-  auto query = QgsSqlite3Mprintf( "SELECT id FROM colorramp WHERE name='%q'", oldName.toUtf8().constData() );
+  QString query = qgs_sqlite3_mprintf( "SELECT id FROM colorramp WHERE name='%q'", oldName.toUtf8().constData() );
   int nErr;
   statement = mCurrentDB.prepare( query, nErr );
   if ( nErr == SQLITE_OK && sqlite3_step( statement.get() ) == SQLITE_ROW )
@@ -831,10 +968,12 @@ bool QgsStyle::saveTextFormat( const QString &name, const QgsTextFormat &format,
 
   QByteArray xmlArray;
   QTextStream stream( &xmlArray );
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
   stream.setCodec( "UTF-8" );
+#endif
   formatElem.save( stream, 4 );
-  auto query = QgsSqlite3Mprintf( "INSERT INTO textformat VALUES (NULL, '%q', '%q', %d);",
-                                  name.toUtf8().constData(), xmlArray.constData(), ( favorite ? 1 : 0 ) );
+  QString query = qgs_sqlite3_mprintf( "INSERT INTO textformat VALUES (NULL, '%q', '%q', %d);",
+                                       name.toUtf8().constData(), xmlArray.constData(), ( favorite ? 1 : 0 ) );
   if ( !runEmptyQuery( query ) )
   {
     QgsDebugMsg( QStringLiteral( "Couldn't insert text format into the database!" ) );
@@ -874,7 +1013,7 @@ bool QgsStyle::renameTextFormat( const QString &oldName, const QString &newName 
 
   int textFormatId = 0;
   sqlite3_statement_unique_ptr statement;
-  auto query = QgsSqlite3Mprintf( "SELECT id FROM textformat WHERE name='%q'", oldName.toUtf8().constData() );
+  QString query = qgs_sqlite3_mprintf( "SELECT id FROM textformat WHERE name='%q'", oldName.toUtf8().constData() );
   int nErr;
   statement = mCurrentDB.prepare( query, nErr );
   if ( nErr == SQLITE_OK && sqlite3_step( statement.get() ) == SQLITE_ROW )
@@ -905,10 +1044,12 @@ bool QgsStyle::saveLabelSettings( const QString &name, const QgsPalLayerSettings
 
   QByteArray xmlArray;
   QTextStream stream( &xmlArray );
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
   stream.setCodec( "UTF-8" );
+#endif
   settingsElem.save( stream, 4 );
-  auto query = QgsSqlite3Mprintf( "INSERT INTO labelsettings VALUES (NULL, '%q', '%q', %d);",
-                                  name.toUtf8().constData(), xmlArray.constData(), ( favorite ? 1 : 0 ) );
+  QString query = qgs_sqlite3_mprintf( "INSERT INTO labelsettings VALUES (NULL, '%q', '%q', %d);",
+                                       name.toUtf8().constData(), xmlArray.constData(), ( favorite ? 1 : 0 ) );
   if ( !runEmptyQuery( query ) )
   {
     QgsDebugMsg( QStringLiteral( "Couldn't insert label settings into the database!" ) );
@@ -948,7 +1089,7 @@ bool QgsStyle::renameLabelSettings( const QString &oldName, const QString &newNa
 
   int labelSettingsId = 0;
   sqlite3_statement_unique_ptr statement;
-  auto query = QgsSqlite3Mprintf( "SELECT id FROM labelsettings WHERE name='%q'", oldName.toUtf8().constData() );
+  QString query = qgs_sqlite3_mprintf( "SELECT id FROM labelsettings WHERE name='%q'", oldName.toUtf8().constData() );
   int nErr;
   statement = mCurrentDB.prepare( query, nErr );
   if ( nErr == SQLITE_OK && sqlite3_step( statement.get() ) == SQLITE_ROW )
@@ -974,10 +1115,12 @@ bool QgsStyle::saveLegendPatchShape( const QString &name, const QgsLegendPatchSh
 
   QByteArray xmlArray;
   QTextStream stream( &xmlArray );
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
   stream.setCodec( "UTF-8" );
+#endif
   shapeElem.save( stream, 4 );
-  auto query = QgsSqlite3Mprintf( "INSERT INTO legendpatchshapes VALUES (NULL, '%q', '%q', %d);",
-                                  name.toUtf8().constData(), xmlArray.constData(), ( favorite ? 1 : 0 ) );
+  QString query = qgs_sqlite3_mprintf( "INSERT INTO legendpatchshapes VALUES (NULL, '%q', '%q', %d);",
+                                       name.toUtf8().constData(), xmlArray.constData(), ( favorite ? 1 : 0 ) );
   if ( !runEmptyQuery( query ) )
   {
     QgsDebugMsg( QStringLiteral( "Couldn't insert legend patch shape into the database!" ) );
@@ -1011,7 +1154,7 @@ bool QgsStyle::renameLegendPatchShape( const QString &oldName, const QString &ne
 
   int labelSettingsId = 0;
   sqlite3_statement_unique_ptr statement;
-  auto query = QgsSqlite3Mprintf( "SELECT id FROM legendpatchshapes WHERE name='%q'", oldName.toUtf8().constData() );
+  QString query = qgs_sqlite3_mprintf( "SELECT id FROM legendpatchshapes WHERE name='%q'", oldName.toUtf8().constData() );
   int nErr;
   statement = mCurrentDB.prepare( query, nErr );
   if ( nErr == SQLITE_OK && sqlite3_step( statement.get() ) == SQLITE_ROW )
@@ -1027,59 +1170,134 @@ bool QgsStyle::renameLegendPatchShape( const QString &oldName, const QString &ne
   return result;
 }
 
-QgsLegendPatchShape QgsStyle::defaultPatch( QgsSymbol::SymbolType type, QSizeF size ) const
+QgsLegendPatchShape QgsStyle::defaultPatch( Qgis::SymbolType type, QSizeF size ) const
 {
-  if ( type == QgsSymbol::Hybrid )
+  if ( type == Qgis::SymbolType::Hybrid )
     return QgsLegendPatchShape();
 
-  if ( mDefaultPatchCache[ type ].contains( size ) )
-    return mDefaultPatchCache[ type ].value( size );
+  if ( mDefaultPatchCache[ static_cast< int >( type ) ].contains( size ) )
+    return mDefaultPatchCache[ static_cast< int >( type ) ].value( size );
 
   QgsGeometry geom;
   switch ( type )
   {
-    case QgsSymbol::Marker:
-      geom = QgsGeometry( qgis::make_unique< QgsPoint >( static_cast< int >( size.width() ) / 2, static_cast< int >( size.height() ) / 2 ) );
+    case Qgis::SymbolType::Marker:
+      geom = QgsGeometry( std::make_unique< QgsPoint >( static_cast< int >( size.width() ) / 2, static_cast< int >( size.height() ) / 2 ) );
       break;
 
-    case QgsSymbol::Line:
+    case Qgis::SymbolType::Line:
     {
       // we're adding 0.5 to get rid of blurred preview:
       // drawing antialiased lines of width 1 at (x,0)-(x,100) creates 2px line
       double y = static_cast< int >( size.height() ) / 2 + 0.5;
-      geom = QgsGeometry( qgis::make_unique< QgsLineString >( ( QVector< double >() << 0 << size.width() ),
+      geom = QgsGeometry( std::make_unique< QgsLineString >( ( QVector< double >() << 0 << size.width() ),
                           ( QVector< double >() << y << y ) ) );
       break;
     }
 
-    case QgsSymbol::Fill:
+    case Qgis::SymbolType::Fill:
     {
-      geom = QgsGeometry( qgis::make_unique< QgsPolygon >(
+      geom = QgsGeometry( std::make_unique< QgsPolygon >(
                             new QgsLineString( QVector< double >() << 0 << static_cast< int >( size.width() ) << static_cast< int >( size.width() ) << 0 << 0,
                                 QVector< double >() << static_cast< int >( size.height() ) << static_cast< int >( size.height() ) << 0 << 0 << static_cast< int >( size.height() ) ) ) );
       break;
     }
 
-    case QgsSymbol::Hybrid:
+    case Qgis::SymbolType::Hybrid:
       break;
   }
 
   QgsLegendPatchShape res = QgsLegendPatchShape( type, geom, false );
-  mDefaultPatchCache[ type ][size ] = res;
+  mDefaultPatchCache[ static_cast< int >( type ) ][size ] = res;
   return res;
 }
 
-QList<QList<QPolygonF> > QgsStyle::defaultPatchAsQPolygonF( QgsSymbol::SymbolType type, QSizeF size ) const
+QList<QList<QPolygonF> > QgsStyle::defaultPatchAsQPolygonF( Qgis::SymbolType type, QSizeF size ) const
 {
-  if ( type == QgsSymbol::Hybrid )
+  if ( type == Qgis::SymbolType::Hybrid )
     return QList<QList<QPolygonF> >();
 
-  if ( mDefaultPatchQPolygonFCache[ type ].contains( size ) )
-    return mDefaultPatchQPolygonFCache[ type ].value( size );
+  if ( mDefaultPatchQPolygonFCache[ static_cast< int >( type ) ].contains( size ) )
+    return mDefaultPatchQPolygonFCache[ static_cast< int >( type ) ].value( size );
 
   QList<QList<QPolygonF> > res = defaultPatch( type, size ).toQPolygonF( type, size );
-  mDefaultPatchQPolygonFCache[ type ][size ] = res;
+  mDefaultPatchQPolygonFCache[ static_cast< int >( type ) ][size ] = res;
   return res;
+}
+
+QgsTextFormat QgsStyle::defaultTextFormat( QgsStyle::TextFormatContext ) const
+{
+  return textFormat( QStringLiteral( "Default" ) );
+}
+
+bool QgsStyle::saveSymbol3D( const QString &name, QgsAbstract3DSymbol *symbol, bool favorite, const QStringList &tags )
+{
+  // insert it into the database
+  QDomDocument doc( QStringLiteral( "dummy" ) );
+  QDomElement elem = doc.createElement( QStringLiteral( "symbol" ) );
+  elem.setAttribute( QStringLiteral( "type" ), symbol->type() );
+  symbol->writeXml( elem, QgsReadWriteContext() );
+
+  QByteArray xmlArray;
+  QTextStream stream( &xmlArray );
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+  stream.setCodec( "UTF-8" );
+#endif
+  elem.save( stream, 4 );
+  QString query = qgs_sqlite3_mprintf( "INSERT INTO symbol3d VALUES (NULL, '%q', '%q', %d);",
+                                       name.toUtf8().constData(), xmlArray.constData(), ( favorite ? 1 : 0 ) );
+  if ( !runEmptyQuery( query ) )
+  {
+    QgsDebugMsg( QStringLiteral( "Couldn't insert 3d symbol into the database!" ) );
+    return false;
+  }
+
+  mCachedFavorites[ Symbol3DEntity ].insert( name, favorite );
+
+  tagSymbol( Symbol3DEntity, name, tags );
+
+  emit entityAdded( Symbol3DEntity, name );
+
+  return true;
+}
+
+bool QgsStyle::renameSymbol3D( const QString &oldName, const QString &newName )
+{
+  if ( m3dSymbols.contains( newName ) )
+  {
+    QgsDebugMsg( QStringLiteral( "3d symbol of new name already exists." ) );
+    return false;
+  }
+
+  if ( !m3dSymbols.contains( oldName ) )
+    return false;
+  QgsAbstract3DSymbol *symbol = m3dSymbols.take( oldName );
+
+  m3dSymbols.insert( newName, symbol );
+  mCachedTags[Symbol3DEntity ].remove( oldName );
+  mCachedFavorites[ Symbol3DEntity ].remove( oldName );
+
+  int labelSettingsId = 0;
+  sqlite3_statement_unique_ptr statement;
+  QString query = qgs_sqlite3_mprintf( "SELECT id FROM symbol3d WHERE name='%q'", oldName.toUtf8().constData() );
+  int nErr;
+  statement = mCurrentDB.prepare( query, nErr );
+  if ( nErr == SQLITE_OK && sqlite3_step( statement.get() ) == SQLITE_ROW )
+  {
+    labelSettingsId = sqlite3_column_int( statement.get(), 0 );
+  }
+  const bool result = rename( Symbol3DEntity, labelSettingsId, newName );
+  if ( result )
+  {
+    emit entityRenamed( Symbol3DEntity, oldName, newName );
+  }
+
+  return result;
+}
+
+QStringList QgsStyle::symbol3DNames() const
+{
+  return m3dSymbols.keys();
 }
 
 QStringList QgsStyle::symbolsOfFavorite( StyleEntity type ) const
@@ -1099,7 +1317,7 @@ QStringList QgsStyle::symbolsOfFavorite( StyleEntity type ) const
       return QStringList();
 
     default:
-      query = QgsSqlite3Mprintf( QStringLiteral( "SELECT name FROM %1 WHERE favorite=1" ).arg( entityTableName( type ) ).toLocal8Bit().data() );
+      query = qgs_sqlite3_mprintf( QStringLiteral( "SELECT name FROM %1 WHERE favorite=1" ).arg( entityTableName( type ) ).toLocal8Bit().data() );
       break;
   }
 
@@ -1133,8 +1351,8 @@ QStringList QgsStyle::symbolsWithTag( StyleEntity type, int tagid ) const
       return QStringList();
 
     default:
-      subquery = QgsSqlite3Mprintf( QStringLiteral( "SELECT %1 FROM %2 WHERE tag_id=%d" ).arg( tagmapEntityIdFieldName( type ),
-                                    tagmapTableName( type ) ).toLocal8Bit().data(), tagid );
+      subquery = qgs_sqlite3_mprintf( QStringLiteral( "SELECT %1 FROM %2 WHERE tag_id=%d" ).arg( tagmapEntityIdFieldName( type ),
+                                      tagmapTableName( type ) ).toLocal8Bit().data(), tagid );
       break;
   }
 
@@ -1148,7 +1366,7 @@ QStringList QgsStyle::symbolsWithTag( StyleEntity type, int tagid ) const
   {
     int id = sqlite3_column_int( statement.get(), 0 );
 
-    const QString query = QgsSqlite3Mprintf( QStringLiteral( "SELECT name FROM %1 WHERE id=%d" ).arg( entityTableName( type ) ).toLocal8Bit().data(), id );
+    const QString query = qgs_sqlite3_mprintf( QStringLiteral( "SELECT name FROM %1 WHERE id=%d" ).arg( entityTableName( type ) ).toLocal8Bit().data(), id );
 
     int rc;
     sqlite3_statement_unique_ptr statement2;
@@ -1168,7 +1386,7 @@ int QgsStyle::addTag( const QString &tagname )
     return 0;
   sqlite3_statement_unique_ptr statement;
 
-  auto query = QgsSqlite3Mprintf( "INSERT INTO tag VALUES (NULL, '%q')", tagname.toUtf8().constData() );
+  QString query = qgs_sqlite3_mprintf( "INSERT INTO tag VALUES (NULL, '%q')", tagname.toUtf8().constData() );
   int nErr;
   statement = mCurrentDB.prepare( query, nErr );
   if ( nErr == SQLITE_OK )
@@ -1189,7 +1407,7 @@ QStringList QgsStyle::tags() const
 
   sqlite3_statement_unique_ptr statement;
 
-  auto query = QgsSqlite3Mprintf( "SELECT name FROM tag" );
+  QString query = qgs_sqlite3_mprintf( "SELECT name FROM tag" );
   int nError;
   statement = mCurrentDB.prepare( query, nError );
 
@@ -1204,7 +1422,7 @@ QStringList QgsStyle::tags() const
 
 bool QgsStyle::rename( StyleEntity type, int id, const QString &newName )
 {
-  const QString query = QgsSqlite3Mprintf( QStringLiteral( "UPDATE %1 SET name='%q' WHERE id=%d" ).arg( entityTableName( type ) ).toLocal8Bit().data(), newName.toUtf8().constData(), id );
+  const QString query = qgs_sqlite3_mprintf( QStringLiteral( "UPDATE %1 SET name='%q' WHERE id=%d" ).arg( entityTableName( type ) ).toLocal8Bit().data(), newName.toUtf8().constData(), id );
 
   const bool result = runEmptyQuery( query );
   if ( !result )
@@ -1244,20 +1462,20 @@ bool QgsStyle::remove( StyleEntity type, int id )
   switch ( type )
   {
     case TagEntity:
-      query = QgsSqlite3Mprintf( "DELETE FROM tag WHERE id=%d; DELETE FROM tagmap WHERE tag_id=%d", id, id );
+      query = qgs_sqlite3_mprintf( "DELETE FROM tag WHERE id=%d; DELETE FROM tagmap WHERE tag_id=%d", id, id );
       groupRemoved = true;
       break;
     case SmartgroupEntity:
-      query = QgsSqlite3Mprintf( "DELETE FROM smartgroup WHERE id=%d", id );
+      query = qgs_sqlite3_mprintf( "DELETE FROM smartgroup WHERE id=%d", id );
       groupRemoved = true;
       break;
 
     default:
-      query = QgsSqlite3Mprintf( QStringLiteral( "DELETE FROM %1 WHERE id=%d; DELETE FROM %2 WHERE %3=%d" ).arg(
-                                   entityTableName( type ),
-                                   tagmapTableName( type ),
-                                   tagmapEntityIdFieldName( type )
-                                 ).toLocal8Bit().data(), id, id );
+      query = qgs_sqlite3_mprintf( QStringLiteral( "DELETE FROM %1 WHERE id=%d; DELETE FROM %2 WHERE %3=%d" ).arg(
+                                     entityTableName( type ),
+                                     tagmapTableName( type ),
+                                     tagmapEntityIdFieldName( type )
+                                   ).toLocal8Bit().data(), id, id );
       break;
   }
 
@@ -1294,6 +1512,15 @@ bool QgsStyle::removeEntityByName( QgsStyle::StyleEntity type, const QString &na
     case QgsStyle::SymbolEntity:
     {
       std::unique_ptr< QgsSymbol > symbol( mSymbols.take( name ) );
+      if ( !symbol )
+        return false;
+
+      break;
+    }
+
+    case QgsStyle::Symbol3DEntity:
+    {
+      std::unique_ptr< QgsAbstract3DSymbol > symbol( m3dSymbols.take( name ) );
       if ( !symbol )
         return false;
 
@@ -1410,8 +1637,8 @@ bool QgsStyle::addFavorite( StyleEntity type, const QString &name )
       return false;
 
     default:
-      query = QgsSqlite3Mprintf( QStringLiteral( "UPDATE %1 SET favorite=1 WHERE name='%q'" ).arg( entityTableName( type ) ).toLocal8Bit().data(),
-                                 name.toUtf8().constData() );
+      query = qgs_sqlite3_mprintf( QStringLiteral( "UPDATE %1 SET favorite=1 WHERE name='%q'" ).arg( entityTableName( type ) ).toLocal8Bit().data(),
+                                   name.toUtf8().constData() );
       break;
   }
 
@@ -1446,7 +1673,7 @@ bool QgsStyle::removeFavorite( StyleEntity type, const QString &name )
       return false;
 
     default:
-      query = QgsSqlite3Mprintf( QStringLiteral( "UPDATE %1 SET favorite=0 WHERE name='%q'" ).arg( entityTableName( type ) ).toLocal8Bit().data(), name.toUtf8().constData() );
+      query = qgs_sqlite3_mprintf( QStringLiteral( "UPDATE %1 SET favorite=0 WHERE name='%q'" ).arg( entityTableName( type ) ).toLocal8Bit().data(), name.toUtf8().constData() );
       break;
   }
 
@@ -1481,8 +1708,8 @@ QStringList QgsStyle::findSymbols( StyleEntity type, const QString &qword )
       break;
   }
 
-  auto query = QgsSqlite3Mprintf( "SELECT name FROM %q WHERE name LIKE '%%%q%%'",
-                                  item.toUtf8().constData(), qword.toUtf8().constData() );
+  QString query = qgs_sqlite3_mprintf( "SELECT name FROM %q WHERE name LIKE '%%%q%%'",
+                                       item.toUtf8().constData(), qword.toUtf8().constData() );
 
   sqlite3_statement_unique_ptr statement;
   int nErr; statement = mCurrentDB.prepare( query, nErr );
@@ -1494,7 +1721,7 @@ QStringList QgsStyle::findSymbols( StyleEntity type, const QString &qword )
   }
 
   // next add symbols with matching tags
-  query = QgsSqlite3Mprintf( "SELECT id FROM tag WHERE name LIKE '%%%q%%'", qword.toUtf8().constData() );
+  query = qgs_sqlite3_mprintf( "SELECT id FROM tag WHERE name LIKE '%%%q%%'", qword.toUtf8().constData() );
   statement = mCurrentDB.prepare( query, nErr );
 
   QStringList tagids;
@@ -1503,9 +1730,9 @@ QStringList QgsStyle::findSymbols( StyleEntity type, const QString &qword )
     tagids << statement.columnAsText( 0 );
   }
 
-  QString dummy = tagids.join( QStringLiteral( ", " ) );
-  query = QgsSqlite3Mprintf( QStringLiteral( "SELECT %1 FROM %2 WHERE tag_id IN (%q)" ).arg( tagmapEntityIdFieldName( type ),
-                             tagmapTableName( type ) ).toLocal8Bit().data(), dummy.toUtf8().constData() );
+  QString dummy = tagids.join( QLatin1String( ", " ) );
+  query = qgs_sqlite3_mprintf( QStringLiteral( "SELECT %1 FROM %2 WHERE tag_id IN (%q)" ).arg( tagmapEntityIdFieldName( type ),
+                               tagmapTableName( type ) ).toLocal8Bit().data(), dummy.toUtf8().constData() );
 
   statement = mCurrentDB.prepare( query, nErr );
 
@@ -1515,9 +1742,9 @@ QStringList QgsStyle::findSymbols( StyleEntity type, const QString &qword )
     symbolids << statement.columnAsText( 0 );
   }
 
-  dummy = symbolids.join( QStringLiteral( ", " ) );
-  query = QgsSqlite3Mprintf( "SELECT name FROM %q  WHERE id IN (%q)",
-                             item.toUtf8().constData(), dummy.toUtf8().constData() );
+  dummy = symbolids.join( QLatin1String( ", " ) );
+  query = qgs_sqlite3_mprintf( "SELECT name FROM %q  WHERE id IN (%q)",
+                               item.toUtf8().constData(), dummy.toUtf8().constData() );
   statement = mCurrentDB.prepare( query, nErr );
   while ( nErr == SQLITE_OK && sqlite3_step( statement.get() ) == SQLITE_ROW )
   {
@@ -1570,7 +1797,7 @@ bool QgsStyle::tagSymbol( StyleEntity type, const QString &symbol, const QString
       // Now map the tag to the symbol if it's not already tagged
       if ( !symbolHasTag( type, symbol, tag ) )
       {
-        QString query = QgsSqlite3Mprintf( QStringLiteral( "INSERT INTO %1 VALUES (%d,%d)" ).arg( tagmapTableName( type ) ).toLocal8Bit().data(), tagid, symbolid );
+        QString query = qgs_sqlite3_mprintf( QStringLiteral( "INSERT INTO %1 VALUES (%d,%d)" ).arg( tagmapTableName( type ) ).toLocal8Bit().data(), tagid, symbolid );
 
         char *zErr = nullptr;
         int nErr;
@@ -1617,7 +1844,7 @@ bool QgsStyle::detagSymbol( StyleEntity type, const QString &symbol, const QStri
   const auto constTags = tags;
   for ( const QString &tag : constTags )
   {
-    query = QgsSqlite3Mprintf( "SELECT id FROM tag WHERE name='%q'", tag.toUtf8().constData() );
+    query = qgs_sqlite3_mprintf( "SELECT id FROM tag WHERE name='%q'", tag.toUtf8().constData() );
 
     sqlite3_statement_unique_ptr statement2;
     statement2 = mCurrentDB.prepare( query, nErr );
@@ -1631,7 +1858,7 @@ bool QgsStyle::detagSymbol( StyleEntity type, const QString &symbol, const QStri
     if ( tagid )
     {
       // remove from the tagmap
-      const QString query = QgsSqlite3Mprintf( QStringLiteral( "DELETE FROM %1 WHERE tag_id=%d AND %2=%d" ).arg( tagmapTableName( type ), tagmapEntityIdFieldName( type ) ).toLocal8Bit().data(), tagid, symbolid );
+      const QString query = qgs_sqlite3_mprintf( QStringLiteral( "DELETE FROM %1 WHERE tag_id=%d AND %2=%d" ).arg( tagmapTableName( type ), tagmapEntityIdFieldName( type ) ).toLocal8Bit().data(), tagid, symbolid );
       runEmptyQuery( query );
     }
   }
@@ -1670,7 +1897,7 @@ bool QgsStyle::detagSymbol( StyleEntity type, const QString &symbol )
   }
 
   // remove all tags
-  const QString query = QgsSqlite3Mprintf( QStringLiteral( "DELETE FROM %1 WHERE %2=%d" ).arg( tagmapTableName( type ),
+  const QString query = qgs_sqlite3_mprintf( QStringLiteral( "DELETE FROM %1 WHERE %2=%d" ).arg( tagmapTableName( type ),
                         tagmapEntityIdFieldName( type ) ).toLocal8Bit().data(), symbolid );
   runEmptyQuery( query );
 
@@ -1708,7 +1935,7 @@ QStringList QgsStyle::tagsOfSymbol( StyleEntity type, const QString &symbol )
     return QStringList();
 
   // get the ids of tags for the symbol
-  const QString query = QgsSqlite3Mprintf( QStringLiteral( "SELECT tag_id FROM %1 WHERE %2=%d" ).arg( tagmapTableName( type ),
+  const QString query = qgs_sqlite3_mprintf( QStringLiteral( "SELECT tag_id FROM %1 WHERE %2=%d" ).arg( tagmapTableName( type ),
                         tagmapEntityIdFieldName( type ) ).toLocal8Bit().data(), symbolid );
 
   sqlite3_statement_unique_ptr statement;
@@ -1717,7 +1944,7 @@ QStringList QgsStyle::tagsOfSymbol( StyleEntity type, const QString &symbol )
   QStringList tagList;
   while ( nErr == SQLITE_OK && sqlite3_step( statement.get() ) == SQLITE_ROW )
   {
-    auto subquery = QgsSqlite3Mprintf( "SELECT name FROM tag WHERE id=%d", sqlite3_column_int( statement.get(), 0 ) );
+    QString subquery = qgs_sqlite3_mprintf( "SELECT name FROM tag WHERE id=%d", sqlite3_column_int( statement.get(), 0 ) );
 
     sqlite3_statement_unique_ptr statement2;
     int pErr;
@@ -1803,7 +2030,7 @@ bool QgsStyle::symbolHasTag( StyleEntity type, const QString &symbol, const QStr
   }
 
   // get the ids of tags for the symbol
-  const QString query = QgsSqlite3Mprintf( QStringLiteral( "SELECT tag_id FROM %1 WHERE tag_id=%d AND %2=%d" ).arg( tagmapTableName( type ),
+  const QString query = qgs_sqlite3_mprintf( QStringLiteral( "SELECT tag_id FROM %1 WHERE tag_id=%d AND %2=%d" ).arg( tagmapTableName( type ),
                         tagmapEntityIdFieldName( type ) ).toLocal8Bit().data(), tagid, symbolid );
 
   sqlite3_statement_unique_ptr statement;
@@ -1819,7 +2046,7 @@ QString QgsStyle::tag( int id ) const
 
   sqlite3_statement_unique_ptr statement;
 
-  auto query = QgsSqlite3Mprintf( "SELECT name FROM tag WHERE id=%d", id );
+  QString query = qgs_sqlite3_mprintf( "SELECT name FROM tag WHERE id=%d", id );
   int nError;
   statement = mCurrentDB.prepare( query, nError );
 
@@ -1835,7 +2062,7 @@ QString QgsStyle::tag( int id ) const
 int QgsStyle::getId( const QString &table, const QString &name )
 {
   QString lowerName( name.toLower() );
-  auto query = QgsSqlite3Mprintf( "SELECT id FROM %q WHERE LOWER(name)='%q'", table.toUtf8().constData(), lowerName.toUtf8().constData() );
+  QString query = qgs_sqlite3_mprintf( "SELECT id FROM %q WHERE LOWER(name)='%q'", table.toUtf8().constData(), lowerName.toUtf8().constData() );
 
   sqlite3_statement_unique_ptr statement;
   int nErr; statement = mCurrentDB.prepare( query, nErr );
@@ -1848,7 +2075,7 @@ int QgsStyle::getId( const QString &table, const QString &name )
   else
   {
     // Try the name without lowercase conversion
-    auto query = QgsSqlite3Mprintf( "SELECT id FROM %q WHERE name='%q'", table.toUtf8().constData(), name.toUtf8().constData() );
+    QString query = qgs_sqlite3_mprintf( "SELECT id FROM %q WHERE name='%q'", table.toUtf8().constData(), name.toUtf8().constData() );
 
     sqlite3_statement_unique_ptr statement;
     int nErr; statement = mCurrentDB.prepare( query, nErr );
@@ -1863,7 +2090,7 @@ int QgsStyle::getId( const QString &table, const QString &name )
 
 QString QgsStyle::getName( const QString &table, int id ) const
 {
-  auto query = QgsSqlite3Mprintf( "SELECT name FROM %q WHERE id='%q'", table.toUtf8().constData(), QString::number( id ).toUtf8().constData() );
+  QString query = qgs_sqlite3_mprintf( "SELECT name FROM %q WHERE id='%q'", table.toUtf8().constData(), QString::number( id ).toUtf8().constData() );
 
   sqlite3_statement_unique_ptr statement;
   int nErr; statement = mCurrentDB.prepare( query, nErr );
@@ -1927,12 +2154,30 @@ int QgsStyle::legendPatchShapesCount() const
   return mLegendPatchShapes.count();
 }
 
-QgsSymbol::SymbolType QgsStyle::legendPatchShapeSymbolType( const QString &name ) const
+Qgis::SymbolType QgsStyle::legendPatchShapeSymbolType( const QString &name ) const
 {
   if ( !mLegendPatchShapes.contains( name ) )
-    return QgsSymbol::Hybrid;
+    return Qgis::SymbolType::Hybrid;
 
   return mLegendPatchShapes.value( name ).symbolType();
+}
+
+QgsAbstract3DSymbol *QgsStyle::symbol3D( const QString &name ) const
+{
+  return m3dSymbols.contains( name ) ? m3dSymbols.value( name )->clone() : nullptr;
+}
+
+int QgsStyle::symbol3DCount() const
+{
+  return m3dSymbols.count();
+}
+
+QList<QgsWkbTypes::GeometryType> QgsStyle::symbol3DCompatibleGeometryTypes( const QString &name ) const
+{
+  if ( !m3dSymbols.contains( name ) )
+    return QList<QgsWkbTypes::GeometryType>();
+
+  return m3dSymbols.value( name )->compatibleGeometryTypes();
 }
 
 QgsWkbTypes::GeometryType QgsStyle::labelSettingsLayerType( const QString &name ) const
@@ -1967,16 +2212,16 @@ const QgsSymbol *QgsStyle::previewSymbolForPatchShape( const QgsLegendPatchShape
 {
   switch ( shape.symbolType() )
   {
-    case QgsSymbol::Marker:
+    case Qgis::SymbolType::Marker:
       return mPatchMarkerSymbol.get();
 
-    case QgsSymbol::Line:
+    case Qgis::SymbolType::Line:
       return mPatchLineSymbol.get();
 
-    case QgsSymbol::Fill:
+    case Qgis::SymbolType::Fill:
       return mPatchFillSymbol.get();
 
-    case QgsSymbol::Hybrid:
+    case Qgis::SymbolType::Hybrid:
       break;
   }
   return nullptr;
@@ -2010,6 +2255,9 @@ QStringList QgsStyle::allNames( QgsStyle::StyleEntity type ) const
 
     case LegendPatchShapeEntity:
       return legendPatchShapeNames();
+
+    case Symbol3DEntity:
+      return symbol3DNames();
 
     case TagEntity:
       return tags();
@@ -2052,10 +2300,12 @@ int QgsStyle::addSmartgroup( const QString &name, const QString &op, const QStri
 
   QByteArray xmlArray;
   QTextStream stream( &xmlArray );
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
   stream.setCodec( "UTF-8" );
+#endif
   smartEl.save( stream, 4 );
-  auto query = QgsSqlite3Mprintf( "INSERT INTO smartgroup VALUES (NULL, '%q', '%q')",
-                                  name.toUtf8().constData(), xmlArray.constData() );
+  QString query = qgs_sqlite3_mprintf( "INSERT INTO smartgroup VALUES (NULL, '%q', '%q')",
+                                       name.toUtf8().constData(), xmlArray.constData() );
 
   if ( runEmptyQuery( query ) )
   {
@@ -2080,7 +2330,7 @@ QgsSymbolGroupMap QgsStyle::smartgroupsListMap()
     return QgsSymbolGroupMap();
   }
 
-  auto query = QgsSqlite3Mprintf( "SELECT * FROM smartgroup" );
+  QString query = qgs_sqlite3_mprintf( "SELECT * FROM smartgroup" );
 
   // Now run the query and retrieve the group names
   sqlite3_statement_unique_ptr statement;
@@ -2105,7 +2355,7 @@ QStringList QgsStyle::smartgroupNames() const
     return QStringList();
   }
 
-  auto query = QgsSqlite3Mprintf( "SELECT name FROM smartgroup" );
+  QString query = qgs_sqlite3_mprintf( "SELECT name FROM smartgroup" );
 
   // Now run the query and retrieve the group names
   sqlite3_statement_unique_ptr statement;
@@ -2125,7 +2375,7 @@ QStringList QgsStyle::symbolsOfSmartgroup( StyleEntity type, int id )
 {
   QStringList symbols;
 
-  auto query = QgsSqlite3Mprintf( "SELECT xml FROM smartgroup WHERE id=%d", id );
+  QString query = qgs_sqlite3_mprintf( "SELECT xml FROM smartgroup WHERE id=%d", id );
 
   sqlite3_statement_unique_ptr statement;
   int nErr; statement = mCurrentDB.prepare( query, nErr );
@@ -2197,7 +2447,7 @@ QStringList QgsStyle::symbolsOfSmartgroup( StyleEntity type, int id )
         {
           QStringList dummy = symbols;
           symbols.clear();
-          for ( const QString &result : qgis::as_const( resultNames ) )
+          for ( const QString &result : std::as_const( resultNames ) )
           {
             if ( dummy.contains( result ) )
               symbols << result;
@@ -2223,7 +2473,7 @@ QgsSmartConditionMap QgsStyle::smartgroup( int id )
 
   QgsSmartConditionMap condition;
 
-  auto query = QgsSqlite3Mprintf( "SELECT xml FROM smartgroup WHERE id=%d", id );
+  QString query = qgs_sqlite3_mprintf( "SELECT xml FROM smartgroup WHERE id=%d", id );
 
   sqlite3_statement_unique_ptr statement;
   int nError;
@@ -2263,7 +2513,7 @@ QString QgsStyle::smartgroupOperator( int id )
 
   QString op;
 
-  auto query = QgsSqlite3Mprintf( "SELECT xml FROM smartgroup WHERE id=%d", id );
+  QString query = qgs_sqlite3_mprintf( "SELECT xml FROM smartgroup WHERE id=%d", id );
 
   int nError;
   sqlite3_statement_unique_ptr statement;
@@ -2299,6 +2549,8 @@ bool QgsStyle::exportXml( const QString &filename )
   const QStringList favoriteSymbols = symbolsOfFavorite( SymbolEntity );
   const QStringList favoriteColorramps = symbolsOfFavorite( ColorrampEntity );
   const QStringList favoriteTextFormats = symbolsOfFavorite( TextFormatEntity );
+  const QStringList favoriteLegendShapes = symbolsOfFavorite( LegendPatchShapeEntity );
+  const QStringList favorite3DSymbols = symbolsOfFavorite( Symbol3DEntity );
 
   // save symbols and attach tags
   QDomElement symbolsElem = QgsSymbolLayerUtils::saveSymbols( mSymbols, QStringLiteral( "symbols" ), doc, QgsReadWriteContext() );
@@ -2390,11 +2642,33 @@ bool QgsStyle::exportXml( const QString &filename )
     {
       legendPatchShapeEl.setAttribute( QStringLiteral( "tags" ), tags.join( ',' ) );
     }
-    if ( favoriteTextFormats.contains( it.key() ) )
+    if ( favoriteLegendShapes.contains( it.key() ) )
     {
       legendPatchShapeEl.setAttribute( QStringLiteral( "favorite" ), QStringLiteral( "1" ) );
     }
     legendPatchShapesElem.appendChild( legendPatchShapeEl );
+  }
+
+  // save symbols and attach tags
+  QDomElement symbols3DElem = doc.createElement( QStringLiteral( "symbols3d" ) );
+  for ( auto it = m3dSymbols.constBegin(); it != m3dSymbols.constEnd(); ++it )
+  {
+    QDomElement symbolEl = doc.createElement( QStringLiteral( "symbol3d" ) );
+    symbolEl.setAttribute( QStringLiteral( "name" ), it.key() );
+    QDomElement defEl = doc.createElement( QStringLiteral( "definition" ) );
+    defEl.setAttribute( QStringLiteral( "type" ), it.value()->type() );
+    it.value()->writeXml( defEl, QgsReadWriteContext() );
+    symbolEl.appendChild( defEl );
+    QStringList tags = tagsOfSymbol( Symbol3DEntity, it.key() );
+    if ( tags.count() > 0 )
+    {
+      symbolEl.setAttribute( QStringLiteral( "tags" ), tags.join( ',' ) );
+    }
+    if ( favorite3DSymbols.contains( it.key() ) )
+    {
+      symbolEl.setAttribute( QStringLiteral( "favorite" ), QStringLiteral( "1" ) );
+    }
+    symbols3DElem.appendChild( symbolEl );
   }
 
   root.appendChild( symbolsElem );
@@ -2402,6 +2676,7 @@ bool QgsStyle::exportXml( const QString &filename )
   root.appendChild( textFormatsElem );
   root.appendChild( labelSettingsElem );
   root.appendChild( legendPatchShapesElem );
+  root.appendChild( symbols3DElem );
 
   // save
   QFile f( filename );
@@ -2412,7 +2687,9 @@ bool QgsStyle::exportXml( const QString &filename )
   }
 
   QTextStream ts( &f );
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
   ts.setCodec( "UTF-8" );
+#endif
   doc.save( ts, 2 );
   f.close();
 
@@ -2466,13 +2743,13 @@ bool QgsStyle::importXml( const QString &filename, int sinceVersion )
   QDomElement e = symbolsElement.firstChildElement();
 
   // gain speed by re-grouping the INSERT statements in a transaction
-  auto query = QgsSqlite3Mprintf( "BEGIN TRANSACTION;" );
+  QString query = qgs_sqlite3_mprintf( "BEGIN TRANSACTION;" );
   runEmptyQuery( query );
 
   if ( version == QLatin1String( STYLE_CURRENT_VERSION ) || version == QLatin1String( "1" ) )
   {
     // For the new style, load symbols individually
-    while ( !e.isNull() )
+    for ( ; !e.isNull(); e = e.nextSiblingElement() )
     {
       const int entityAddedVersion = e.attribute( QStringLiteral( "addedVersion" ) ).toInt();
       if ( entityAddedVersion != 0 && sinceVersion != -1 && entityAddedVersion <= sinceVersion )
@@ -2490,7 +2767,7 @@ bool QgsStyle::importXml( const QString &filename, int sinceVersion )
           tags = e.attribute( QStringLiteral( "tags" ) ).split( ',' );
         }
         bool favorite = false;
-        if ( e.hasAttribute( QStringLiteral( "favorite" ) ) && e.attribute( QStringLiteral( "favorite" ) ) == QStringLiteral( "1" ) )
+        if ( e.hasAttribute( QStringLiteral( "favorite" ) ) && e.attribute( QStringLiteral( "favorite" ) ) == QLatin1String( "1" ) )
         {
           favorite = true;
         }
@@ -2509,7 +2786,6 @@ bool QgsStyle::importXml( const QString &filename, int sinceVersion )
       {
         QgsDebugMsg( "unknown tag: " + e.tagName() );
       }
-      e = e.nextSiblingElement();
     }
   }
   else
@@ -2527,7 +2803,7 @@ bool QgsStyle::importXml( const QString &filename, int sinceVersion )
   // load color ramps
   QDomElement rampsElement = docEl.firstChildElement( QStringLiteral( "colorramps" ) );
   e = rampsElement.firstChildElement();
-  while ( !e.isNull() )
+  for ( ; !e.isNull(); e = e.nextSiblingElement() )
   {
     const int entityAddedVersion = e.attribute( QStringLiteral( "addedVersion" ) ).toInt();
     if ( entityAddedVersion != 0 && sinceVersion != -1 && entityAddedVersion <= sinceVersion )
@@ -2545,7 +2821,7 @@ bool QgsStyle::importXml( const QString &filename, int sinceVersion )
         tags = e.attribute( QStringLiteral( "tags" ) ).split( ',' );
       }
       bool favorite = false;
-      if ( e.hasAttribute( QStringLiteral( "favorite" ) ) && e.attribute( QStringLiteral( "favorite" ) ) == QStringLiteral( "1" ) )
+      if ( e.hasAttribute( QStringLiteral( "favorite" ) ) && e.attribute( QStringLiteral( "favorite" ) ) == QLatin1String( "1" ) )
       {
         favorite = true;
       }
@@ -2564,96 +2840,98 @@ bool QgsStyle::importXml( const QString &filename, int sinceVersion )
     {
       QgsDebugMsg( "unknown tag: " + e.tagName() );
     }
-    e = e.nextSiblingElement();
   }
 
   // load text formats
-  if ( version == STYLE_CURRENT_VERSION )
+
+  // this is ONLY safe to do if we have a QGuiApplication-- it requires QFontDatabase, which is not available otherwise!
+  if ( qobject_cast< QGuiApplication * >( QCoreApplication::instance() ) )
   {
-    const QDomElement textFormatElement = docEl.firstChildElement( QStringLiteral( "textformats" ) );
-    e = textFormatElement.firstChildElement();
-    while ( !e.isNull() )
+    if ( version == STYLE_CURRENT_VERSION )
     {
-      const int entityAddedVersion = e.attribute( QStringLiteral( "addedVersion" ) ).toInt();
-      if ( entityAddedVersion != 0 && sinceVersion != -1 && entityAddedVersion <= sinceVersion )
+      const QDomElement textFormatElement = docEl.firstChildElement( QStringLiteral( "textformats" ) );
+      e = textFormatElement.firstChildElement();
+      for ( ; !e.isNull(); e = e.nextSiblingElement() )
       {
-        // skip the format, should already be present
-        continue;
-      }
-
-      if ( e.tagName() == QLatin1String( "textformat" ) )
-      {
-        QString name = e.attribute( QStringLiteral( "name" ) );
-        QStringList tags;
-        if ( e.hasAttribute( QStringLiteral( "tags" ) ) )
+        const int entityAddedVersion = e.attribute( QStringLiteral( "addedVersion" ) ).toInt();
+        if ( entityAddedVersion != 0 && sinceVersion != -1 && entityAddedVersion <= sinceVersion )
         {
-          tags = e.attribute( QStringLiteral( "tags" ) ).split( ',' );
-        }
-        bool favorite = false;
-        if ( e.hasAttribute( QStringLiteral( "favorite" ) ) && e.attribute( QStringLiteral( "favorite" ) ) == QStringLiteral( "1" ) )
-        {
-          favorite = true;
+          // skip the format, should already be present
+          continue;
         }
 
-        QgsTextFormat format;
-        const QDomElement styleElem = e.firstChildElement();
-        format.readXml( styleElem, QgsReadWriteContext() );
-        addTextFormat( name, format );
-        if ( mCurrentDB )
+        if ( e.tagName() == QLatin1String( "textformat" ) )
         {
-          saveTextFormat( name, format, favorite, tags );
+          QString name = e.attribute( QStringLiteral( "name" ) );
+          QStringList tags;
+          if ( e.hasAttribute( QStringLiteral( "tags" ) ) )
+          {
+            tags = e.attribute( QStringLiteral( "tags" ) ).split( ',' );
+          }
+          bool favorite = false;
+          if ( e.hasAttribute( QStringLiteral( "favorite" ) ) && e.attribute( QStringLiteral( "favorite" ) ) == QLatin1String( "1" ) )
+          {
+            favorite = true;
+          }
+
+          QgsTextFormat format;
+          const QDomElement styleElem = e.firstChildElement();
+          format.readXml( styleElem, QgsReadWriteContext() );
+          addTextFormat( name, format );
+          if ( mCurrentDB )
+          {
+            saveTextFormat( name, format, favorite, tags );
+          }
+        }
+        else
+        {
+          QgsDebugMsg( "unknown tag: " + e.tagName() );
         }
       }
-      else
-      {
-        QgsDebugMsg( "unknown tag: " + e.tagName() );
-      }
-      e = e.nextSiblingElement();
     }
-  }
 
-  // load label settings
-  if ( version == STYLE_CURRENT_VERSION )
-  {
-    const QDomElement labelSettingsElement = docEl.firstChildElement( QStringLiteral( "labelsettings" ) );
-    e = labelSettingsElement.firstChildElement();
-    while ( !e.isNull() )
+    // load label settings
+    if ( version == STYLE_CURRENT_VERSION )
     {
-      const int entityAddedVersion = e.attribute( QStringLiteral( "addedVersion" ) ).toInt();
-      if ( entityAddedVersion != 0 && sinceVersion != -1 && entityAddedVersion <= sinceVersion )
+      const QDomElement labelSettingsElement = docEl.firstChildElement( QStringLiteral( "labelsettings" ) );
+      e = labelSettingsElement.firstChildElement();
+      for ( ; !e.isNull(); e = e.nextSiblingElement() )
       {
-        // skip the settings, should already be present
-        continue;
-      }
-
-      if ( e.tagName() == QLatin1String( "labelsetting" ) )
-      {
-        QString name = e.attribute( QStringLiteral( "name" ) );
-        QStringList tags;
-        if ( e.hasAttribute( QStringLiteral( "tags" ) ) )
+        const int entityAddedVersion = e.attribute( QStringLiteral( "addedVersion" ) ).toInt();
+        if ( entityAddedVersion != 0 && sinceVersion != -1 && entityAddedVersion <= sinceVersion )
         {
-          tags = e.attribute( QStringLiteral( "tags" ) ).split( ',' );
-        }
-        bool favorite = false;
-        if ( e.hasAttribute( QStringLiteral( "favorite" ) ) && e.attribute( QStringLiteral( "favorite" ) ) == QStringLiteral( "1" ) )
-        {
-          favorite = true;
+          // skip the settings, should already be present
+          continue;
         }
 
-        QgsPalLayerSettings settings;
-        const QDomElement styleElem = e.firstChildElement();
-        settings.readXml( styleElem, QgsReadWriteContext() );
-        addLabelSettings( name, settings );
-        if ( mCurrentDB )
+        if ( e.tagName() == QLatin1String( "labelsetting" ) )
         {
-          saveLabelSettings( name, settings, favorite, tags );
+          QString name = e.attribute( QStringLiteral( "name" ) );
+          QStringList tags;
+          if ( e.hasAttribute( QStringLiteral( "tags" ) ) )
+          {
+            tags = e.attribute( QStringLiteral( "tags" ) ).split( ',' );
+          }
+          bool favorite = false;
+          if ( e.hasAttribute( QStringLiteral( "favorite" ) ) && e.attribute( QStringLiteral( "favorite" ) ) == QLatin1String( "1" ) )
+          {
+            favorite = true;
+          }
+
+          QgsPalLayerSettings settings;
+          const QDomElement styleElem = e.firstChildElement();
+          settings.readXml( styleElem, QgsReadWriteContext() );
+          addLabelSettings( name, settings );
+          if ( mCurrentDB )
+          {
+            saveLabelSettings( name, settings, favorite, tags );
+          }
+        }
+        else
+        {
+          QgsDebugMsg( "unknown tag: " + e.tagName() );
         }
       }
-      else
-      {
-        QgsDebugMsg( "unknown tag: " + e.tagName() );
-      }
-      e = e.nextSiblingElement();
     }
   }
 
@@ -2662,7 +2940,7 @@ bool QgsStyle::importXml( const QString &filename, int sinceVersion )
   {
     const QDomElement legendPatchShapesElement = docEl.firstChildElement( QStringLiteral( "legendpatchshapes" ) );
     e = legendPatchShapesElement.firstChildElement();
-    while ( !e.isNull() )
+    for ( ; !e.isNull(); e = e.nextSiblingElement() )
     {
       const int entityAddedVersion = e.attribute( QStringLiteral( "addedVersion" ) ).toInt();
       if ( entityAddedVersion != 0 && sinceVersion != -1 && entityAddedVersion <= sinceVersion )
@@ -2680,7 +2958,7 @@ bool QgsStyle::importXml( const QString &filename, int sinceVersion )
           tags = e.attribute( QStringLiteral( "tags" ) ).split( ',' );
         }
         bool favorite = false;
-        if ( e.hasAttribute( QStringLiteral( "favorite" ) ) && e.attribute( QStringLiteral( "favorite" ) ) == QStringLiteral( "1" ) )
+        if ( e.hasAttribute( QStringLiteral( "favorite" ) ) && e.attribute( QStringLiteral( "favorite" ) ) == QLatin1String( "1" ) )
         {
           favorite = true;
         }
@@ -2698,11 +2976,59 @@ bool QgsStyle::importXml( const QString &filename, int sinceVersion )
       {
         QgsDebugMsg( "unknown tag: " + e.tagName() );
       }
-      e = e.nextSiblingElement();
     }
   }
 
-  query = QgsSqlite3Mprintf( "COMMIT TRANSACTION;" );
+  // load 3d symbols
+  if ( version == STYLE_CURRENT_VERSION )
+  {
+    const QDomElement symbols3DElement = docEl.firstChildElement( QStringLiteral( "symbols3d" ) );
+    e = symbols3DElement.firstChildElement();
+    for ( ; !e.isNull(); e = e.nextSiblingElement() )
+    {
+      const int entityAddedVersion = e.attribute( QStringLiteral( "addedVersion" ) ).toInt();
+      if ( entityAddedVersion != 0 && sinceVersion != -1 && entityAddedVersion <= sinceVersion )
+      {
+        // skip the symbol, should already be present
+        continue;
+      }
+
+      if ( e.tagName() == QLatin1String( "symbol3d" ) )
+      {
+        QString name = e.attribute( QStringLiteral( "name" ) );
+        QStringList tags;
+        if ( e.hasAttribute( QStringLiteral( "tags" ) ) )
+        {
+          tags = e.attribute( QStringLiteral( "tags" ) ).split( ',' );
+        }
+        bool favorite = false;
+        if ( e.hasAttribute( QStringLiteral( "favorite" ) ) && e.attribute( QStringLiteral( "favorite" ) ) == QLatin1String( "1" ) )
+        {
+          favorite = true;
+        }
+
+        const QDomElement symbolElem = e.firstChildElement();
+        const QString type = symbolElem.attribute( QStringLiteral( "type" ) );
+        std::unique_ptr< QgsAbstract3DSymbol > sym( QgsApplication::symbol3DRegistry()->createSymbol( type ) );
+        if ( sym )
+        {
+          sym->readXml( symbolElem, QgsReadWriteContext() );
+          QgsAbstract3DSymbol *newSym = sym.get();
+          addSymbol3D( name, sym.release() );
+          if ( mCurrentDB )
+          {
+            saveSymbol3D( name, newSym, favorite, tags );
+          }
+        }
+      }
+      else
+      {
+        QgsDebugMsg( "unknown tag: " + e.tagName() );
+      }
+    }
+  }
+
+  query = qgs_sqlite3_mprintf( "COMMIT TRANSACTION;" );
   runEmptyQuery( query );
 
   mFileName = filename;
@@ -2735,7 +3061,9 @@ bool QgsStyle::updateSymbol( StyleEntity type, const QString &name )
   QDomElement symEl;
   QByteArray xmlArray;
   QTextStream stream( &xmlArray );
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
   stream.setCodec( "UTF-8" );
+#endif
 
   QString query;
 
@@ -2757,8 +3085,31 @@ bool QgsStyle::updateSymbol( StyleEntity type, const QString &name )
         return false;
       }
       symEl.save( stream, 4 );
-      query = QgsSqlite3Mprintf( "UPDATE symbol SET xml='%q' WHERE name='%q';",
-                                 xmlArray.constData(), name.toUtf8().constData() );
+      query = qgs_sqlite3_mprintf( "UPDATE symbol SET xml='%q' WHERE name='%q';",
+                                   xmlArray.constData(), name.toUtf8().constData() );
+      break;
+    }
+
+    case Symbol3DEntity:
+    {
+      // check if it is an existing symbol
+      if ( !symbol3DNames().contains( name ) )
+      {
+        QgsDebugMsg( QStringLiteral( "Update request received for unavailable symbol" ) );
+        return false;
+      }
+
+      symEl = doc.createElement( QStringLiteral( "symbol" ) );
+      symEl.setAttribute( QStringLiteral( "type" ), m3dSymbols.value( name )->type() );
+      m3dSymbols.value( name )->writeXml( symEl, QgsReadWriteContext() );
+      if ( symEl.isNull() )
+      {
+        QgsDebugMsg( QStringLiteral( "Couldn't convert symbol to valid XML!" ) );
+        return false;
+      }
+      symEl.save( stream, 4 );
+      query = qgs_sqlite3_mprintf( "UPDATE symbol3d SET xml='%q' WHERE name='%q';",
+                                   xmlArray.constData(), name.toUtf8().constData() );
       break;
     }
 
@@ -2778,8 +3129,8 @@ bool QgsStyle::updateSymbol( StyleEntity type, const QString &name )
         return false;
       }
       symEl.save( stream, 4 );
-      query = QgsSqlite3Mprintf( "UPDATE colorramp SET xml='%q' WHERE name='%q';",
-                                 xmlArray.constData(), name.toUtf8().constData() );
+      query = qgs_sqlite3_mprintf( "UPDATE colorramp SET xml='%q' WHERE name='%q';",
+                                   xmlArray.constData(), name.toUtf8().constData() );
       break;
     }
 
@@ -2799,8 +3150,8 @@ bool QgsStyle::updateSymbol( StyleEntity type, const QString &name )
         return false;
       }
       symEl.save( stream, 4 );
-      query = QgsSqlite3Mprintf( "UPDATE textformat SET xml='%q' WHERE name='%q';",
-                                 xmlArray.constData(), name.toUtf8().constData() );
+      query = qgs_sqlite3_mprintf( "UPDATE textformat SET xml='%q' WHERE name='%q';",
+                                   xmlArray.constData(), name.toUtf8().constData() );
       break;
     }
 
@@ -2820,8 +3171,8 @@ bool QgsStyle::updateSymbol( StyleEntity type, const QString &name )
         return false;
       }
       symEl.save( stream, 4 );
-      query = QgsSqlite3Mprintf( "UPDATE labelsettings SET xml='%q' WHERE name='%q';",
-                                 xmlArray.constData(), name.toUtf8().constData() );
+      query = qgs_sqlite3_mprintf( "UPDATE labelsettings SET xml='%q' WHERE name='%q';",
+                                   xmlArray.constData(), name.toUtf8().constData() );
       break;
     }
 
@@ -2837,8 +3188,8 @@ bool QgsStyle::updateSymbol( StyleEntity type, const QString &name )
       symEl = doc.createElement( QStringLiteral( "shape" ) );
       shape.writeXml( symEl, doc, QgsReadWriteContext() );
       symEl.save( stream, 4 );
-      query = QgsSqlite3Mprintf( "UPDATE legendpatchshapes SET xml='%q' WHERE name='%q';",
-                                 xmlArray.constData(), name.toUtf8().constData() );
+      query = qgs_sqlite3_mprintf( "UPDATE legendpatchshapes SET xml='%q' WHERE name='%q';",
+                                   xmlArray.constData(), name.toUtf8().constData() );
       break;
     }
 
@@ -2879,6 +3230,7 @@ bool QgsStyle::updateSymbol( StyleEntity type, const QString &name )
       case LegendPatchShapeEntity:
       case TagEntity:
       case SmartgroupEntity:
+      case Symbol3DEntity:
         break;
     }
     emit entityChanged( type, name );
@@ -2894,7 +3246,7 @@ void QgsStyle::clearCachedTags( QgsStyle::StyleEntity type, const QString &name 
 void QgsStyle::upgradeIfRequired()
 {
   // make sure metadata table exists
-  auto query = QgsSqlite3Mprintf( "SELECT name FROM sqlite_master WHERE name='stylemetadata'" );
+  QString query = qgs_sqlite3_mprintf( "SELECT name FROM sqlite_master WHERE name='stylemetadata'" );
   sqlite3_statement_unique_ptr statement;
   int rc;
   int dbVersion = 0;
@@ -2903,19 +3255,19 @@ void QgsStyle::upgradeIfRequired()
   if ( rc != SQLITE_OK || sqlite3_step( statement.get() ) != SQLITE_ROW )
   {
     // no metadata table
-    query = QgsSqlite3Mprintf( "CREATE TABLE stylemetadata("\
-                               "id INTEGER PRIMARY KEY,"\
-                               "key TEXT UNIQUE,"\
-                               "value TEXT);" );
+    query = qgs_sqlite3_mprintf( "CREATE TABLE stylemetadata("\
+                                 "id INTEGER PRIMARY KEY,"\
+                                 "key TEXT UNIQUE,"\
+                                 "value TEXT);" );
     runEmptyQuery( query );
-    query = QgsSqlite3Mprintf( "INSERT INTO stylemetadata VALUES (NULL, '%q', '%q')", "version", "31200" );
+    query = qgs_sqlite3_mprintf( "INSERT INTO stylemetadata VALUES (NULL, '%q', '%q')", "version", "31200" );
     runEmptyQuery( query );
 
     dbVersion = 31200;
   }
   else
   {
-    query = QgsSqlite3Mprintf( "SELECT value FROM stylemetadata WHERE key='version'" );
+    query = qgs_sqlite3_mprintf( "SELECT value FROM stylemetadata WHERE key='version'" );
     statement = mCurrentDB.prepare( query, rc );
     if ( rc == SQLITE_OK && sqlite3_step( statement.get() ) == SQLITE_ROW )
     {
@@ -2928,7 +3280,7 @@ void QgsStyle::upgradeIfRequired()
     // do upgrade
     if ( importXml( QgsApplication::defaultStylePath(), dbVersion ) )
     {
-      query = QgsSqlite3Mprintf( "UPDATE stylemetadata SET value='%q' WHERE key='version'", QString::number( Qgis::versionInt() ).toUtf8().constData() );
+      query = qgs_sqlite3_mprintf( "UPDATE stylemetadata SET value='%q' WHERE key='version'", QString::number( Qgis::versionInt() ).toUtf8().constData() );
       runEmptyQuery( query );
     }
   }
@@ -2952,6 +3304,9 @@ QString QgsStyle::entityTableName( QgsStyle::StyleEntity type )
 
     case LegendPatchShapeEntity:
       return QStringLiteral( "legendpatchshapes" );
+
+    case Symbol3DEntity:
+      return QStringLiteral( "symbol3d" );
 
     case TagEntity:
       return QStringLiteral( "tag" );
@@ -2981,6 +3336,9 @@ QString QgsStyle::tagmapTableName( QgsStyle::StyleEntity type )
     case LegendPatchShapeEntity:
       return QStringLiteral( "lpstagmap" );
 
+    case Symbol3DEntity:
+      return QStringLiteral( "symbol3dtagmap" );
+
     case TagEntity:
     case SmartgroupEntity:
       break;
@@ -3006,6 +3364,9 @@ QString QgsStyle::tagmapEntityIdFieldName( QgsStyle::StyleEntity type )
 
     case LegendPatchShapeEntity:
       return QStringLiteral( "legendpatchshape_id" );
+
+    case Symbol3DEntity:
+      return QStringLiteral( "symbol3d_id" );
 
     case TagEntity:
     case SmartgroupEntity:
@@ -3037,4 +3398,9 @@ QgsStyle::StyleEntity QgsStyleLabelSettingsEntity::type() const
 QgsStyle::StyleEntity QgsStyleLegendPatchShapeEntity::type() const
 {
   return QgsStyle::LegendPatchShapeEntity;
+}
+
+QgsStyle::StyleEntity QgsStyleSymbol3DEntity::type() const
+{
+  return QgsStyle::Symbol3DEntity;
 }

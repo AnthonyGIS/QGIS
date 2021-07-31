@@ -45,10 +45,12 @@ namespace pal
 
   class LabelPosition;
   class Label;
+  class PriorityQueue;
 
   /**
    * \class pal::Sol
    * \ingroup core
+   * \brief Chain solution parameters.
    * \note not available in Python bindings
    */
 
@@ -121,7 +123,7 @@ namespace pal
        * Solves the labeling problem, selecting the best candidate locations for all labels and returns a list of these
        * calculated label positions.
        *
-       * If \a returnInactive is true, then the best positions for ALL labels will be returned, regardless of whether these
+       * If \a returnInactive is TRUE, then the best positions for ALL labels will be returned, regardless of whether these
        * labels overlap other labels.
        *
        * If the optional \a unlabeled list is specified, it will be filled with a list of all feature labels which could
@@ -153,6 +155,11 @@ namespace pal
       PalRtree< LabelPosition > &allCandidatesIndex() { return mAllCandidatesIndex; }
 
     private:
+
+      /**
+       * Returns TRUE if a labelling candidate \a lp1 conflicts with \a lp2.
+       */
+      bool candidatesAreConflicting( const LabelPosition *lp1, const LabelPosition *lp2 ) const;
 
       /**
        * Total number of layers containing labels
@@ -224,6 +231,7 @@ namespace pal
       Pal *pal = nullptr;
 
       void solution_cost();
+      void ignoreLabel( const LabelPosition *lp, pal::PriorityQueue &list, PalRtree<LabelPosition> &candidatesIndex );
   };
 
 } // namespace

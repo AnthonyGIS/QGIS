@@ -16,15 +16,20 @@
 #include "qgsmssqlexpressioncompiler.h"
 #include "qgsexpressionnodeimpl.h"
 
-QgsMssqlExpressionCompiler::QgsMssqlExpressionCompiler( QgsMssqlFeatureSource *source )
+QgsMssqlExpressionCompiler::QgsMssqlExpressionCompiler( QgsMssqlFeatureSource *source, bool ignoreStaticNodes )
   : QgsSqlExpressionCompiler( source->mFields,
-                              QgsSqlExpressionCompiler::LikeIsCaseInsensitive | QgsSqlExpressionCompiler::CaseInsensitiveStringMatch | QgsSqlExpressionCompiler::IntegerDivisionResultsInInteger )
+                              QgsSqlExpressionCompiler::LikeIsCaseInsensitive |
+                              QgsSqlExpressionCompiler::CaseInsensitiveStringMatch |
+                              QgsSqlExpressionCompiler::IntegerDivisionResultsInInteger, ignoreStaticNodes )
 {
-
 }
 
 QgsSqlExpressionCompiler::Result QgsMssqlExpressionCompiler::compileNode( const QgsExpressionNode *node, QString &result )
 {
+  QgsSqlExpressionCompiler::Result staticRes = replaceNodeByStaticCachedValueIfPossible( node, result );
+  if ( staticRes != Fail )
+    return staticRes;
+
   switch ( node->nodeType() )
   {
     case QgsExpressionNode::ntBinaryOperator:
@@ -40,7 +45,7 @@ QgsSqlExpressionCompiler::Result QgsMssqlExpressionCompiler::compileNode( const 
 
         default:
           // fallback to default handling
-          return QgsSqlExpressionCompiler::compileNode( node, result );;
+          return QgsSqlExpressionCompiler::compileNode( node, result );
       }
 
       QString op1, op2;
@@ -119,8 +124,8 @@ QString QgsMssqlExpressionCompiler::quotedValue( const QVariant &value, bool &ok
 QString QgsMssqlExpressionCompiler::quotedIdentifier( const QString &identifier )
 {
   QString quoted = identifier;
-  quoted.replace( '[', QStringLiteral( "[[" ) );
-  quoted.replace( ']', QStringLiteral( "]]" ) );
+  quoted.replace( '[', QLatin1String( "[[" ) );
+  quoted.replace( ']', QLatin1String( "]]" ) );
   quoted = quoted.prepend( '[' ).append( ']' );
   return quoted;
 }

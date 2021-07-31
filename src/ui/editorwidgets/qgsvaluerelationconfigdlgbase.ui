@@ -124,7 +124,7 @@
     </widget>
    </item>
    <item row="9" column="1">
-    <widget class="QSpinBox" name="mNofColumns"/>
+    <widget class="QgsSpinBox" name="mNofColumns"/>
    </item>
    <item row="2" column="1">
     <widget class="QgsFieldComboBox" name="mKeyColumn"/>
@@ -153,20 +153,25 @@
  </widget>
  <customwidgets>
   <customwidget>
+   <class>QgsSpinBox</class>
+   <extends>QSpinBox</extends>
+   <header>qgsspinbox.h</header>
+  </customwidget>
+  <customwidget>
    <class>QgsFieldComboBox</class>
    <extends>QComboBox</extends>
    <header>qgsfieldcombobox.h</header>
-  </customwidget>
-  <customwidget>
-   <class>QgsMapLayerComboBox</class>
-   <extends>QComboBox</extends>
-   <header>qgsmaplayercombobox.h</header>
   </customwidget>
   <customwidget>
    <class>QgsFieldExpressionWidget</class>
    <extends>QWidget</extends>
    <header>qgsfieldexpressionwidget.h</header>
    <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>QgsMapLayerComboBox</class>
+   <extends>QComboBox</extends>
+   <header>qgsmaplayercombobox.h</header>
   </customwidget>
  </customwidgets>
  <tabstops>
@@ -176,6 +181,7 @@
   <tabstop>mAllowNull</tabstop>
   <tabstop>mOrderByValue</tabstop>
   <tabstop>mAllowMulti</tabstop>
+  <tabstop>mNofColumns</tabstop>
   <tabstop>mUseCompleter</tabstop>
   <tabstop>mEditExpression</tabstop>
   <tabstop>mFilterExpression</tabstop>

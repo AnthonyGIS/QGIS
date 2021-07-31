@@ -34,7 +34,7 @@ class QgsModelGraphicsScene;
 
 /**
  * \ingroup gui
- * Abstract base class for all model designer view tools.
+ * \brief Abstract base class for all model designer view tools.
  *
  * Model designer view tools are user interactive tools for manipulating and adding items
  * within the model designer.
@@ -204,7 +204,7 @@ class GUI_EXPORT QgsModelViewTool : public QObject
     //! Pointer to model view.
     QgsModelGraphicsView *mView = nullptr;
 
-    QgsModelViewTool::Flags mFlags = nullptr;
+    QgsModelViewTool::Flags mFlags = QgsModelViewTool::Flags();
 
     //! Cursor used by tool
     QCursor mCursor = Qt::ArrowCursor;

@@ -132,7 +132,11 @@ class GUI_EXPORT QgsDateTimeEdit : public QDateTimeEdit
 
 #ifndef SIP_RUN
 ///@cond PRIVATE
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     QgsDateTimeEdit( const QVariant &var, QVariant::Type parserType, QWidget *parent );
+#else
+    QgsDateTimeEdit( const QVariant &var, QMetaType::Type parserType, QWidget *parent );
+#endif
 ///@endcond
 #endif
 
@@ -202,7 +206,7 @@ class GUI_EXPORT QgsDateTimeEdit : public QDateTimeEdit
     */
     void setMinimumEditDateTime()
     {
-      setDateTimeRange( QDateTime( QDate( 1, 1, 1 ) ), maximumDateTime() );
+      setDateTimeRange( QDateTime( QDate( 1, 1, 1 ), QTime( 0, 0, 0 ) ), maximumDateTime() );
     }
 
     friend class TestQgsDateTimeEdit;

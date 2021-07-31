@@ -49,7 +49,7 @@ class Ogr2OgrToPostGisList(GdalAlgorithm):
     SHAPE_ENCODING = 'SHAPE_ENCODING'
     GTYPE = 'GTYPE'
     GEOMTYPE = ['', 'NONE', 'GEOMETRY', 'POINT', 'LINESTRING', 'POLYGON', 'GEOMETRYCOLLECTION', 'MULTIPOINT',
-                'MULTIPOLYGON', 'MULTILINESTRING']
+                'MULTIPOLYGON', 'MULTILINESTRING', 'CIRCULARSTRING', 'COMPOUNDCURVE', 'CURVEPOLYGON', 'MULTICURVE', 'MULTISURFACE']
     S_SRS = 'S_SRS'
     T_SRS = 'T_SRS'
     A_SRS = 'A_SRS'
@@ -64,7 +64,7 @@ class Ogr2OgrToPostGisList(GdalAlgorithm):
     PRIMARY_KEY = 'PRIMARY_KEY'
     GEOCOLUMN = 'GEOCOLUMN'
     DIM = 'DIM'
-    DIMLIST = ['2', '3']
+    DIMLIST = ['2', '3', '4']
     SIMPLIFY = 'SIMPLIFY'
     SEGMENTIZE = 'SEGMENTIZE'
     SPAT = 'SPAT'
@@ -245,20 +245,21 @@ class Ogr2OgrToPostGisList(GdalAlgorithm):
         precision = self.parameterAsBoolean(parameters, self.PRECISION, context)
         options = self.parameterAsString(parameters, self.OPTIONS, context)
 
-        arguments = []
-        arguments.append('-progress')
-        arguments.append('--config PG_USE_COPY YES')
+        arguments = [
+            '-progress',
+            '--config PG_USE_COPY YES'
+        ]
         if shapeEncoding:
             arguments.append('--config')
             arguments.append('SHAPE_ENCODING')
-            arguments.append('"' + shapeEncoding + '"')
+            arguments.append(shapeEncoding)
         arguments.append('-f')
         arguments.append('PostgreSQL')
-        arguments.append('PG:"')
-        for token in QgsDataSourceUri(uri).connectionInfo(executing).split(' '):
-            arguments.append(token)
-        arguments.append('active_schema={}'.format(schema or 'public'))
-        arguments.append('"')
+
+        connection_parts = QgsDataSourceUri(uri).connectionInfo(executing).split(' ')
+        connection_parts.append('active_schema={}'.format(schema or 'public'))
+        arguments.append('PG:{}'.format(' '.join(connection_parts)))
+
         arguments.append(dimstring)
         arguments.append(ogrLayer)
         arguments.append(layername)
@@ -324,14 +325,11 @@ class Ogr2OgrToPostGisList(GdalAlgorithm):
         if len(options) > 0:
             arguments.append(options)
 
-        commands = []
         if isWindows():
-            commands = ['cmd.exe', '/C ', 'ogr2ogr.exe',
-                        GdalUtils.escapeAndJoin(arguments)]
+            return ['cmd.exe', '/C ', 'ogr2ogr.exe',
+                    GdalUtils.escapeAndJoin(arguments)]
         else:
-            commands = ['ogr2ogr', GdalUtils.escapeAndJoin(arguments)]
-
-        return commands
+            return ['ogr2ogr', GdalUtils.escapeAndJoin(arguments)]
 
     def commandName(self):
         return "ogr2ogr"

@@ -82,6 +82,12 @@ QgsStatisticalSummaryDockWidget::QgsStatisticalSummaryDockWidget( QWidget *paren
   mFieldType = DataType::Numeric;
   mPreviousFieldType = DataType::Numeric;
   refreshStatisticsMenu();
+
+  connect( this, &QgsDockWidget::visibilityChanged, this, [ = ]( bool visible )
+  {
+    if ( mPendingCalculate && visible )
+      refreshStatistics();
+  } );
 }
 
 QgsStatisticalSummaryDockWidget::~QgsStatisticalSummaryDockWidget()
@@ -112,7 +118,7 @@ void QgsStatisticalSummaryDockWidget::copyStatistics()
       QTableWidgetItem *item =  mStatisticsTable->item( i, j );
       columns += item->text();
     }
-    rows += columns.join( QStringLiteral( "\t" ) );
+    rows += columns.join( QLatin1Char( '\t' ) );
     columns.clear();
   }
 
@@ -120,9 +126,9 @@ void QgsStatisticalSummaryDockWidget::copyStatistics()
   {
     QString text = QStringLiteral( "%1\t%2\n%3" ).arg( mStatisticsTable->horizontalHeaderItem( 0 )->text(),
                    mStatisticsTable->horizontalHeaderItem( 1 )->text(),
-                   rows.join( QStringLiteral( "\n" ) ) );
+                   rows.join( QLatin1Char( '\n' ) ) );
     QString html = QStringLiteral( "<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 4.0 Transitional//EN\"><html><head><meta http-equiv=\"content-type\" content=\"text/html; charset=utf-8\"/></head><body><table border=\"1\"><tr><td>%1</td></tr></table></body></html>" ).arg( text );
-    html.replace( QStringLiteral( "\t" ), QStringLiteral( "</td><td>" ) ).replace( QStringLiteral( "\n" ), QStringLiteral( "</td></tr><tr><td>" ) );
+    html.replace( QLatin1String( "\t" ), QLatin1String( "</td><td>" ) ).replace( QLatin1String( "\n" ), QLatin1String( "</td></tr><tr><td>" ) );
 
     QgsClipboard clipboard;
     clipboard.setData( QStringLiteral( "text/html" ), html.toUtf8(), text );
@@ -136,6 +142,16 @@ void QgsStatisticalSummaryDockWidget::refreshStatistics()
     mStatisticsTable->setRowCount( 0 );
     return;
   }
+
+  if ( !isUserVisible() )
+  {
+    //defer calculation until dock is visible -- no point calculating stats if the user can't
+    //see them!
+    mPendingCalculate = true;
+    return;
+  }
+
+  mPendingCalculate = false;
 
   // determine field type
   mFieldType = DataType::Numeric;
@@ -163,7 +179,7 @@ void QgsStatisticalSummaryDockWidget::refreshStatistics()
   if ( ok )
   {
     long featureCount = selectedOnly ? mLayer->selectedFeatureCount() : mLayer->featureCount();
-    std::unique_ptr< QgsStatisticsValueGatherer > gatherer = qgis::make_unique< QgsStatisticsValueGatherer >( mLayer, fit, featureCount, sourceFieldExp );
+    std::unique_ptr< QgsStatisticsValueGatherer > gatherer = std::make_unique< QgsStatisticsValueGatherer >( mLayer, fit, featureCount, sourceFieldExp );
     switch ( mFieldType )
     {
       case DataType::Numeric:
@@ -236,7 +252,7 @@ void QgsStatisticalSummaryDockWidget::updateNumericStatistics()
   }
 
   QList< QgsStatisticalSummary::Statistic > statsToDisplay;
-  QgsStatisticalSummary::Statistics statsToCalc = nullptr;
+  QgsStatisticalSummary::Statistics statsToCalc = QgsStatisticalSummary::Statistics();
   const auto displayStats = *sDisplayStats();
   for ( QgsStatisticalSummary::Statistic stat : displayStats )
   {
@@ -264,7 +280,7 @@ void QgsStatisticalSummaryDockWidget::updateNumericStatistics()
   {
     double val = stats.statistic( stat );
     addRow( row, QgsStatisticalSummary::displayName( stat ),
-            std::isnan( val ) ? QString() : QString::number( val ),
+            std::isnan( val ) ? QString() : QLocale().toString( val ),
             stats.count() != 0 );
     row++;
   }
@@ -272,7 +288,7 @@ void QgsStatisticalSummaryDockWidget::updateNumericStatistics()
   if ( mStatsActions.value( MISSING_VALUES )->isChecked() )
   {
     addRow( row, tr( "Missing (null) values" ),
-            QString::number( missingValues ),
+            QLocale().toString( missingValues ),
             stats.count() != 0 || missingValues != 0 );
     row++;
   }
@@ -293,7 +309,7 @@ void QgsStatisticalSummaryDockWidget::updateStringStatistics()
   QVariantList values = mGatherer->values();
 
   QList< QgsStringStatisticalSummary::Statistic > statsToDisplay;
-  QgsStringStatisticalSummary::Statistics statsToCalc = nullptr;
+  QgsStringStatisticalSummary::Statistics statsToCalc = QgsStringStatisticalSummary::Statistics();
   const auto displayStringStats = *sDisplayStringStats();
   for ( QgsStringStatisticalSummary::Statistic stat : displayStringStats )
   {
@@ -418,7 +434,7 @@ void QgsStatisticalSummaryDockWidget::updateDateTimeStatistics()
   QVariantList values = mGatherer->values();
 
   QList< QgsDateTimeStatisticalSummary::Statistic > statsToDisplay;
-  QgsDateTimeStatisticalSummary::Statistics statsToCalc = nullptr;
+  QgsDateTimeStatisticalSummary::Statistics statsToCalc = QgsDateTimeStatisticalSummary::Statistics();
   const auto displayDateTimeStats = *sDisplayDateTimeStats();
   for ( QgsDateTimeStatisticalSummary::Statistic stat : displayDateTimeStats )
   {
@@ -567,7 +583,7 @@ QgsStatisticalSummaryDockWidget::DataType QgsStatisticalSummaryDockWidget::field
 }
 
 QgsStatisticsValueGatherer::QgsStatisticsValueGatherer( QgsVectorLayer *layer, const QgsFeatureIterator &fit, long featureCount, const QString &sourceFieldExp )
-  : QgsTask( tr( "Fetching statistic values" ) )
+  : QgsTask( tr( "Fetching statistic values" ), QgsTask::CanCancel | QgsTask::CancelWithoutPrompt )
   , mFeatureIterator( fit )
   , mFeatureCount( featureCount )
   , mFieldExpression( sourceFieldExp )

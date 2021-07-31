@@ -37,7 +37,7 @@ bool QgsCurve::operator!=( const QgsAbstractGeometry &other ) const
   return !operator==( other );
 }
 
-bool QgsCurve::isClosed() const
+bool QgsCurve::isClosed2D() const
 {
   if ( numPoints() == 0 )
     return false;
@@ -46,10 +46,18 @@ bool QgsCurve::isClosed() const
   QgsPoint start = startPoint();
   QgsPoint end = endPoint();
 
-  bool closed = qgsDoubleNear( start.x(), end.x() ) &&
-                qgsDoubleNear( start.y(), end.y() );
+  return qgsDoubleNear( start.x(), end.x() ) &&
+         qgsDoubleNear( start.y(), end.y() );
+}
+bool QgsCurve::isClosed() const
+{
+  bool closed = isClosed2D();
   if ( is3D() && closed )
+  {
+    QgsPoint start = startPoint();
+    QgsPoint end = endPoint();
     closed &= qgsDoubleNear( start.z(), end.z() ) || ( std::isnan( start.z() ) && std::isnan( end.z() ) );
+  }
   return closed;
 }
 
@@ -199,6 +207,33 @@ QgsCurve *QgsCurve::toCurveType() const
   return clone();
 }
 
+void QgsCurve::normalize()
+{
+  if ( isEmpty() )
+    return;
+
+  if ( !isClosed() )
+  {
+    return;
+  }
+
+  int minCoordinateIndex = 0;
+  QgsPoint minCoord;
+  int i = 0;
+  for ( auto it = vertices_begin(); it != vertices_end(); ++it )
+  {
+    const QgsPoint vertex = *it;
+    if ( minCoord.isEmpty() || minCoord.compareTo( &vertex ) > 0 )
+    {
+      minCoord = vertex;
+      minCoordinateIndex = i;
+    }
+    i++;
+  }
+
+  scroll( minCoordinateIndex );
+}
+
 QgsRectangle QgsCurve::boundingBox() const
 {
   if ( mBoundingBox.isNull() )
@@ -229,14 +264,8 @@ bool QgsCurve::isValid( QString &error, int flags ) const
 
 QPolygonF QgsCurve::asQPolygonF() const
 {
-  const int nb = numPoints();
-  QPolygonF points;
-  points.reserve( nb );
-  for ( int i = 0; i < nb; ++i )
-  {
-    points << QPointF( xAt( i ), yAt( i ) );
-  }
-  return points;
+  std::unique_ptr< QgsLineString > segmentized( curveToLine() );
+  return segmentized->asQPolygonF();
 }
 
 double QgsCurve::straightDistance2d() const

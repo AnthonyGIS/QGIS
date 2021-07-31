@@ -117,18 +117,15 @@ class FieldsPyculator(QgisAlgorithm):
                 exec(bytecode, new_ns)
             except:
                 raise QgsProcessingException(
-                    self.tr("FieldPyculator code execute error.Global code block can't be executed!\n{0}\n{1}").format(
+                    self.tr("FieldPyculator code execute error. Global code block can't be executed!\n{0}\n{1}").format(
                         str(sys.exc_info()[0].__name__), str(sys.exc_info()[1])))
 
         # Replace all fields tags
         fields = source.fields()
-        num = 0
-        for field in fields:
+        for num, field in enumerate(fields):
             field_name = str(field.name())
             replval = '__attr[' + str(num) + ']'
             code = code.replace('<' + field_name + '>', replval)
-            num += 1
-
         # Replace all special vars
         code = code.replace('$id', '__id')
         code = code.replace('$geom', '__geom')

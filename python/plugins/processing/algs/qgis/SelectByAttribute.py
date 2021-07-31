@@ -72,7 +72,7 @@ class SelectByAttribute(QgisAlgorithm):
         super().__init__()
 
     def flags(self):
-        return super().flags() | QgsProcessingAlgorithm.FlagNoThreading
+        return super().flags() | QgsProcessingAlgorithm.FlagNoThreading | QgsProcessingAlgorithm.FlagNotAvailableInStandaloneTool
 
     def initAlgorithm(self, config=None):
         self.operators = ['=',
@@ -133,7 +133,7 @@ class SelectByAttribute(QgisAlgorithm):
         fieldType = fields[idx].type()
 
         if fieldType != QVariant.String and operator in self.STRING_OPERATORS:
-            op = ''.join(['"%s", ' % o for o in self.STRING_OPERATORS])
+            op = ''.join('"%s", ' % o for o in self.STRING_OPERATORS)
             raise QgsProcessingException(
                 self.tr('Operators {0} can be used only with string fields.').format(op))
 

@@ -37,11 +37,12 @@ struct QgsMesh;
 class QgsMesh3dAveragingMethod;
 class QgsMeshLayerTemporalProperties;
 class QgsMeshDatasetGroupStore;
+class QgsMeshEditor;
 
 /**
  * \ingroup core
  *
- * Represents a mesh layer supporting display of data on structured or unstructured meshes
+ * \brief Represents a mesh layer supporting display of data on structured or unstructured meshes
  *
  * The QgsMeshLayer is instantiated by specifying the name of a data provider,
  * such as mdal, and url defining the specific data set to connect to.
@@ -64,9 +65,8 @@ class QgsMeshDatasetGroupStore;
  * vertices and faces is comma separated coordinates and connections for mesh.
  * E.g. to create mesh with one quad and one triangle
  *
- * \code
- *  QString uri(
- *      "1.0, 2.0 \n" \
+ * \code{py}
+ *  uri = "1.0, 2.0 \n" \
  *      "2.0, 2.0 \n" \
  *      "3.0, 2.0 \n" \
  *      "2.0, 3.0 \n" \
@@ -74,8 +74,8 @@ class QgsMeshDatasetGroupStore;
  *      "---" \
  *      "0, 1, 3, 4 \n" \
  *      "1, 2, 3 \n"
- *    );
- *    QgsMeshLayer *scratchLayer = new QgsMeshLayer(uri, "My Scratch layer", "mesh_memory");
+ *
+ *  scratchLayer = QgsMeshLayer(uri, "My Scratch layer", "mesh_memory")
  * \endcode
  *
  * \subsection mdal MDAL data provider (mdal)
@@ -83,9 +83,9 @@ class QgsMeshDatasetGroupStore;
  * Accesses data using the MDAL drivers (https://github.com/lutraconsulting/MDAL). The url
  * is the MDAL connection string. QGIS must be built with MDAL support to allow this provider.
 
- * \code
- *     QString uri = "test/land.2dm";
- *     QgsMeshLayer *scratchLayer = new QgsMeshLayer(uri, "My Scratch Layer",  "mdal");
+ * \code{py}
+ *     uri = "test/land.2dm"
+ *     scratchLayer = QgsMeshLayer(uri, "My Scratch Layer",  "mdal")
  * \endcode
  *
  * \note The API is considered EXPERIMENTAL and can be changed without a notice
@@ -152,6 +152,14 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
     //! QgsMeshLayer cannot be copied.
     QgsMeshLayer &operator=( QgsMeshLayer const &rhs ) = delete;
 
+#ifdef SIP_RUN
+    SIP_PYOBJECT __repr__();
+    % MethodCode
+    QString str = QStringLiteral( "<QgsMeshLayer: '%1' (%2)>" ).arg( sipCpp->name(), sipCpp->dataProvider() ? sipCpp->dataProvider()->name() : QStringLiteral( "Invalid" ) );
+    sipRes = PyUnicode_FromString( str.toUtf8().constData() );
+    % End
+#endif
+
     QgsMeshDataProvider *dataProvider() override;
     const QgsMeshDataProvider *dataProvider() const override SIP_SKIP;
     QgsMeshLayer *clone() const override SIP_FACTORY;
@@ -170,7 +178,9 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
     QgsMapLayerTemporalProperties *temporalProperties() override;
     void reload() override;
     QStringList subLayers() const override;
-    bool isTemporary() const override;
+    QString htmlMetadata() const override;
+    bool isEditable() const override;
+    bool supportsEditing() const override;
 
     //! Returns the provider type for this layer
     QString providerType() const;
@@ -194,7 +204,7 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
      *
      * \since QGIS 3.16
      */
-    bool addDatasets( QgsMeshDatasetGroup *datasetGroup )SIP_SKIP;
+    bool addDatasets( QgsMeshDatasetGroup *datasetGroup SIP_TRANSFER );
 
     /**
      * Saves datasets group on file with the specified \a driver
@@ -235,6 +245,26 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
      * \note Not available in Python bindings
      */
     QgsTriangularMesh *triangularMesh( double minimumTriangleSize = 0 ) const SIP_SKIP;
+
+    /**
+     * Returns the count of levels of detail of the mesh simplification
+     *
+     * \note Not available in Python bindings
+     * \since QGIS 3.18
+     */
+    int triangularMeshLevelOfDetailCount() const SIP_SKIP;
+
+    /**
+     * Returns triangular corresponding to the index of level of details.
+     * If \a lodIndex is greater than the count of levels of detail, returns the last one (with lesser triangles)
+     * If \a lodIndex is lesser or equal to 0, returns the original triangular mesh
+     *
+     * \param lodIndex the level od detail index
+     *
+     * \note Not available in Python bindings
+     * \since QGIS 3.18
+     */
+    QgsTriangularMesh *triangularMeshByLodIndex( int lodIndex ) const SIP_SKIP;
 
     /**
      * Gets native mesh and updates (creates if it doesn't exist) the base triangular mesh
@@ -308,7 +338,7 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
     int extraDatasetGroupCount() const;
 
     /**
-     * Returns the list of indexes of dataset groups count handled by the layer
+     * Returns the list of indexes of dataset groups handled by the layer
      *
      * \note indexes are used to distinguish all the dataset groups handled by the layer (from dataprovider, extra dataset group,...)
      * In the layer scope, those indexes can be different from the data provider indexes.
@@ -316,6 +346,16 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
      * \since QGIS 3.16
      */
     QList<int> datasetGroupsIndexes() const;
+
+    /**
+     * Returns the list of indexes of enables dataset groups handled by the layer
+     *
+     * \note indexes are used to distinguish all the dataset groups handled by the layer (from dataprovider, extra dataset group,...)
+     * In the layer scope, those indexes can be different from the data provider indexes.
+     *
+     * \since QGIS 3.16.3
+     */
+    QList<int> enabledDatasetGroupsIndexes() const;
 
     /**
      * Returns the dataset groups metadata
@@ -398,7 +438,7 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
      * returns invalid block for DataOnFaces and DataOnVertices.
      *
      * \param index index of the dataset
-     * \param valueIndex index of the value
+     * \param faceIndex index of the face
      * \param count number of values to return
      *
      * \note indexes are used to distinguish all the dataset groups handled by the layer (from dataprovider, extra dataset group,...)
@@ -421,7 +461,7 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
      * Returns whether the faces are active for particular dataset
      *
      * \param index index of the dataset
-     * \param valueIndex index of the value
+     * \param faceIndex index of the face
      * \param count number of values to return
      *
      * \note indexes are used to distinguish all the dataset groups handled by the layer (from dataprovider, extra dataset group,...)
@@ -497,12 +537,12 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
       */
     QgsMeshDatasetValue dataset1dValue( const QgsMeshDatasetIndex &index, const QgsPointXY &point, double searchRadius ) const;
 
-
     /**
       * Returns dataset index from datasets group depending on the time range.
-      * If the temporal properties is not active, returns invalid dataset index
+      * If the temporal properties is not active, returns invalid dataset index. This method is used for rendering mesh layer.
       *
       * \param timeRange the time range
+      * \param datasetGroupIndex the index of the dataset group
       * \returns dataset index
       *
       * \note the returned dataset index depends on the matching method, see setTemporalMatchingMethod()
@@ -513,6 +553,23 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
       * \since QGIS 3.14
       */
     QgsMeshDatasetIndex datasetIndexAtTime( const QgsDateTimeRange &timeRange, int datasetGroupIndex ) const;
+
+    /**
+      * Returns dataset index from datasets group depending on the relative time from the layer reference time.
+      * Dataset index is valid even the temporal properties is inactive. This method is used for calculation on mesh layer.
+      *
+      * \param relativeTime the relative from the mesh layer reference time
+      * \param datasetGroupIndex the index of the dataset group
+      * \returns dataset index
+      *
+      * \note the returned dataset index depends on the matching method, see setTemporalMatchingMethod()
+      *
+      * \note indexes are used to distinguish all the dataset groups handled by the layer (from dataprovider, extra dataset group,...)
+      * In the layer scope, those indexes are different from the data provider indexes.
+      *
+      * \since QGIS 3.16
+      */
+    QgsMeshDatasetIndex datasetIndexAtRelativeTime( const QgsInterval &relativeTime, int datasetGroupIndex ) const;
 
     /**
       * Returns dataset index from active scalar group depending on the time range.
@@ -652,11 +709,96 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
     QgsInterval firstValidTimeStep() const;
 
     /**
-     * Returns the relative time (in milliseconds) of the dataset from the reference time of its group
+     * Returns the relative time of the dataset from the reference time of its group
      *
      * \since QGIS 3.16
      */
     QgsInterval datasetRelativeTime( const QgsMeshDatasetIndex &index );
+
+    /**
+     * Returns the relative time (in milliseconds) of the dataset from the reference time of its group
+     *
+     * \since QGIS 3.16
+     */
+    qint64 datasetRelativeTimeInMilliseconds( const QgsMeshDatasetIndex &index );
+
+    /**
+    * Starts edition of the mesh frame. Coordinate \a transform used to initialize the triangular mesh if needed.
+    * This operation will disconnect the mesh layer from the data provider anf removes all existing dataset group
+    *
+    * \since QGIS 3.22
+    */
+    bool startFrameEditing( const QgsCoordinateTransform &transform );
+
+    /**
+    * Commits edition of the mesh frame,
+    * Rebuilds the triangular mesh and its spatial index with \a transform,
+    * Continue editing with the same mesh editor if \a continueEditing is True
+    *
+    * \return TRUE if the commit succeeds
+    * \since QGIS 3.22
+    */
+    bool commitFrameEditing( const QgsCoordinateTransform &transform, bool continueEditing = true );
+
+    /**
+    * Rolls Back edition of the mesh frame.
+    * Reload mesh from file, rebuilds the triangular mesh and its spatial index with \a transform,
+    * Continue editing with the same mesh editor if \a continueEditing is TRUE
+    *
+    * \return TRUE if the rollback succeeds
+    * \since QGIS 3.22
+    */
+    bool rollBackFrameEditing( const QgsCoordinateTransform &transform, bool continueEditing = true );
+
+    /**
+    * Stops edition of the mesh, re-indexes the faces and vertices,
+    * rebuilds the triangular mesh and its spatial index with \a transform,
+    * clean the undostack
+    *
+    * \since QGIS 3.22
+    */
+    void stopFrameEditing( const QgsCoordinateTransform &transform );
+
+    /**
+    * Returns a pointer to the mesh editor own by the mesh layer
+    *
+    * \since QGIS 3.22
+    */
+    QgsMeshEditor *meshEditor();
+
+    /**
+    * Returns whether the mesh frame has been modified since the last save
+    *
+    * \since QGIS 3.22
+    */
+    bool isModified() const override;
+
+    /**
+     *  Returns whether the mesh contains at mesh elements of given type
+     *  \since QGIS 3.22
+     */
+    bool contains( const QgsMesh::ElementType &type ) const;
+
+    /**
+    * Returns the vertices count of the mesh frame
+    *
+    *  \since QGIS 3.22
+    */
+    int meshVertexCount() const;
+
+    /**
+    * Returns the faces count of the mesh frame
+    *
+    * \since QGIS 3.22
+    */
+    int meshFaceCount() const;
+
+    /**
+    * Returns the edges count of the mesh frame
+    *
+    * \since QGIS 3.22
+    */
+    int meshEdgeCount() const;
 
   public slots:
 
@@ -701,8 +843,9 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
      * Binds layer to a specific data provider
      * \param provider provider key string, must match a valid QgsMeshDataProvider key. E.g. "mesh_memory", etc.
      * \param options generic provider options
+     * \param flags provider flags since QGIS 3.16
      */
-    bool setDataProvider( QString const &provider, const QgsDataProvider::ProviderOptions &options );
+    bool setDataProvider( QString const &provider, const QgsDataProvider::ProviderOptions &options, QgsDataProvider::ReadFlags flags = QgsDataProvider::ReadFlags() );
 
 #ifdef SIP_RUN
     QgsMeshLayer( const QgsMeshLayer &rhs );
@@ -721,10 +864,14 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
 
   private slots:
     void onDatasetGroupsAdded( const QList<int> &datasetGroupIndexes );
+    void onMeshEdited();
 
   private:
     //! Pointer to data provider derived from the abastract base class QgsMeshDataProvider
     QgsMeshDataProvider *mDataProvider = nullptr;
+
+    //! List of extra dataset uri associated with this layer
+    QStringList mExtraDatasetUri;
 
     std::unique_ptr<QgsMeshDatasetGroupStore> mDatasetGroupStore;
 
@@ -746,10 +893,15 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
     //! Simplify mesh configuration
     QgsMeshSimplificationSettings mSimplificationSettings;
 
-    QgsMeshLayerTemporalProperties *mTemporalProperties;
+    QgsMeshLayerTemporalProperties *mTemporalProperties = nullptr;
+
+    //! Temporal unit used by the provider
+    QgsUnitTypes::TemporalUnit mTemporalUnit = QgsUnitTypes::TemporalHours;
 
     int mStaticScalarDatasetIndex = 0;
     int mStaticVectorDatasetIndex = 0;
+
+    QgsMeshEditor *mMeshEditor = nullptr;
 
     int closestEdge( const QgsPointXY &point, double searchRadius, QgsPointXY &projectedPoint ) const;
 
@@ -763,6 +915,9 @@ class CORE_EXPORT QgsMeshLayer : public QgsMapLayer
     QgsPointXY snapOnFace( const QgsPointXY &point, double searchRadius );
 
     void updateActiveDatasetGroups();
+
+    void setDataSourcePrivate( const QString &dataSource, const QString &baseName, const QString &provider,
+                               const QgsDataProvider::ProviderOptions &options, QgsDataProvider::ReadFlags flags ) override;
 };
 
 #endif //QGSMESHLAYER_H

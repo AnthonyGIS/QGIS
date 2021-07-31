@@ -70,7 +70,7 @@ void QgsServerSettings::initSettings()
                               QStringLiteral( "Log level" ),
                               QString(),
                               QVariant::Int,
-                              QVariant( Qgis::None ),
+                              QVariant::fromValue( Qgis::MessageLevel::NoLevel ),
                               QVariant()
                             };
   mSettings[ sLogLevel.envVar ] = sLogLevel;
@@ -107,17 +107,6 @@ void QgsServerSettings::initSettings()
                              QVariant()
                            };
   mSettings[ sProject.envVar ] = sProject;
-
-  // max cache layers
-  const Setting sMaxCacheLayers = { QgsServerSettingsEnv::MAX_CACHE_LAYERS,
-                                    QgsServerSettingsEnv::DEFAULT_VALUE,
-                                    QStringLiteral( "Specify the maximum number of cached layers" ),
-                                    QString(),
-                                    QVariant::Int,
-                                    QVariant( 100 ),
-                                    QVariant()
-                                  };
-  mSettings[ sMaxCacheLayers.envVar ] = sMaxCacheLayers;
 
   // cache directory
   const Setting sCacheDir = { QgsServerSettingsEnv::QGIS_SERVER_CACHE_DIRECTORY,
@@ -162,6 +151,28 @@ void QgsServerSettings::initSettings()
                                      QVariant()
                                    };
   mSettings[ sIgnoreBadLayers.envVar ] = sIgnoreBadLayers;
+
+  // trust layer metadata
+  const Setting sTrustLayerMetadata = { QgsServerSettingsEnv::QGIS_SERVER_TRUST_LAYER_METADATA,
+                                        QgsServerSettingsEnv::DEFAULT_VALUE,
+                                        QStringLiteral( "Trust layer metadata" ),
+                                        QString(),
+                                        QVariant::Bool,
+                                        QVariant( false ),
+                                        QVariant()
+                                      };
+  mSettings[ sTrustLayerMetadata.envVar ] = sTrustLayerMetadata;
+
+  // don't load layouts
+  const Setting sDontLoadLayouts = { QgsServerSettingsEnv::QGIS_SERVER_DISABLE_GETPRINT,
+                                     QgsServerSettingsEnv::DEFAULT_VALUE,
+                                     QStringLiteral( "Don't load layouts" ),
+                                     QString(),
+                                     QVariant::Bool,
+                                     QVariant( false ),
+                                     QVariant()
+                                   };
+  mSettings[ sDontLoadLayouts.envVar ] = sDontLoadLayouts;
 
   // show group separator
   const Setting sShowGroupSeparator = { QgsServerSettingsEnv::QGIS_SERVER_SHOW_GROUP_SEPARATOR,
@@ -219,6 +230,109 @@ void QgsServerSettings::initSettings()
                                    };
 
   mSettings[ sApiWfs3MaxLimit.envVar ] = sApiWfs3MaxLimit;
+
+  // projects directory for landing page service
+  const Setting sProjectsDirectories = { QgsServerSettingsEnv::QGIS_SERVER_LANDING_PAGE_PROJECTS_DIRECTORIES,
+                                         QgsServerSettingsEnv::DEFAULT_VALUE,
+                                         QStringLiteral( "Directories used by the landing page service to find .qgs and .qgz projects" ),
+                                         QStringLiteral( "/qgis/server_projects_directories" ),
+                                         QVariant::String,
+                                         QVariant( "" ),
+                                         QVariant()
+                                       };
+
+  mSettings[ sProjectsDirectories.envVar ] = sProjectsDirectories;
+
+  // postgresql connection string for landing page service
+  const Setting sProjectsPgConnections = { QgsServerSettingsEnv::QGIS_SERVER_LANDING_PAGE_PROJECTS_PG_CONNECTIONS,
+                                           QgsServerSettingsEnv::DEFAULT_VALUE,
+                                           QStringLiteral( "PostgreSQL connection strings used by the landing page service to find projects" ),
+                                           QStringLiteral( "/qgis/server_projects_pg_connections" ),
+                                           QVariant::String,
+                                           QVariant( "" ),
+                                           QVariant()
+                                         };
+
+  mSettings[ sProjectsPgConnections.envVar ] = sProjectsPgConnections;
+
+  // landing page base URL prefix
+  const Setting sLandingPageBaseUrlPrefix = { QgsServerSettingsEnv::QGIS_SERVER_LANDING_PAGE_PREFIX,
+                                              QgsServerSettingsEnv::DEFAULT_VALUE,
+                                              QStringLiteral( "Landing page base URL path prefix" ),
+                                              QStringLiteral( "/qgis/server_landing_page_base_url_prefix" ),
+                                              QVariant::String,
+                                              QVariant( "" ),
+                                              QVariant()
+                                            };
+
+  mSettings[ sLandingPageBaseUrlPrefix.envVar ] = sLandingPageBaseUrlPrefix;
+
+  // log profile
+  const Setting sLogProfile = { QgsServerSettingsEnv::QGIS_SERVER_LOG_PROFILE,
+                                QgsServerSettingsEnv::DEFAULT_VALUE,
+                                QStringLiteral( "Add detailed profile information to the logs, only effective when QGIS_SERVER_LOG_LEVEL=0" ),
+                                QStringLiteral( "/qgis/server_log_profile" ),
+                                QVariant::Bool,
+                                QVariant( false ),
+                                QVariant()
+                              };
+
+  mSettings[ sLogProfile.envVar ] = sLogProfile;
+
+  // the default service URL.
+  const Setting sServiceUrl = { QgsServerSettingsEnv::QGIS_SERVER_SERVICE_URL,
+                                QgsServerSettingsEnv::DEFAULT_VALUE,
+                                QStringLiteral( "The default service URL" ),
+                                QStringLiteral( "/qgis/server_service_url" ),
+                                QVariant::String,
+                                QVariant( "" ),
+                                QVariant()
+                              };
+  mSettings[ sServiceUrl.envVar ] = sServiceUrl;
+
+  // the default WMS service URL.
+  const Setting sWmsServiceUrl = { QgsServerSettingsEnv::QGIS_SERVER_WMS_SERVICE_URL,
+                                   QgsServerSettingsEnv::DEFAULT_VALUE,
+                                   QStringLiteral( "The default WMS service URL" ),
+                                   QStringLiteral( "/qgis/server_wms_service_url" ),
+                                   QVariant::String,
+                                   QVariant( "" ),
+                                   QVariant()
+                                 };
+  mSettings[ sServiceUrl.envVar ] = sWmsServiceUrl;
+
+  // the default WFS service URL.
+  const Setting sWfsServiceUrl = { QgsServerSettingsEnv::QGIS_SERVER_WFS_SERVICE_URL,
+                                   QgsServerSettingsEnv::DEFAULT_VALUE,
+                                   QStringLiteral( "The default WFS service URL" ),
+                                   QStringLiteral( "/qgis/server_wfs_service_url" ),
+                                   QVariant::String,
+                                   QVariant( "" ),
+                                   QVariant()
+                                 };
+  mSettings[ sServiceUrl.envVar ] = sWfsServiceUrl;
+
+  // the default WCS service URL.
+  const Setting sWcsServiceUrl = { QgsServerSettingsEnv::QGIS_SERVER_WCS_SERVICE_URL,
+                                   QgsServerSettingsEnv::DEFAULT_VALUE,
+                                   QStringLiteral( "The default WcS service URL" ),
+                                   QStringLiteral( "/qgis/server_wcs_service_url" ),
+                                   QVariant::String,
+                                   QVariant( "" ),
+                                   QVariant()
+                                 };
+  mSettings[ sServiceUrl.envVar ] = sWfsServiceUrl;
+
+  // the default WMTS service URL.
+  const Setting sWmtsServiceUrl = { QgsServerSettingsEnv::QGIS_SERVER_WMTS_SERVICE_URL,
+                                    QgsServerSettingsEnv::DEFAULT_VALUE,
+                                    QStringLiteral( "The default WMTS service URL" ),
+                                    QStringLiteral( "/qgis/server_wmts_service_url" ),
+                                    QVariant::String,
+                                    QVariant( "" ),
+                                    QVariant()
+                                  };
+  mSettings[ sServiceUrl.envVar ] = sWmtsServiceUrl;
 }
 
 void QgsServerSettings::load()
@@ -266,8 +380,16 @@ QMap<QgsServerSettingsEnv::EnvVar, QString> QgsServerSettings::getEnv() const
   return env;
 }
 
-QVariant QgsServerSettings::value( QgsServerSettingsEnv::EnvVar envVar ) const
+QVariant QgsServerSettings::value( QgsServerSettingsEnv::EnvVar envVar, bool actual ) const
 {
+  if ( actual )
+  {
+    const QString envValue( getenv( name( envVar ).toStdString().c_str() ) );
+
+    if ( ! envValue.isEmpty() )
+      return envValue;
+  }
+
   if ( mSettings[ envVar ].src == QgsServerSettingsEnv::DEFAULT_VALUE )
   {
     return mSettings[ envVar ].defaultVal;
@@ -289,7 +411,8 @@ void QgsServerSettings::loadQSettings( const QString &envOptPath ) const
 
 void QgsServerSettings::prioritize( const QMap<QgsServerSettingsEnv::EnvVar, QString> &env )
 {
-  for ( QgsServerSettingsEnv::EnvVar e : env.keys() )
+  const auto constKeys( env.keys() );
+  for ( const QgsServerSettingsEnv::EnvVar &e : constKeys )
   {
     Setting s = mSettings[ e ];
 
@@ -327,25 +450,30 @@ void QgsServerSettings::prioritize( const QMap<QgsServerSettingsEnv::EnvVar, QSt
   }
 }
 
+QString QgsServerSettings::name( QgsServerSettingsEnv::EnvVar env )
+{
+  const QMetaEnum metaEnumEnv( QMetaEnum::fromType<QgsServerSettingsEnv::EnvVar>() );
+  return metaEnumEnv.valueToKey( env );
+}
+
 void QgsServerSettings::logSummary() const
 {
   const QMetaEnum metaEnumSrc( QMetaEnum::fromType<QgsServerSettingsEnv::Source>() );
-  const QMetaEnum metaEnumEnv( QMetaEnum::fromType<QgsServerSettingsEnv::EnvVar>() );
 
-  QgsMessageLog::logMessage( "QGIS Server Settings: ", "Server", Qgis::Info );
-  for ( Setting s : mSettings )
+  QgsMessageLog::logMessage( "QGIS Server Settings: ", "Server", Qgis::MessageLevel::Info );
+  for ( const Setting &s : std::as_const( mSettings ) )
   {
     const QString src = metaEnumSrc.valueToKey( s.src );
-    const QString var = metaEnumEnv.valueToKey( s.envVar );
+    const QString var = name( s.envVar );
 
     const QString msg = "  - " + var + " / '" + s.iniKey + "' (" + s.descr + "): '" + value( s.envVar ).toString() + "' (read from " + src + ")";
-    QgsMessageLog::logMessage( msg, "Server", Qgis::Info );
+    QgsMessageLog::logMessage( msg, "Server", Qgis::MessageLevel::Info );
   }
 
   if ( ! iniFile().isEmpty() )
   {
     const QString msg = "Ini file used to initialize settings: " + iniFile();
-    QgsMessageLog::logMessage( msg, "Server", Qgis::Info );
+    QgsMessageLog::logMessage( msg, "Server", Qgis::MessageLevel::Info );
   }
 }
 
@@ -378,11 +506,6 @@ bool QgsServerSettings::logStderr() const
 Qgis::MessageLevel QgsServerSettings::logLevel() const
 {
   return static_cast<Qgis::MessageLevel>( value( QgsServerSettingsEnv::QGIS_SERVER_LOG_LEVEL ).toInt() );
-}
-
-int QgsServerSettings::maxCacheLayers() const
-{
-  return value( QgsServerSettingsEnv::MAX_CACHE_LAYERS ).toInt();
 }
 
 QString QgsServerSettings::projectFile() const
@@ -420,6 +543,21 @@ int QgsServerSettings::wmsMaxWidth() const
   return value( QgsServerSettingsEnv::QGIS_SERVER_WMS_MAX_WIDTH ).toInt();
 }
 
+QString QgsServerSettings::landingPageProjectsDirectories() const
+{
+  return value( QgsServerSettingsEnv::QGIS_SERVER_LANDING_PAGE_PROJECTS_DIRECTORIES, true ).toString();
+}
+
+QString QgsServerSettings::landingPageProjectsPgConnections() const
+{
+  return value( QgsServerSettingsEnv::QGIS_SERVER_LANDING_PAGE_PROJECTS_PG_CONNECTIONS, true ).toString();
+}
+
+QString QgsServerSettings::landingPageBaseUrlPrefix() const
+{
+  return value( QgsServerSettingsEnv::QGIS_SERVER_LANDING_PAGE_PREFIX, true ).toString();
+}
+
 QString QgsServerSettings::apiResourcesDirectory() const
 {
   return value( QgsServerSettingsEnv::QGIS_SERVER_API_RESOURCES_DIRECTORY ).toString();
@@ -433,4 +571,47 @@ qlonglong QgsServerSettings::apiWfs3MaxLimit() const
 bool QgsServerSettings::ignoreBadLayers() const
 {
   return value( QgsServerSettingsEnv::QGIS_SERVER_IGNORE_BAD_LAYERS ).toBool();
+}
+
+bool QgsServerSettings::trustLayerMetadata() const
+{
+  return value( QgsServerSettingsEnv::QGIS_SERVER_TRUST_LAYER_METADATA ).toBool();
+}
+
+bool QgsServerSettings::getPrintDisabled() const
+{
+  return value( QgsServerSettingsEnv::QGIS_SERVER_DISABLE_GETPRINT ).toBool();
+}
+
+bool QgsServerSettings::logProfile()
+{
+  return value( QgsServerSettingsEnv::QGIS_SERVER_LOG_PROFILE, false ).toBool();
+}
+
+QString QgsServerSettings::serviceUrl( const QString &service ) const
+{
+  QString result;
+  if ( service.compare( QLatin1String( "WMS" ) ) )
+  {
+    result = value( QgsServerSettingsEnv::QGIS_SERVER_WMS_SERVICE_URL ).toString();
+  }
+  else if ( service.compare( QLatin1String( "WFS" ) ) )
+  {
+    result = value( QgsServerSettingsEnv::QGIS_SERVER_WFS_SERVICE_URL ).toString();
+  }
+  else if ( service.compare( QLatin1String( "WCS" ) ) )
+  {
+    result = value( QgsServerSettingsEnv::QGIS_SERVER_WCS_SERVICE_URL ).toString();
+  }
+  else if ( service.compare( QLatin1String( "WMTS" ) ) )
+  {
+    result = value( QgsServerSettingsEnv::QGIS_SERVER_WMTS_SERVICE_URL ).toString();
+  }
+
+  if ( result.isEmpty() )
+  {
+    result = value( QgsServerSettingsEnv::QGIS_SERVER_SERVICE_URL ).toString();
+  }
+
+  return result;
 }

@@ -22,11 +22,15 @@
 #include "qgsguiutils.h"
 #include "qgssettings.h"
 #include "qgsnative.h"
+#include "qgslayeritem.h"
 
 #include <QPushButton>
 #include <QMenu>
 #include <QDesktopServices>
 #include <QDialogButtonBox>
+#include <QFileInfo>
+#include <QUrl>
+#include <QActionGroup>
 
 QgsDataSourceSelectWidget::QgsDataSourceSelectWidget(
   QgsBrowserGuiModel *browserModel,
@@ -209,7 +213,7 @@ void QgsDataSourceSelectWidget::refreshModel( const QModelIndex &index )
     QgsDebugMsg( QStringLiteral( "invalid item" ) );
   }
 
-  if ( item && ( item->capabilities2() & QgsDataItem::Fertile ) )
+  if ( item && ( item->capabilities2() & Qgis::BrowserItemCapability::Fertile ) )
   {
     mBrowserModel->refresh( index );
   }
@@ -222,13 +226,13 @@ void QgsDataSourceSelectWidget::refreshModel( const QModelIndex &index )
 
     // Check also expanded descendants so that the whole expanded path does not get collapsed if one item is collapsed.
     // Fast items (usually root items) are refreshed so that when collapsed, it is obvious they are if empty (no expand symbol).
-    if ( mBrowserTreeView->isExpanded( proxyIdx ) || mBrowserTreeView->hasExpandedDescendant( proxyIdx ) || ( child && child->capabilities2() & QgsDataItem::Fast ) )
+    if ( mBrowserTreeView->isExpanded( proxyIdx ) || mBrowserTreeView->hasExpandedDescendant( proxyIdx ) || ( child && child->capabilities2() & Qgis::BrowserItemCapability::Fast ) )
     {
       refreshModel( idx );
     }
     else
     {
-      if ( child && ( child->capabilities2() & QgsDataItem::Fertile ) )
+      if ( child && ( child->capabilities2() & Qgis::BrowserItemCapability::Fertile ) )
       {
         child->depopulate();
       }
@@ -286,7 +290,7 @@ void QgsDataSourceSelectWidget::onLayerSelected( const QModelIndex &index )
                           ( layerItem->mapLayerType() == mBrowserProxyModel.layerType() ) ) )
       {
         isLayerCompatible = true;
-        mUri = layerItem->mimeUri();
+        mUri = layerItem->mimeUris().isEmpty() ? QgsMimeDataUtils::Uri() : layerItem->mimeUris().first();
         // Store last viewed item
         QgsSettings().setValue( QStringLiteral( "datasourceSelectLastSelectedItem" ),  mBrowserProxyModel.data( index, QgsBrowserGuiModel::PathRole ).toString(), QgsSettings::Section::Gui );
       }
@@ -325,6 +329,10 @@ QgsDataSourceSelectDialog::QgsDataSourceSelectDialog( QgsBrowserGuiModel *browse
   buttonBox->button( QDialogButtonBox::Ok )->setEnabled( false );
   connect( mWidget, &QgsDataSourceSelectWidget::validationChanged, buttonBox->button( QDialogButtonBox::Ok ), &QWidget::setEnabled );
   connect( mWidget, &QgsDataSourceSelectWidget::itemTriggered, this, &QDialog::accept );
+
+  // pressing escape should reject the dialog
+  connect( mWidget, &QgsPanelWidget::panelAccepted, this, &QDialog::reject );
+
   vl->addWidget( buttonBox );
   setLayout( vl );
 }

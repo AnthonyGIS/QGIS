@@ -1,7 +1,7 @@
 ########################################################
 # Files
 
-SET (WFS3_SRCS
+set (WFS3_SRCS
   ${CMAKE_SOURCE_DIR}/external/nlohmann/json.hpp
   ${CMAKE_SOURCE_DIR}/external/inja/inja.hpp
   qgswfs3.cpp
@@ -11,32 +11,22 @@ SET (WFS3_SRCS
 ########################################################
 # Build
 
-ADD_LIBRARY (wfs3 MODULE ${WFS3_SRCS})
+add_library (wfs3 MODULE ${WFS3_SRCS})
 
-INCLUDE_DIRECTORIES(SYSTEM
+# require c++17
+target_compile_features(wfs3 PRIVATE cxx_std_17)
+
+include_directories(SYSTEM
   ${GDAL_INCLUDE_DIR}
   ${POSTGRES_INCLUDE_DIR}
 )
 
-INCLUDE_DIRECTORIES(
-  ${CMAKE_SOURCE_DIR}/external
-  ${CMAKE_SOURCE_DIR}/external/nlohmann
+include_directories(
 
-  ${CMAKE_SOURCE_DIR}/src/core
-  ${CMAKE_SOURCE_DIR}/src/core/dxf
-  ${CMAKE_SOURCE_DIR}/src/core/expression
-  ${CMAKE_SOURCE_DIR}/src/core/geometry
-  ${CMAKE_SOURCE_DIR}/src/core/metadata
-  ${CMAKE_SOURCE_DIR}/src/core/raster
-  ${CMAKE_SOURCE_DIR}/src/core/symbology
-  ${CMAKE_SOURCE_DIR}/src/core/effects
-  ${CMAKE_SOURCE_DIR}/src/core/layertree
-  ${CMAKE_SOURCE_DIR}/src/core/fieldformatter
   ${CMAKE_SOURCE_DIR}/src/server
   ${CMAKE_SOURCE_DIR}/src/server/services
   ${CMAKE_SOURCE_DIR}/src/server/services/wfs3
 
-  ${CMAKE_BINARY_DIR}/src/core
   ${CMAKE_BINARY_DIR}/src/python
   ${CMAKE_BINARY_DIR}/src/analysis
   ${CMAKE_BINARY_DIR}/src/server
@@ -45,7 +35,7 @@ INCLUDE_DIRECTORIES(
 )
 
 
-TARGET_LINK_LIBRARIES(wfs3
+target_link_libraries(wfs3
   qgis_core
   qgis_server
 )
@@ -54,7 +44,7 @@ TARGET_LINK_LIBRARIES(wfs3
 ########################################################
 # Install
 
-INSTALL(TARGETS wfs3
+install(TARGETS wfs3
     RUNTIME DESTINATION ${QGIS_SERVER_MODULE_DIR}
     LIBRARY DESTINATION ${QGIS_SERVER_MODULE_DIR}
 )

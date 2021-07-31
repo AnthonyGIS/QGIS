@@ -17,6 +17,7 @@
 ***************************************************************************
 """
 
+
 __author__ = 'Victor Olaya'
 __date__ = 'August 2012'
 __copyright__ = '(C) 2012, Victor Olaya'
@@ -24,7 +25,7 @@ __copyright__ = '(C) 2012, Victor Olaya'
 from qgis.processing import alg as algfactory
 import os
 import inspect
-import importlib
+import importlib.util
 
 from qgis.PyQt.QtCore import QCoreApplication
 
@@ -38,7 +39,7 @@ from qgis.core import (Qgis,
 from processing.core.ProcessingConfig import ProcessingConfig
 from processing.tools.system import mkdir, userFolder
 
-scriptsRegistry = dict()
+scriptsRegistry = {}
 
 SCRIPTS_FOLDERS = "SCRIPTS_FOLDERS"
 

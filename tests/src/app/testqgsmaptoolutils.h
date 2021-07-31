@@ -97,12 +97,27 @@ class TestQgsMapToolAdvancedDigitizingUtils
       mouseRelease( mapX, mapY, button, stateKey, snap );
     }
 
-    void keyClick( int key, Qt::KeyboardModifiers stateKey = Qt::KeyboardModifiers() )
+    void mouseDoubleClick( double mapX, double mapY, Qt::MouseButton button, Qt::KeyboardModifiers stateKey = Qt::KeyboardModifiers(), bool snap = false )
     {
-      QKeyEvent e1( QEvent::KeyPress, key, stateKey );
+      // this is how Qt passes the events: 1. mouse press, 2. mouse release, 3. mouse double-click, 4. mouse release
+
+      mouseClick( mapX, mapY, button, stateKey, snap );
+
+      QgsMapMouseEvent e( mMapTool->canvas(), QEvent::MouseButtonDblClick, mapToScreen( mapX, mapY ), button, button, stateKey );
+      if ( snap )
+        e.snapPoint();
+      mMapTool->canvasDoubleClickEvent( &e );
+
+      mouseRelease( mapX, mapY, button, stateKey );
+    }
+
+
+    void keyClick( int key, Qt::KeyboardModifiers stateKey = Qt::KeyboardModifiers(), bool autoRepeat = false )
+    {
+      QKeyEvent e1( QEvent::KeyPress, key, stateKey, QString(), autoRepeat );
       mMapTool->keyPressEvent( &e1 );
 
-      QKeyEvent e2( QEvent::KeyRelease, key, stateKey );
+      QKeyEvent e2( QEvent::KeyRelease, key, stateKey, QString(), autoRepeat );
       mMapTool->keyReleaseEvent( &e2 );
     }
 

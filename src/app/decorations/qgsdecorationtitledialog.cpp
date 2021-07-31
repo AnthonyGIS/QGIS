@@ -52,7 +52,7 @@ QgsDecorationTitleDialog::QgsDecorationTitleDialog( QgsDecorationTitle &deco, QW
   txtTitleText->setAcceptRichText( false );
   if ( !mDeco.enabled() && mDeco.mLabelText.isEmpty() )
   {
-    QString defaultString = QStringLiteral( "%1" ).arg( QgsProject::instance()->metadata().title() );
+    QString defaultString = QgsProject::instance()->metadata().title();
     txtTitleText->setPlainText( defaultString );
   }
   else
@@ -73,7 +73,7 @@ QgsDecorationTitleDialog::QgsDecorationTitleDialog( QgsDecorationTitle &deco, QW
   cboPlacement->addItem( tr( "Bottom Left" ), QgsDecorationItem::BottomLeft );
   cboPlacement->addItem( tr( "Bottom Center" ), QgsDecorationItem::BottomCenter );
   cboPlacement->addItem( tr( "Bottom Right" ), QgsDecorationItem::BottomRight );
-  connect( cboPlacement, qgis::overload<int>::of( &QComboBox::currentIndexChanged ), this, [ = ]( int )
+  connect( cboPlacement, qOverload<int>( &QComboBox::currentIndexChanged ), this, [ = ]( int )
   {
     spnHorizontal->setMinimum( cboPlacement->currentData() == QgsDecorationItem::TopCenter || cboPlacement->currentData() == QgsDecorationItem::BottomCenter ? -100 : 0 );
   } );
@@ -109,6 +109,8 @@ void QgsDecorationTitleDialog::mInsertExpressionButton_clicked()
   // edit the selected expression if there's one
   if ( selText.startsWith( QLatin1String( "[%" ) ) && selText.endsWith( QLatin1String( "%]" ) ) )
     selText = selText.mid( 2, selText.size() - 4 );
+
+  selText = selText.replace( QChar( 0x2029 ), QChar( '\n' ) );
 
   QgsExpressionBuilderDialog exprDlg( nullptr, selText, this, QStringLiteral( "generic" ), QgisApp::instance()->mapCanvas()->mapSettings().expressionContext() );
 

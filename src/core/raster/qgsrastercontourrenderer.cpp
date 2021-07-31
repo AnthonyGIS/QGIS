@@ -18,6 +18,8 @@
 #include "qgslinesymbollayer.h"
 #include "qgsreadwritecontext.h"
 #include "qgssymbollayerutils.h"
+#include "qgslayertreemodellegendnode.h"
+#include "qgslinesymbol.h"
 
 #include <gdal_alg.h>
 
@@ -69,13 +71,13 @@ QgsRasterRenderer *QgsRasterContourRenderer::create( const QDomElement &elem, Qg
     if ( symbolMap.contains( QStringLiteral( "contour" ) ) )
     {
       QgsSymbol *symbol = symbolMap.take( QStringLiteral( "contour" ) );
-      if ( symbol->type() == QgsSymbol::Line )
+      if ( symbol->type() == Qgis::SymbolType::Line )
         r->setContourSymbol( static_cast<QgsLineSymbol *>( symbol ) );
     }
     if ( symbolMap.contains( QStringLiteral( "index-contour" ) ) )
     {
       QgsSymbol *symbol = symbolMap.take( QStringLiteral( "index-contour" ) );
-      if ( symbol->type() == QgsSymbol::Line )
+      if ( symbol->type() == Qgis::SymbolType::Line )
         r->setContourIndexSymbol( static_cast<QgsLineSymbol *>( symbol ) );
     }
   }
@@ -155,7 +157,7 @@ QgsRasterBlock *QgsRasterContourRenderer::block( int bandNo, const QgsRectangle 
     return outputBlock.release();
   }
 
-  if ( !inputBlock->convert( Qgis::Float64 ) ) // contouring algorithm requires double
+  if ( !inputBlock->convert( Qgis::DataType::Float64 ) ) // contouring algorithm requires double
     return outputBlock.release();
   double *scanline = reinterpret_cast<double *>( inputBlock->bits() );
 
@@ -213,6 +215,22 @@ QList<int> QgsRasterContourRenderer::usesBands() const
     bandList << mInputBand;
   }
   return bandList;
+}
+
+QList<QgsLayerTreeModelLegendNode *> QgsRasterContourRenderer::createLegendNodes( QgsLayerTreeLayer *nodeLayer )
+{
+  QList<QgsLayerTreeModelLegendNode *> nodes;
+
+  QgsLegendSymbolItem contourItem( mContourSymbol.get(), QString::number( mContourInterval ), QStringLiteral( "contour" ) );
+  nodes << new QgsSymbolLegendNode( nodeLayer, contourItem );
+
+  if ( mContourIndexInterval > 0 )
+  {
+    QgsLegendSymbolItem indexItem( mContourIndexSymbol.get(), QString::number( mContourIndexInterval ), QStringLiteral( "index" ) );
+    nodes << new QgsSymbolLegendNode( nodeLayer, indexItem );
+  }
+
+  return nodes;
 }
 
 void QgsRasterContourRenderer::setContourSymbol( QgsLineSymbol *symbol )

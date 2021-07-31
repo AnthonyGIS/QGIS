@@ -18,6 +18,7 @@
 #include "qgsvectorlayer.h"
 #include "qgsmaplayerstylemanager.h"
 #include "qgsexpressioncontextutils.h"
+#include "qgssymbol.h"
 
 Qgs25DRendererWidget::Qgs25DRendererWidget( QgsVectorLayer *layer, QgsStyle *style, QgsFeatureRenderer *renderer )
   : QgsRendererWidget( layer, style )
@@ -54,7 +55,7 @@ Qgs25DRendererWidget::Qgs25DRendererWidget( QgsVectorLayer *layer, QgsStyle *sty
 
   if ( renderer )
   {
-    mRenderer = Qgs25DRenderer::convertFromRenderer( renderer );
+    mRenderer.reset( Qgs25DRenderer::convertFromRenderer( renderer ) );
   }
 
   mHeightWidget->setLayer( layer );
@@ -66,11 +67,13 @@ Qgs25DRendererWidget::Qgs25DRendererWidget( QgsVectorLayer *layer, QgsStyle *sty
 
   mHeightWidget->setField( height.isNull() ? QStringLiteral( "10" ) : height.toString() );
   mAngleWidget->setValue( angle.isNull() ? 70 : angle.toDouble() );
+  mAngleWidget->setClearValue( 70 );
   mWallColorButton->setColor( mRenderer->wallColor() );
   mRoofColorButton->setColor( mRenderer->roofColor() );
   mShadowColorButton->setColor( mRenderer->shadowColor() );
   mShadowEnabledWidget->setChecked( mRenderer->shadowEnabled() );
   mShadowSizeWidget->setValue( mRenderer->shadowSpread() );
+  mShadowSizeWidget->setClearValue( 4 );
   mWallExpositionShading->setChecked( mRenderer->wallShadingEnabled() );
 
   connect( mAngleWidget, static_cast < void ( QSpinBox::* )( int ) > ( &QSpinBox::valueChanged ), this, &Qgs25DRendererWidget::updateRenderer );
@@ -83,9 +86,11 @@ Qgs25DRendererWidget::Qgs25DRendererWidget( QgsVectorLayer *layer, QgsStyle *sty
   connect( mWallExpositionShading, &QAbstractButton::toggled, this, &Qgs25DRendererWidget::updateRenderer );
 }
 
+Qgs25DRendererWidget::~Qgs25DRendererWidget() = default;
+
 QgsFeatureRenderer *Qgs25DRendererWidget::renderer()
 {
-  return mRenderer;
+  return mRenderer.get();
 }
 
 void Qgs25DRendererWidget::updateRenderer()

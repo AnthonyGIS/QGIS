@@ -14,18 +14,9 @@
 
 
 
-enum class QgsMapLayerType
-  {
-  VectorLayer,
-  RasterLayer,
-  PluginLayer,
-  MeshLayer,
-  VectorTileLayer
-};
-
 class QgsMapLayer : QObject
 {
-%Docstring
+%Docstring(signature="appended")
 Base class for all map layer types.
 This is the base class for all map layer types (vector, raster).
 %End
@@ -34,7 +25,7 @@ This is the base class for all map layer types (vector, raster).
 #include "qgsmaplayer.h"
 %End
 %ConvertToSubClassCode
-    QgsMapLayer * layer = qobject_cast<QgsMapLayer *>( sipCpp );
+    QgsMapLayer *layer = qobject_cast<QgsMapLayer *>( sipCpp );
 
     sipType = 0;
 
@@ -57,6 +48,12 @@ This is the base class for all map layer types (vector, raster).
         case QgsMapLayerType::VectorTileLayer:
           sipType = sipType_QgsVectorTileLayer;
           break;
+        case QgsMapLayerType::AnnotationLayer:
+          sipType = sipType_QgsAnnotationLayer;
+          break;
+        case QgsMapLayerType::PointCloudLayer:
+          sipType = sipType_QgsPointCloudLayer;
+          break;
         default:
           sipType = nullptr;
           break;
@@ -76,6 +73,7 @@ This is the base class for all map layer types (vector, raster).
       Identifiable,
       Removable,
       Searchable,
+      Private,
     };
     typedef QFlags<QgsMapLayer::LayerFlag> LayerFlags;
 
@@ -97,6 +95,9 @@ This is the base class for all map layer types (vector, raster).
       GeometryOptions,
       Relations,
       Temporal,
+      Legend,
+      Elevation,
+      Notes,
       AllStyleCategories
     };
     typedef QFlags<QgsMapLayer::StyleCategory> StyleCategories;
@@ -440,6 +441,38 @@ Returns the current blending mode for a layer.
 .. seealso:: :py:func:`setBlendMode`
 %End
 
+    virtual void setOpacity( double opacity );
+%Docstring
+Sets the ``opacity`` for the layer, where ``opacity`` is a value between 0 (totally transparent)
+and 1.0 (fully opaque).
+
+.. seealso:: :py:func:`opacity`
+
+.. seealso:: :py:func:`opacityChanged`
+
+.. note::
+
+   Prior to QGIS 3.18, this method was available for vector layers only
+
+.. versionadded:: 3.18
+%End
+
+    virtual double opacity() const;
+%Docstring
+Returns the opacity for the layer, where opacity is a value between 0 (totally transparent)
+and 1.0 (fully opaque).
+
+.. seealso:: :py:func:`setOpacity`
+
+.. seealso:: :py:func:`opacityChanged`
+
+.. note::
+
+   Prior to QGIS 3.18, this method was available for vector layers only
+
+.. versionadded:: 3.18
+%End
+
     bool readOnly() const;
 %Docstring
 Returns if this layer is read only.
@@ -452,7 +485,7 @@ Synchronises with changes in the datasource
 
     virtual QgsMapLayerRenderer *createMapRenderer( QgsRenderContext &rendererContext ) = 0 /Factory/;
 %Docstring
-Returns new instance of QgsMapLayerRenderer that will be used for rendering of given context
+Returns new instance of :py:class:`QgsMapLayerRenderer` that will be used for rendering of given context
 
 .. versionadded:: 2.4
 %End
@@ -460,6 +493,18 @@ Returns new instance of QgsMapLayerRenderer that will be used for rendering of g
     virtual QgsRectangle extent() const;
 %Docstring
 Returns the extent of the layer.
+%End
+
+    QgsRectangle wgs84Extent( bool forceRecalculate = false ) const;
+%Docstring
+Returns the WGS84 extent (EPSG:4326) of the layer according to
+ReadFlag.FlagTrustLayerMetadata. If that flag is activated, then the
+WGS84 extent read in the qgs project is returned. Otherwise, the actual
+WGS84 extent is returned.
+
+:param forceRecalculate: True to return the current WGS84 extent whatever the read flags
+
+.. versionadded:: 3.20
 %End
 
     bool isValid() const;
@@ -507,9 +552,33 @@ Set the visibility of the given sublayer name.
 :param visible: sublayer visibility
 %End
 
+    virtual bool supportsEditing() const;
+%Docstring
+Returns whether the layer supports editing or not.
+
+:return: ``False`` if the layer is read only or the data provider has no editing capabilities.
+
+.. note::
+
+   default implementation returns ``False``.
+
+.. versionadded:: 3.22
+%End
+
     virtual bool isEditable() const;
 %Docstring
 Returns ``True`` if the layer can be edited.
+%End
+
+    virtual bool isModified() const;
+%Docstring
+Returns ``True`` if the layer has been modified since last commit/save.
+
+.. note::
+
+   default implementation returns ``False``.
+
+.. versionadded:: 3.22
 %End
 
     virtual bool isSpatial() const;
@@ -533,6 +602,8 @@ or layer with temporary data (as temporary mesh layer dataset)
     enum ReadFlag
     {
       FlagDontResolveLayers,
+      FlagTrustLayerMetadata,
+      FlagReadExtentFromXml,
     };
     typedef QFlags<QgsMapLayer::ReadFlag> ReadFlags;
 
@@ -624,6 +695,8 @@ Read all custom properties from layer. Properties are stored in a map and saved 
 
 .. versionadded:: 3.14
 %End
+
+
 
     void removeCustomProperty( const QString &key );
 %Docstring
@@ -738,7 +811,7 @@ record in the users style table in their personal qgis.db)
 .. versionadded:: 3.0
 %End
 
-    QString loadDefaultMetadata( bool &resultFlag );
+    virtual QString loadDefaultMetadata( bool &resultFlag );
 %Docstring
 Retrieve the default metadata for this layer if one
 exists (either as a .qmd file on disk or as a
@@ -965,7 +1038,7 @@ Read the style for the current layer from the DOM node supplied.
     virtual bool writeSymbology( QDomNode &node, QDomDocument &doc, QString &errorMessage, const QgsReadWriteContext &context,
                                  StyleCategories categories = AllStyleCategories ) const = 0;
 %Docstring
-Write the style for the layer into the docment provided.
+Write the style for the layer into the document provided.
 
 :param node: the node that will have the style element added to it.
 :param doc: the document that will have the QDomNode added.
@@ -1005,12 +1078,28 @@ Write just the symbology information for the layer into the document
 %End
 
 
-    virtual void setDataSource( const QString &dataSource, const QString &baseName, const QString &provider, const QgsDataProvider::ProviderOptions &options, bool loadDefaultStyleFlag = false );
+    void setDataSource( const QString &dataSource, const QString &baseName, const QString &provider, bool loadDefaultStyleFlag = false );
 %Docstring
 Updates the data source of the layer. The layer's renderer and legend will be preserved only
 if the geometry type of the new data source matches the current geometry type of the layer.
 
-Subclasses should override this method: default implementation does nothing.
+This method was defined in :py:class:`QgsVectorLayer` since 2.10 and was marked as deprecated since 3.2
+
+:param dataSource: new layer data source
+:param baseName: base name of the layer
+:param provider: provider string
+:param loadDefaultStyleFlag: set to ``True`` to reset the layer's style to the default for the
+                             data source
+
+.. seealso:: :py:func:`dataSourceChanged`
+
+.. versionadded:: 3.20
+%End
+
+    void setDataSource( const QString &dataSource, const QString &baseName, const QString &provider, const QgsDataProvider::ProviderOptions &options, bool loadDefaultStyleFlag = false );
+%Docstring
+Updates the data source of the layer. The layer's renderer and legend will be preserved only
+if the geometry type of the new data source matches the current geometry type of the layer.
 
 :param dataSource: new layer data source
 :param baseName: base name of the layer
@@ -1022,6 +1111,24 @@ Subclasses should override this method: default implementation does nothing.
 .. seealso:: :py:func:`dataSourceChanged`
 
 .. versionadded:: 3.6
+%End
+
+    void setDataSource( const QString &dataSource, const QString &baseName, const QString &provider, const QgsDataProvider::ProviderOptions &options, QgsDataProvider::ReadFlags flags );
+%Docstring
+Updates the data source of the layer. The layer's renderer and legend will be preserved only
+if the geometry type of the new data source matches the current geometry type of the layer.
+
+Subclasses should override setDataSourcePrivate: default implementation does nothing.
+
+:param dataSource: new layer data source
+:param baseName: base name of the layer
+:param provider: provider string
+:param options: provider options
+:param flags: provider read flags which control dataprovider construction like FlagTrustDataSource, FlagLoadDefaultStyle, etc
+
+.. seealso:: :py:func:`dataSourceChanged`
+
+.. versionadded:: 3.20
 %End
 
     QString providerType() const;
@@ -1256,7 +1363,7 @@ Time stamp of data source in the moment when data/metadata were loaded by provid
 Gets the list of dependencies. This includes data dependencies set by the user (:py:func:`setDataDependencies`)
 as well as dependencies given by the provider
 
-:return: a set of QgsMapLayerDependency
+:return: a set of :py:class:`QgsMapLayerDependency`
 
 .. versionadded:: 3.0
 %End
@@ -1317,6 +1424,31 @@ should be canceled.
 Returns the layer's temporal properties. This may be ``None``, depending on the layer type.
 
 .. versionadded:: 3.14
+%End
+
+    virtual QgsMapLayerElevationProperties *elevationProperties();
+%Docstring
+Returns the layer's elevation properties. This may be ``None``, depending on the layer type.
+
+.. versionadded:: 3.18
+%End
+
+    QString legendPlaceholderImage() const;
+%Docstring
+Returns path to the placeholder image or an empty string if a generated legend is shown
+
+:return: placholder image path
+
+.. versionadded:: 3.22
+%End
+
+    void setLegendPlaceholderImage( const QString &imgPath );
+%Docstring
+Set placeholder image for legend. If the string is empty, a generated legend will be shown.
+
+:param imgPath: file path to the placeholder image
+
+.. versionadded:: 3.22
 %End
 
   public slots:
@@ -1380,6 +1512,14 @@ re-rendered, and will not trigger any canvas redraws itself.
    in 2.6 function moved from vector/raster subclasses to QgsMapLayer
 %End
 
+    void trigger3DUpdate();
+%Docstring
+Will advise any 3D maps that this layer requires to be updated in the scene.
+Will emit a :py:func:`~QgsMapLayer.request3DUpdate` signal.
+
+.. versionadded:: 3.18
+%End
+
     void emitStyleChanged();
 %Docstring
 Triggers an emission of the :py:func:`~QgsMapLayer.styleChanged` signal.
@@ -1393,7 +1533,7 @@ Sets the list of dependencies.
 
 .. seealso:: :py:func:`dependencies`
 
-:param layers: set of QgsMapLayerDependency. Only user-defined dependencies will be added
+:param layers: set of :py:class:`QgsMapLayerDependency`. Only user-defined dependencies will be added
 
 :return: ``False`` if a dependency cycle has been detected
 
@@ -1427,6 +1567,14 @@ Sets the coordinate transform context to ``transformContext``
 %MethodCode
     QString str = QStringLiteral( "<QgsMapLayer: '%1' (%2)>" ).arg( sipCpp->name(), sipCpp->dataProvider() ? sipCpp->dataProvider()->name() : QStringLiteral( "Invalid" ) );
     sipRes = PyUnicode_FromString( str.toUtf8().constData() );
+%End
+
+    QgsProject *project() const;
+%Docstring
+Returns the parent project if this map layer is added to a project.
+Otherwise returns ``None``
+
+.. versionadded:: 3.18
 %End
 
   signals:
@@ -1479,6 +1627,22 @@ Data of layer changed
 Signal emitted when the blend mode is changed, through :py:func:`QgsMapLayer.setBlendMode()`
 %End
 
+    void opacityChanged( double opacity );
+%Docstring
+Emitted when the layer's opacity is changed, where ``opacity`` is a value between 0 (transparent)
+and 1 (opaque).
+
+.. seealso:: :py:func:`setOpacity`
+
+.. seealso:: :py:func:`opacity`
+
+.. note::
+
+   Prior to QGIS 3.18, this signal was available for vector layers only
+
+.. versionadded:: 3.18
+%End
+
     void rendererChanged();
 %Docstring
 Signal emitted when renderer is changed.
@@ -1491,6 +1655,11 @@ Signal emitted when renderer is changed.
 Signal emitted whenever a change affects the layer's style. Ie this may be triggered
 by renderer changes, label style changes, or other style changes such as blend
 mode or layer opacity changes.
+
+.. warning::
+
+   This signal should never be manually emitted. Instead call the :py:func:`~QgsMapLayer.emitStyleChanged` method
+   to ensure that the signal is only emitted when appropriate.
 
 .. seealso:: :py:func:`rendererChanged`
 
@@ -1509,6 +1678,13 @@ Signal emitted when legend of the layer has changed
 Signal emitted when 3D renderer associated with the layer has changed.
 
 .. versionadded:: 3.0
+%End
+
+    void request3DUpdate();
+%Docstring
+Signal emitted when a layer requires an update in any 3D maps.
+
+.. versionadded:: 3.18
 %End
 
     void configChanged();
@@ -1580,6 +1756,40 @@ Emitted when a style has been loaded
 .. versionadded:: 3.12
 %End
 
+    void isValidChanged();
+%Docstring
+Emitted when the validity of this layer changed.
+
+.. versionadded:: 3.16
+%End
+
+    void customPropertyChanged( const QString &key );
+%Docstring
+Emitted when a custom property of the layer has been changed or removed.
+
+.. versionadded:: 3.18
+%End
+
+    void editingStarted();
+%Docstring
+Emitted when editing on this layer has started.
+
+.. versionadded:: 3.22
+%End
+
+    void editingStopped();
+%Docstring
+Emitted when edited changes have been successfully written to the data provider.
+
+.. versionadded:: 3.22
+%End
+
+    void layerModified();
+%Docstring
+Emitted when modifications has been done on layer
+
+.. versionadded:: 3.22
+%End
 
   protected:
 
@@ -1599,7 +1809,7 @@ Sets the extent
 
     void setValid( bool valid );
 %Docstring
-Sets whether layer is valid or not - should be used in constructor.
+Sets whether layer is valid or not
 %End
 
     virtual bool readXml( const QDomNode &layer_node, QgsReadWriteContext &context );
@@ -1648,7 +1858,7 @@ passwords or drivers prefixes ("HDF5:")
 Read custom properties from project file.
 
 :param layerNode: note to read from
-:param keyStartsWith: reads only properties starting with the specified string (or all if the string is empty)*
+:param keyStartsWith: reads only properties starting with the specified string (or all if the string is empty)
 %End
 
     void writeCustomProperties( QDomNode &layerNode, QDomDocument &doc ) const;
@@ -1697,6 +1907,14 @@ Add error message
 Sets error message
 %End
 
+    void invalidateWgs84Extent();
+%Docstring
+Invalidates the WGS84 extent. If FlagTrustLayerMetadata is enabled,
+the extent is not invalidated because we want to trust metadata whatever
+happens.
+
+.. versionadded:: 3.20
+%End
 
 
 
@@ -1712,10 +1930,13 @@ Sets error message
  bool hasDependencyCycle( const QSet<QgsMapLayerDependency> & ) const;
 %Docstring
 Checks whether a new set of dependencies will introduce a cycle
-this method is now deprecated and always return false, because circular dependencies are now correctly managed.
+this method is now deprecated and always return ``False``, because circular dependencies are now correctly managed.
 
 .. deprecated:: QGIS 3.10
 %End
+
+
+
 
 
 

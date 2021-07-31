@@ -130,7 +130,7 @@ void QgisAppStyleSheet::buildStyleSheet( const QMap<QString, QVariant> &opts )
   ss += QLatin1String( "QGroupBox{ font-weight: 600; }" );
 
   QString themeName = settings.value( QStringLiteral( "UI/UITheme" ), "default" ).toString();
-  if ( themeName == QStringLiteral( "default" ) || !QgsApplication::uiThemes().contains( themeName ) )
+  if ( themeName == QLatin1String( "default" ) || !QgsApplication::uiThemes().contains( themeName ) )
   {
     //sidebar style
     const int frameMargin = QgsGuiUtils::scaleIconSize( 3 );
@@ -151,6 +151,23 @@ void QgisAppStyleSheet::buildStyleSheet( const QMap<QString, QVariant> &opts )
                                     "    background-color:palette(Window);"
                                     "    padding-right: 0px;"
                                     "}" ).arg( frameMargin );
+
+    style += QStringLiteral( "QTreeView#mOptionsTreeView {"
+                             "    background-color: rgba(69, 69, 69, 0);"
+                             "    outline: 0;"
+                             "}"
+                             "QFrame#mOptionsListFrame {"
+                             "    background-color: rgba(69, 69, 69, 220);"
+                             "}"
+                             "QTreeView#mOptionsTreeView::item {"
+                             "    color: white;"
+                             "    padding: %1px;"
+                             "}"
+                             "QTreeView#mOptionsTreeView::item::selected, QTreeView#mOptionsTreeView::branch::selected {"
+                             "    color: black;"
+                             "    background-color:palette(Window);"
+                             "    padding-right: 0px;"
+                             "}" ).arg( frameMargin );
 
     QString toolbarSpacing = opts.value( QStringLiteral( "toolbarSpacing" ), QString() ).toString();
     if ( !toolbarSpacing.isEmpty() )
@@ -174,9 +191,9 @@ void QgisAppStyleSheet::buildStyleSheet( const QMap<QString, QVariant> &opts )
           .arg( palette.highlight().color().name(),
                 palette.highlightedText().color().name() );
 
-    ss += QStringLiteral( "QgsPropertyOverrideButton { background: none; border: 1px solid rgba(0, 0, 0, 0%); } QgsPropertyOverrideButton:focus { border: 1px solid palette(highlight); }" );
+    ss += QLatin1String( "QgsPropertyOverrideButton { background: none; border: 1px solid rgba(0, 0, 0, 0%); } QgsPropertyOverrideButton:focus { border: 1px solid palette(highlight); }" );
 #ifdef Q_OS_MACX
-    ss += QStringLiteral( "QgsPropertyOverrideButton::menu-indicator { width: 5px; }" );
+    ss += QLatin1String( "QgsPropertyOverrideButton::menu-indicator { width: 5px; }" );
 #endif
   }
 

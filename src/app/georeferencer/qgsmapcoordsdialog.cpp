@@ -22,10 +22,14 @@
 #include "qgsmapmouseevent.h"
 #include "qgsgui.h"
 #include "qgsapplication.h"
+#include "qgsprojectionselectionwidget.h"
+#include "qgsproject.h"
+#include "qgsgcpcanvasitem.h"
 
-QgsMapCoordsDialog::QgsMapCoordsDialog( QgsMapCanvas *qgisCanvas, const QgsPointXY &pixelCoords, QWidget *parent )
+QgsMapCoordsDialog::QgsMapCoordsDialog( QgsMapCanvas *qgisCanvas, const QgsPointXY &pixelCoords, QgsCoordinateReferenceSystem &rasterCrs, QWidget *parent )
   : QDialog( parent, Qt::Dialog )
   , mQgisCanvas( qgisCanvas )
+  , mRasterCrs( rasterCrs )
   , mPixelCoords( pixelCoords )
 {
   setupUi( this );
@@ -59,12 +63,18 @@ QgsMapCoordsDialog::QgsMapCoordsDialog( QgsMapCanvas *qgisCanvas, const QgsPoint
 
   connect( leXCoord, &QLineEdit::textChanged, this, &QgsMapCoordsDialog::updateOK );
   connect( leYCoord, &QLineEdit::textChanged, this, &QgsMapCoordsDialog::updateOK );
+
+  mProjectionSelector->setCrs( mRasterCrs );
+
   updateOK();
 }
 
 QgsMapCoordsDialog::~QgsMapCoordsDialog()
 {
   delete mToolEmitPoint;
+
+  delete mNewlyAddedPointItem;
+  mNewlyAddedPointItem = nullptr;
 
   QgsSettings settings;
   settings.setValue( QStringLiteral( "/Plugin-GeoReferencer/Config/Minimize" ), mMinimizeWindowCheckBox->isChecked() );
@@ -93,7 +103,7 @@ void QgsMapCoordsDialog::buttonBox_accepted()
   if ( !ok )
     y = dmsToDD( leYCoord->text() );
 
-  emit pointAdded( mPixelCoords, QgsPointXY( x, y ) );
+  emit pointAdded( mPixelCoords, QgsPointXY( x, y ), mProjectionSelector->crs().isValid() ? mProjectionSelector->crs() : mRasterCrs );
   close();
 }
 
@@ -108,11 +118,24 @@ void QgsMapCoordsDialog::maybeSetXY( const QgsPointXY &xy, Qt::MouseButton butto
     leYCoord->clear();
     leXCoord->setText( qgsDoubleToString( mapCoordPoint.x() ) );
     leYCoord->setText( qgsDoubleToString( mapCoordPoint.y() ) );
+
+    delete mNewlyAddedPointItem;
+    mNewlyAddedPointItem = nullptr;
+
+    // show a temporary marker at the clicked source point
+    mNewlyAddedPointItem = new QgsGCPCanvasItem( mQgisCanvas, nullptr, true );
+    mNewlyAddedPointItem->setPointColor( QColor( 0, 200, 0 ) );
+    mNewlyAddedPointItem->setPos( mNewlyAddedPointItem->toCanvasCoordinates( mapCoordPoint ) );
   }
 
-  parentWidget()->showNormal();
+  // only restore window if it was minimized
+  if ( parentWidget()->windowState().testFlag( Qt::WindowMinimized ) )
+    parentWidget()->showNormal();
   parentWidget()->activateWindow();
   parentWidget()->raise();
+
+  // set CRS to match canvas' point coordinates
+  mProjectionSelector->setCrs( mQgisCanvas->mapSettings().destinationCrs() );
 
   mPointFromCanvasPushButton->setChecked( false );
   buttonBox->button( QDialogButtonBox::Ok )->setFocus();

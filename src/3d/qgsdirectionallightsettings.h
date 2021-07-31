@@ -25,7 +25,7 @@ class QDomElement;
 
 /**
  * \ingroup 3d
- * Definition of a directional light in a 3D map scene
+ * \brief Definition of a directional light in a 3D map scene
  *
  * \since QGIS 3.16
  */
@@ -55,12 +55,13 @@ class _3D_EXPORT QgsDirectionalLightSettings
     //! Reads configuration from a DOM element previously written using writeXml()
     void readXml( const QDomElement &elem );
 
+    // TODO c++20 - replace with = default
     bool operator==( const QgsDirectionalLightSettings &other );
 
   private:
-    QgsVector3D mDirection = QgsVector3D( 0.0, -1.0, 0.0 );
+    QgsVector3D mDirection { -0.32, -0.91, -0.27 };
     QColor mColor = Qt::white;
-    float mIntensity = 0.5;
+    float mIntensity = 1.0;
 };
 
 #endif // QGSDIRECTIONALLIGHTSETTINGS_H

@@ -109,9 +109,15 @@ class buildvrt(GdalAlgorithm):
                                                      self.tr('Resolution'),
                                                      options=[i[0] for i in self.RESOLUTION_OPTIONS],
                                                      defaultValue=0))
-        self.addParameter(QgsProcessingParameterBoolean(self.SEPARATE,
-                                                        self.tr('Place each input file into a separate band'),
-                                                        defaultValue=True))
+
+        separate_param = QgsProcessingParameterBoolean(self.SEPARATE,
+                                                       self.tr('Place each input file into a separate band'),
+                                                       defaultValue=True)
+        # default to not using separate bands is a friendlier option, but we can't change the parameter's actual
+        # defaultValue without breaking API!
+        separate_param.setGuiDefaultValueOverride(False)
+        self.addParameter(separate_param)
+
         self.addParameter(QgsProcessingParameterBoolean(self.PROJ_DIFFERENCE,
                                                         self.tr('Allow projection difference'),
                                                         defaultValue=False))
@@ -170,9 +176,12 @@ class buildvrt(GdalAlgorithm):
         return "gdalbuildvrt"
 
     def getConsoleCommands(self, parameters, context, feedback, executing=True):
-        arguments = []
-        arguments.append('-resolution')
-        arguments.append(self.RESOLUTION_OPTIONS[self.parameterAsEnum(parameters, self.RESOLUTION, context)][1])
+        arguments = [
+            '-overwrite',
+            '-resolution',
+            self.RESOLUTION_OPTIONS[self.parameterAsEnum(parameters, self.RESOLUTION, context)][1]
+        ]
+
         if self.parameterAsBoolean(parameters, buildvrt.SEPARATE, context):
             arguments.append('-separate')
         if self.parameterAsBoolean(parameters, buildvrt.PROJ_DIFFERENCE, context):
@@ -188,7 +197,8 @@ class buildvrt(GdalAlgorithm):
 
         if self.SRC_NODATA in parameters and parameters[self.SRC_NODATA] not in (None, ''):
             nodata = self.parameterAsString(parameters, self.SRC_NODATA, context)
-            arguments.append('-srcnodata "{}"'.format(nodata))
+            arguments.append('-srcnodata')
+            arguments.append(nodata)
 
         if self.EXTRA in parameters and parameters[self.EXTRA] not in (None, ''):
             extra = self.parameterAsString(parameters, self.EXTRA, context)

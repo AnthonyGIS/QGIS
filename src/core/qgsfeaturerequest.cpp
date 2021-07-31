@@ -23,28 +23,24 @@
 const QString QgsFeatureRequest::ALL_ATTRIBUTES = QStringLiteral( "#!allattributes!#" );
 
 QgsFeatureRequest::QgsFeatureRequest()
-  : mFlags( nullptr )
 {
 }
 
 QgsFeatureRequest::QgsFeatureRequest( QgsFeatureId fid )
   : mFilter( FilterFid )
   , mFilterFid( fid )
-  , mFlags( nullptr )
 {
 }
 
 QgsFeatureRequest::QgsFeatureRequest( const QgsFeatureIds &fids )
   : mFilter( FilterFids )
   , mFilterFids( fids )
-  , mFlags( nullptr )
 {
 
 }
 
 QgsFeatureRequest::QgsFeatureRequest( const QgsRectangle &rect )
   : mFilterRect( rect )
-  , mFlags( nullptr )
 {
 }
 
@@ -52,7 +48,6 @@ QgsFeatureRequest::QgsFeatureRequest( const QgsExpression &expr, const QgsExpres
   : mFilter( FilterExpression )
   , mFilterExpression( new QgsExpression( expr ) )
   , mExpressionContext( context )
-  , mFlags( nullptr )
 {
 }
 
@@ -91,6 +86,7 @@ QgsFeatureRequest &QgsFeatureRequest::operator=( const QgsFeatureRequest &rh )
   mTransformErrorCallback = rh.mTransformErrorCallback;
   mTimeout = rh.mTimeout;
   mRequestMayBeNested = rh.mRequestMayBeNested;
+  mFeedback = rh.mFeedback;
   return *this;
 }
 
@@ -175,7 +171,7 @@ QgsFeatureRequest &QgsFeatureRequest::setOrderBy( const QgsFeatureRequest::Order
   return *this;
 }
 
-QgsFeatureRequest &QgsFeatureRequest::setLimit( long limit )
+QgsFeatureRequest &QgsFeatureRequest::setLimit( long long limit )
 {
   mLimit = limit;
   return *this;
@@ -337,6 +333,16 @@ QgsFeatureRequest &QgsFeatureRequest::setRequestMayBeNested( bool requestMayBeNe
 {
   mRequestMayBeNested = requestMayBeNested;
   return *this;
+}
+
+void QgsFeatureRequest::setFeedback( QgsFeedback *feedback )
+{
+  mFeedback = feedback;
+}
+
+QgsFeedback *QgsFeatureRequest::feedback() const
+{
+  return mFeedback;
 }
 
 
@@ -528,5 +534,5 @@ QString QgsFeatureRequest::OrderBy::dump() const
     results << clause.dump();
   }
 
-  return results.join( QStringLiteral( ", " ) );
+  return results.join( QLatin1String( ", " ) );
 }

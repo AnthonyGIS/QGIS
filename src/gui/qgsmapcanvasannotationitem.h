@@ -33,7 +33,7 @@ class QgsAnnotation;
 /**
  * \class QgsMapCanvasAnnotationItem
  * \ingroup gui
- * An interactive map canvas item which displays a QgsAnnotation.
+ * \brief An interactive map canvas item which displays a QgsAnnotation.
  * \since QGIS 3.0
  */
 class GUI_EXPORT QgsMapCanvasAnnotationItem: public QObject, public QgsMapCanvasItem
@@ -107,6 +107,8 @@ class GUI_EXPORT QgsMapCanvasAnnotationItem: public QObject, public QgsMapCanvas
 
     //! Sets a feature for the current map position
     void setFeatureForMapPosition();
+
+    void annotationDeleted();
 
   private:
 

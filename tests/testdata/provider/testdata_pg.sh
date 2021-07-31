@@ -4,6 +4,7 @@ DB=${DB:-qgis_test}
 
 SCRIPTS="
   tests/testdata/provider/testdata_pg.sql
+  tests/testdata/provider/testdata_pg_relations.sql
   tests/testdata/provider/testdata_pg_reltests.sql
   tests/testdata/provider/testdata_pg_role.sql
   tests/testdata/provider/testdata_pg_vectorjoin.sql
@@ -15,6 +16,8 @@ SCRIPTS="
   tests/testdata/provider/testdata_pg_json.sql
   tests/testdata/provider/testdata_pg_pointcloud.sql
   tests/testdata/provider/testdata_pg_bigint_pk.sql
+  tests/testdata/provider/testdata_pg_hasspatialindex.sql
+  tests/testdata/provider/testdata_pg_geography.sql
 "
 
 SCRIPTS12="

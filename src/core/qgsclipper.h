@@ -34,7 +34,8 @@ SIP_FEATURE( ARM ) // Some parts are not available in sip bindings on ARM becaus
 
 /**
  * \ingroup core
- * A class to trim lines and polygons to within a rectangular region.
+ * \brief A class to trim lines and polygons to within a rectangular region.
+ *
  * The functions in this class are likely to be called from within a
  * render loop and hence need to as CPU efficient as possible.
  * The main purpose of the functions in this class are to trim lines
@@ -108,6 +109,13 @@ class CORE_EXPORT QgsClipper
      */
     static QPolygonF clippedLine( const QgsCurve &curve, const QgsRectangle &clipExtent );
 
+    /**
+     * Takes a \a curve and clips it to clipExtent.
+     *
+     * \since QGIS 3.16
+     */
+    static QPolygonF clippedLine( const QPolygonF &curve, const QgsRectangle &clipExtent );
+
   private:
 
     // Used when testing for equivalence to 0.0
@@ -144,12 +152,12 @@ class CORE_EXPORT QgsClipper
 
     /**
      * Connects two lines split by the clip (by inserting points on the clip border)
-      \param x0 x-coordinate of the first line end
-      \param y0 y-coordinate of the first line end
-      \param x1 x-coordinate of the second line start
-      \param y1 y-coordinate of the second line start
-      \param clipRect clip rectangle
-      \param pts: in/out array of clipped points
+     * \param x0 x-coordinate of the first line end
+     * \param y0 y-coordinate of the first line end
+     * \param x1 x-coordinate of the second line start
+     * \param y1 y-coordinate of the second line start
+     * \param clipRect clip rectangle
+     * \param pts: in/out array of clipped points
       */
     static void connectSeparatedLines( double x0, double y0, double x1, double y1,
                                        const QgsRectangle &clipRect, QPolygonF &pts );

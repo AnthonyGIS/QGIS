@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """QGIS Unit tests for QgsServer.
 
+From build dir, run: ctest -R PyQgsServerAccessControlWFSTransactional -V
+
 .. note:: This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation; either version 2 of the License, or
@@ -9,8 +11,6 @@ the Free Software Foundation; either version 2 of the License, or
 __author__ = 'Stephane Brunner'
 __date__ = '28/08/2015'
 __copyright__ = 'Copyright 2015, The QGIS Project'
-
-print('CTEST_FULL_OUTPUT')
 
 from qgis.testing import unittest
 from test_qgsserver_accesscontrol import TestQgsServerAccessControl, XML_NS

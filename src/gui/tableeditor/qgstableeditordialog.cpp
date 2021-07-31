@@ -20,6 +20,7 @@
 #include "qgsdockwidget.h"
 #include "qgspanelwidgetstack.h"
 #include "qgstableeditorformattingwidget.h"
+#include "qgssettings.h"
 
 #include <QClipboard>
 #include <QMessageBox>
@@ -37,10 +38,8 @@ QgsTableEditorDialog::QgsTableEditorDialog( QWidget *parent )
 
   QGridLayout *viewLayout = new QGridLayout();
   viewLayout->setSpacing( 0 );
-  viewLayout->setMargin( 0 );
   viewLayout->setContentsMargins( 0, 0, 0, 0 );
   centralWidget()->layout()->setSpacing( 0 );
-  centralWidget()->layout()->setMargin( 0 );
   centralWidget()->layout()->setContentsMargins( 0, 0, 0, 0 );
 
   mMessageBar = new QgsMessageBar( centralWidget() );
@@ -76,7 +75,6 @@ QgsTableEditorDialog::QgsTableEditorDialog( QWidget *parent )
 
   mPropertiesDock->setFeatures( QDockWidget::NoDockWidgetFeatures );
 
-  connect( mFormattingWidget, &QgsTableEditorFormattingWidget::foregroundColorChanged, mTableWidget, &QgsTableEditorWidget::setSelectionForegroundColor );
   connect( mFormattingWidget, &QgsTableEditorFormattingWidget::backgroundColorChanged, mTableWidget, &QgsTableEditorWidget::setSelectionBackgroundColor );
 
   connect( mFormattingWidget, &QgsTableEditorFormattingWidget::horizontalAlignmentChanged, mTableWidget, &QgsTableEditorWidget::setSelectionHorizontalAlignment );
@@ -97,7 +95,6 @@ QgsTableEditorDialog::QgsTableEditorDialog( QWidget *parent )
 
   connect( mTableWidget, &QgsTableEditorWidget::activeCellChanged, this, [ = ]
   {
-    mFormattingWidget->setForegroundColor( mTableWidget->selectionForegroundColor() );
     mFormattingWidget->setBackgroundColor( mTableWidget->selectionBackgroundColor() );
     mFormattingWidget->setNumericFormat( mTableWidget->selectionNumericFormat(), mTableWidget->hasMixedSelectionNumericFormat() );
     mFormattingWidget->setRowHeight( mTableWidget->selectionRowHeight() );
@@ -135,6 +132,22 @@ QgsTableEditorDialog::QgsTableEditorDialog( QWidget *parent )
     mTableWidget->setIncludeTableHeader( checked );
     emit includeHeaderChanged( checked );
   } );
+
+  // restore the toolbar and dock widgets positions using Qt settings API
+  QgsSettings settings;
+
+  const QByteArray state = settings.value( QStringLiteral( "LayoutDesigner/tableEditorState" ), QByteArray(), QgsSettings::App ).toByteArray();
+  if ( !state.isEmpty() && !restoreState( state ) )
+  {
+    QgsDebugMsg( QStringLiteral( "restore of table editor dialog UI state failed" ) );
+  }
+}
+
+void QgsTableEditorDialog::closeEvent( QCloseEvent * )
+{
+  QgsSettings settings;
+  // store the toolbar/dock widget settings using Qt settings API
+  settings.setValue( QStringLiteral( "LayoutDesigner/tableEditorState" ), saveState(), QgsSettings::App );
 }
 
 bool QgsTableEditorDialog::setTableContentsFromClipboard()

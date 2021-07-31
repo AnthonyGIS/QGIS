@@ -27,7 +27,6 @@
 #include <QToolButton>
 #include <QFileDialog>
 #include <QMessageBox>
-#include <QDesktopWidget>
 #include <QMouseEvent>
 #include <QInputDialog>
 
@@ -92,7 +91,7 @@ QColor QgsColorDialog::getColor( const QColor &initialColor, QWidget *parent, co
   }
   else
   {
-    QgsColorDialog *dialog = new QgsColorDialog( parent, nullptr, initialColor );
+    QgsColorDialog *dialog = new QgsColorDialog( parent, Qt::WindowFlags(), initialColor );
     dialog->setWindowTitle( dialogTitle );
     dialog->setAllowOpacity( allowOpacity );
 

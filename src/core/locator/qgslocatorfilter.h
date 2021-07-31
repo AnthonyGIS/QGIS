@@ -18,7 +18,6 @@
 #ifndef QGSLOCATORFILTER_H
 #define QGSLOCATORFILTER_H
 
-#include <QAction>
 #include <QIcon>
 #include <QString>
 #include <QVariant>
@@ -33,7 +32,7 @@ class QgsLocatorFilter;
 /**
  * \class QgsLocatorResult
  * \ingroup core
- * Encapsulates properties of an individual matching result found by a QgsLocatorFilter.
+ * \brief Encapsulates properties of an individual matching result found by a QgsLocatorFilter.
  * \since QGIS 3.0
  */
 class CORE_EXPORT QgsLocatorResult
@@ -53,6 +52,14 @@ class CORE_EXPORT QgsLocatorResult
       , displayString( displayString )
       , userData( userData )
     {}
+
+
+    /**
+     * Returns the ``userData``.
+     *
+     * \since QGIS 3.18
+     */
+    QVariant getUserData() const;
 
     /**
      * Filter from which the result was obtained. This is automatically set.
@@ -91,7 +98,7 @@ class CORE_EXPORT QgsLocatorResult
       * \note This should be translated.
       * \since QGIS 3.2
       */
-    QString group = QString();
+    QString group;
 
     /**
      * The ResultAction stores basic information for additional
@@ -136,7 +143,7 @@ Q_DECLARE_METATYPE( QgsLocatorResult::ResultAction )
 /**
  * \class QgsLocatorFilter
  * \ingroup core
- * Abstract base class for filters which collect locator results.
+ * \brief Abstract base class for filters which collect locator results.
  *
  * \note If the configuration of the filter is changed outside of the main application settings,
  * one needs to invalidate current results of the locator widget: \see QgisInterface::invalidateLocatorResults
@@ -191,6 +198,12 @@ class CORE_EXPORT QgsLocatorFilter : public QObject
     virtual QString displayName() const = 0;
 
     /**
+     * Returns a translated, description for the filter.
+     * \since QGIS 3.20
+     */
+    virtual QString description() const { return QString(); }
+
+    /**
      * Returns flags which specify the filter's behavior.
      */
     virtual QgsLocatorFilter::Flags flags() const;
@@ -219,8 +232,9 @@ class CORE_EXPORT QgsLocatorFilter : public QObject
      * from the main thread, and individual filter subclasses should perform whatever
      * tasks are required in order to allow a subsequent search to safely execute
      * on a background thread.
+     * The method returns an autocompletion list
      */
-    virtual void prepare( const QString &string, const QgsLocatorContext &context ) { Q_UNUSED( string ) Q_UNUSED( context ); }
+    virtual QStringList prepare( const QString &string, const QgsLocatorContext &context ) { Q_UNUSED( string ) Q_UNUSED( context ); return QStringList();}
 
     /**
      * Retrieves the filter results for a specified search \a string. The \a context
@@ -344,8 +358,22 @@ class CORE_EXPORT QgsLocatorFilter : public QObject
      *          since fetching results does not happen in the main thread.
      * \since QGIS 3.2
      */
-    void logMessage( const QString &message, Qgis::MessageLevel level = Qgis::Info );
+    void logMessage( const QString &message, Qgis::MessageLevel level = Qgis::MessageLevel::Info );
 
+    /**
+     * Returns the delay (in milliseconds) for the filter to wait prior to fetching results.
+     * \see setFetchResultsDelay()
+     * \since QGIS 3.18
+     */
+    int fetchResultsDelay() const { return mFetchResultsDelay; }
+
+    /**
+     * Sets a \a delay (in milliseconds) for the filter to wait prior to fetching results.
+     * \see fetchResultsDelay()
+     * \note If the locator filter has a FastFlag, this value is ignored.
+     * \since QGIS 3.18
+     */
+    void setFetchResultsDelay( int delay ) { mFetchResultsDelay = delay; }
 
   signals:
 
@@ -365,6 +393,7 @@ class CORE_EXPORT QgsLocatorFilter : public QObject
     bool mEnabled = true;
     bool mUseWithoutPrefix = true;
     QString mActivePrefifx = QString();
+    int mFetchResultsDelay = 0;
 
 };
 

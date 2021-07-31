@@ -33,7 +33,7 @@ class QgsCharacterSelectorDialog;
 /**
  * \class QgsTextFormatWidget
  * \ingroup gui
- * A widget for customizing text formatting settings.
+ * \brief A widget for customizing text formatting settings.
  *
  * QgsTextFormatWidget provides a widget for controlling the appearance of text rendered
  * using QgsTextRenderer. The widget includes all settings contained within
@@ -161,6 +161,14 @@ class GUI_EXPORT QgsTextFormatWidget : public QWidget, public QgsExpressionConte
 
     QgsExpressionContext createExpressionContext() const override;
 
+    /**
+     * Returns the geometry type which will be used by the labeling engine
+     * when registering labels for the labeling settings currently defined by the widget.
+     *
+     * \since QGIS 3.16
+     */
+    QgsWkbTypes::GeometryType labelGeometryType() const;
+
     //! Text substitution list
     QgsStringReplacementCollection mSubstitutions;
     //! Quadrant button group
@@ -169,12 +177,6 @@ class GUI_EXPORT QgsTextFormatWidget : public QWidget, public QgsExpressionConte
     QButtonGroup *mDirectSymbBtnGrp = nullptr;
     //! Upside down labels button group
     QButtonGroup *mUpsidedownBtnGrp = nullptr;
-    //! Point placement button group
-    QButtonGroup *mPlacePointBtnGrp = nullptr;
-    //! Line placement button group
-    QButtonGroup *mPlaceLineBtnGrp = nullptr;
-    //! Polygon placement button group
-    QButtonGroup *mPlacePolygonBtnGrp = nullptr;
     //! Pixel size font limit
     int mMinPixelLimit = 0;
 
@@ -190,7 +192,10 @@ class GUI_EXPORT QgsTextFormatWidget : public QWidget, public QgsExpressionConte
     //! Associated vector layer
     QgsVectorLayer *mLayer = nullptr;
 
-    QgsSymbolLayerReferenceList mMaskedSymbolLayers;
+    QList<QgsSymbolLayerReference> mMaskedSymbolLayers;
+
+    //! Geometry type for layer, if known
+    QgsWkbTypes::GeometryType mGeomType = QgsWkbTypes::UnknownGeometry;
 
   protected slots:
 
@@ -262,12 +267,10 @@ class GUI_EXPORT QgsTextFormatWidget : public QWidget, public QgsExpressionConte
   private slots:
     void optionsStackedWidget_CurrentChanged( int indx );
     void showBackgroundRadius( bool show );
-    void showBackgroundPenStyle( bool show );
     void mShapeSVGPathLineEdit_textChanged( const QString &text );
     void onSubstitutionsChanged( const QgsStringReplacementCollection &substitutions );
     void previewScaleChanged( double scale );
     void mFontSizeSpinBox_valueChanged( double d );
-    void mFontCapitalsComboBox_currentIndexChanged( int index );
     void mFontFamilyCmbBx_currentFontChanged( const QFont &f );
     void mFontStyleComboBox_currentIndexChanged( const QString &text );
     void mFontUnderlineBtn_toggled( bool ckd );
@@ -311,7 +314,7 @@ class GUI_EXPORT QgsTextFormatWidget : public QWidget, public QgsExpressionConte
 /**
  * \class QgsTextFormatDialog
  * \ingroup gui
- * A simple dialog for customizing text formatting settings.
+ * \brief A simple dialog for customizing text formatting settings.
  *
  * QgsTextFormatDialog provides a dialog for controlling the appearance of text rendered
  * using QgsTextRenderer. The dialog includes all settings contained within
@@ -366,7 +369,7 @@ class GUI_EXPORT QgsTextFormatDialog : public QDialog
 /**
  * \class QgsTextFormatPanelWidget
  * \ingroup gui
- * A panel widget for customizing text formatting settings.
+ * \brief A panel widget for customizing text formatting settings.
  *
  * QgsTextFormatPanelWidget provides a panel widget for controlling the appearance of text rendered
  * using QgsTextRenderer. The dialog includes all settings contained within
@@ -396,6 +399,13 @@ class GUI_EXPORT QgsTextFormatPanelWidget : public QgsPanelWidgetWrapper
     QgsTextFormat format() const;
 
     /**
+     * Sets the \a format to show in the widget.
+     *
+     * \since QGIS 3.16
+     */
+    void setFormat( const QgsTextFormat &format );
+
+    /**
      * Sets the \a context in which the widget is shown, e.g., the associated map canvas and expression contexts.
      * \since QGIS 3.10
      */
@@ -406,6 +416,7 @@ class GUI_EXPORT QgsTextFormatPanelWidget : public QgsPanelWidgetWrapper
   private:
 
     QgsTextFormatWidget *mFormatWidget = nullptr;
+    bool mBlockSignals = false;
 };
 
 #endif //QGSTEXTFORMATWIDGET_H

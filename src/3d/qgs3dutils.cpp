@@ -38,11 +38,15 @@
 #include "qgspolygon3dsymbol.h"
 
 #include <Qt3DExtras/QPhongMaterial>
+#include <Qt3DRender/QRenderSettings>
 
 QImage Qgs3DUtils::captureSceneImage( QgsAbstract3DEngine &engine, Qgs3DMapScene *scene )
 {
   QImage resImage;
   QEventLoop evLoop;
+
+  // We need to change render policy to RenderPolicy::Always, since otherwise render capture node won't work
+  engine.renderSettings()->setRenderPolicy( Qt3DRender::QRenderSettings::RenderPolicy::Always );
 
   auto requestImageFcn = [&engine, scene]
   {
@@ -77,6 +81,7 @@ QImage Qgs3DUtils::captureSceneImage( QgsAbstract3DEngine &engine, Qgs3DMapScene
   if ( conn2 )
     QObject::disconnect( conn2 );
 
+  engine.renderSettings()->setRenderPolicy( Qt3DRender::QRenderSettings::RenderPolicy::OnDemand );
   return resImage;
 }
 
@@ -94,6 +99,8 @@ bool Qgs3DUtils::exportAnimation( const Qgs3DAnimationSettings &animationSetting
   engine.setSize( outputSize );
   Qgs3DMapScene *scene = new Qgs3DMapScene( mapSettings, &engine );
   engine.setRootEntity( scene );
+  // We need to change render policy to RenderPolicy::Always, since otherwise render capture node won't work
+  engine.renderSettings()->setRenderPolicy( Qt3DRender::QRenderSettings::RenderPolicy::Always );
 
   if ( animationSettings.keyFrames().size() < 2 )
   {
@@ -153,10 +160,6 @@ bool Qgs3DUtils::exportAnimation( const Qgs3DAnimationSettings &animationSetting
     fileName.replace( token, frameNoPaddedLeft );
     const QString path = QDir( outputDirectory ).filePath( fileName );
 
-    // It would initially return empty rendered image.
-    // Capturing the initial image and throwing it away fixes that.
-    // Hopefully we will find a better fix in the future.
-    Qgs3DUtils::captureSceneImage( engine, scene );
     QImage img = Qgs3DUtils::captureSceneImage( engine, scene );
 
     img.save( path );
@@ -237,11 +240,11 @@ QString Qgs3DUtils::cullingModeToString( Qgs3DTypes::CullingMode mode )
 
 Qgs3DTypes::CullingMode Qgs3DUtils::cullingModeFromString( const QString &str )
 {
-  if ( str == QStringLiteral( "front" ) )
+  if ( str == QLatin1String( "front" ) )
     return Qgs3DTypes::Front;
-  else if ( str == QStringLiteral( "back" ) )
+  else if ( str == QLatin1String( "back" ) )
     return Qgs3DTypes::Back;
-  else if ( str == QStringLiteral( "front-and-back" ) )
+  else if ( str == QLatin1String( "front-and-back" ) )
     return Qgs3DTypes::FrontAndBack;
   else
     return Qgs3DTypes::NoCulling;
@@ -253,7 +256,7 @@ float Qgs3DUtils::clampAltitude( const QgsPoint &p, Qgs3DTypes::AltitudeClamping
   if ( altClamp == Qgs3DTypes::AltClampRelative || altClamp == Qgs3DTypes::AltClampTerrain )
   {
     QgsPointXY pt = altBind == Qgs3DTypes::AltBindVertex ? p : centroid;
-    terrainZ = map.terrainGenerator()->heightAt( pt.x(), pt.y(), map );
+    terrainZ = map.terrainGenerator() ? map.terrainGenerator()->heightAt( pt.x(), pt.y(), map ) : 0;
   }
 
   float geomZ = 0;
@@ -281,7 +284,8 @@ void Qgs3DUtils::clampAltitudes( QgsLineString *lineString, Qgs3DTypes::Altitude
       {
         pt.set( centroid.x(), centroid.y() );
       }
-      terrainZ = map.terrainGenerator()->heightAt( pt.x(), pt.y(), map );
+
+      terrainZ = map.terrainGenerator() ? map.terrainGenerator()->heightAt( pt.x(), pt.y(), map ) : 0;
     }
 
     float geomZ = 0;
@@ -343,7 +347,7 @@ QMatrix4x4 Qgs3DUtils::stringToMatrix4x4( const QString &str )
   return m;
 }
 
-void Qgs3DUtils::extractPointPositions( QgsFeature &f, const Qgs3DMapSettings &map, Qgs3DTypes::AltitudeClamping altClamp, QVector<QVector3D> &positions )
+void Qgs3DUtils::extractPointPositions( const QgsFeature &f, const Qgs3DMapSettings &map, Qgs3DTypes::AltitudeClamping altClamp, QVector<QVector3D> &positions )
 {
   const QgsAbstractGeometry *g = f.geometry().constGet();
   for ( auto it = g->vertices_begin(); it != g->vertices_end(); ++it )
@@ -354,7 +358,7 @@ void Qgs3DUtils::extractPointPositions( QgsFeature &f, const Qgs3DMapSettings &m
     {
       geomZ = pt.z();
     }
-    float terrainZ = map.terrainGenerator()->heightAt( pt.x(), pt.y(), map ) * map.terrainVerticalScale();
+    float terrainZ = map.terrainGenerator() ? map.terrainGenerator()->heightAt( pt.x(), pt.y(), map ) * map.terrainVerticalScale() : 0;
     float h;
     switch ( altClamp )
     {
@@ -370,7 +374,7 @@ void Qgs3DUtils::extractPointPositions( QgsFeature &f, const Qgs3DMapSettings &m
         break;
     }
     positions.append( QVector3D( pt.x() - map.origin().x(), h, -( pt.y() - map.origin().y() ) ) );
-    //qDebug() << positions.last();
+    QgsDebugMsgLevel( QStringLiteral( "%1 %2 %3" ).arg( positions.last().x() ).arg( positions.last().y() ).arg( positions.last().z() ), 2 );
   }
 }
 
@@ -548,21 +552,6 @@ void Qgs3DUtils::estimateVectorLayerZRange( QgsVectorLayer *layer, double &zMin,
   }
 }
 
-std::unique_ptr<QgsAbstract3DSymbol> Qgs3DUtils::symbolForGeometryType( QgsWkbTypes::GeometryType geomType )
-{
-  switch ( geomType )
-  {
-    case QgsWkbTypes::PointGeometry:
-      return std::unique_ptr<QgsAbstract3DSymbol>( new QgsPoint3DSymbol );
-    case QgsWkbTypes::LineGeometry:
-      return std::unique_ptr<QgsAbstract3DSymbol>( new QgsLine3DSymbol );
-    case QgsWkbTypes::PolygonGeometry:
-      return std::unique_ptr<QgsAbstract3DSymbol>( new QgsPolygon3DSymbol );
-    default:
-      return nullptr;
-  }
-}
-
 QgsExpressionContext Qgs3DUtils::globalProjectLayerExpressionContext( QgsVectorLayer *layer )
 {
   QgsExpressionContext exprContext;
@@ -572,12 +561,38 @@ QgsExpressionContext Qgs3DUtils::globalProjectLayerExpressionContext( QgsVectorL
   return exprContext;
 }
 
-Qt3DExtras::QPhongMaterial *Qgs3DUtils::phongMaterial( const QgsPhongMaterialSettings &settings )
+QgsPhongMaterialSettings Qgs3DUtils::phongMaterialFromQt3DComponent( Qt3DExtras::QPhongMaterial *material )
 {
-  Qt3DExtras::QPhongMaterial *phong = new Qt3DExtras::QPhongMaterial;
-  phong->setAmbient( settings.ambient() );
-  phong->setDiffuse( settings.diffuse() );
-  phong->setSpecular( settings.specular() );
-  phong->setShininess( settings.shininess() );
-  return phong;
+  QgsPhongMaterialSettings settings;
+  settings.setAmbient( material->ambient() );
+  settings.setDiffuse( material->diffuse() );
+  settings.setSpecular( material->specular() );
+  settings.setShininess( material->shininess() );
+  return settings;
+}
+
+QgsRay3D Qgs3DUtils::rayFromScreenPoint( const QPoint &point, const QSize &windowSize, Qt3DRender::QCamera *camera )
+{
+  QVector3D deviceCoords( point.x(), point.y(), 0.0 );
+  // normalized device coordinates
+  QVector3D normDeviceCoords( 2.0 * deviceCoords.x() / windowSize.width() - 1.0f, 1.0f - 2.0 * deviceCoords.y() / windowSize.height(), camera->nearPlane() );
+  // clip coordinates
+  QVector4D rayClip( normDeviceCoords.x(), normDeviceCoords.y(), -1.0, 0.0 );
+
+  QMatrix4x4 invertedProjMatrix = camera->projectionMatrix().inverted();
+  QMatrix4x4 invertedViewMatrix = camera->viewMatrix().inverted();
+
+  // ray direction in view coordinates
+  QVector4D rayDirView = invertedProjMatrix * rayClip;
+  // ray origin in world coordinates
+  QVector4D rayOriginWorld = invertedViewMatrix * QVector4D( 0.0f, 0.0f, 0.0f, 1.0f );
+
+  // ray direction in world coordinates
+  rayDirView.setZ( -1.0f );
+  rayDirView.setW( 0.0f );
+  QVector4D rayDirWorld4D = invertedViewMatrix * rayDirView;
+  QVector3D rayDirWorld( rayDirWorld4D.x(), rayDirWorld4D.y(), rayDirWorld4D.z() );
+  rayDirWorld = rayDirWorld.normalized();
+
+  return QgsRay3D( QVector3D( rayOriginWorld ), rayDirWorld );
 }

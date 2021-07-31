@@ -32,7 +32,9 @@ from qgis.core import (QgsVectorLayer,
                        QgsPoint,
                        QgsFields,
                        QgsCoordinateTransformContext,
-                       QgsFeatureSink
+                       QgsFeatureSink,
+                       QgsMemoryProviderUtils,
+                       QgsLayerMetadata
                        )
 from qgis.PyQt.QtCore import QDate, QTime, QDateTime, QVariant, QDir, QByteArray
 import os
@@ -99,6 +101,56 @@ class TestQgsVectorFileWriter(unittest.TestCase):
 
         writeShape(self.mMemoryLayer, 'writetest.shp')
 
+    def testWritePreferAlias(self):
+        """Test preferring field alias."""
+        layer = QgsVectorLayer(
+            ('Point?crs=epsg:4326&field=name:string(20)&'
+             'field=age:integer&field=size:double&index=yes'),
+            'test',
+            'memory')
+
+        self.assertTrue(layer.isValid())
+        myProvider = layer.dataProvider()
+
+        layer.setFieldAlias(0, 'My Name')
+        layer.setFieldAlias(2, 'My Size')
+
+        ft = QgsFeature()
+        ft.setGeometry(QgsGeometry.fromPointXY(QgsPointXY(10, 10)))
+        ft.setAttributes(['Johny', 20, 0.3])
+        myResult, myFeatures = myProvider.addFeatures([ft])
+        self.assertTrue(myResult)
+        self.assertTrue(myFeatures)
+
+        options = QgsVectorFileWriter.SaveVectorOptions()
+        options.driverName = 'ESRI Shapefile'
+        options.fieldNameSource = QgsVectorFileWriter.Original
+
+        dest = os.path.join(str(QDir.tempPath()), 'alias.shp')
+        result, err = QgsVectorFileWriter.writeAsVectorFormatV2(
+            layer,
+            dest,
+            QgsProject.instance().transformContext(),
+            options)
+        self.assertEqual(result, QgsVectorFileWriter.NoError)
+
+        res = QgsVectorLayer(dest, 'result')
+        self.assertTrue(res.isValid())
+        self.assertEqual([f.name() for f in res.fields()], ['name', 'age', 'size'])
+
+        options.fieldNameSource = QgsVectorFileWriter.PreferAlias
+        dest = os.path.join(str(QDir.tempPath()), 'alias2.shp')
+        result, err = QgsVectorFileWriter.writeAsVectorFormatV2(
+            layer,
+            dest,
+            QgsProject.instance().transformContext(),
+            options)
+        self.assertEqual(result, QgsVectorFileWriter.NoError)
+
+        res = QgsVectorLayer(dest, 'result')
+        self.assertTrue(res.isValid())
+        self.assertEqual([f.name() for f in res.fields()], ['My Name', 'age', 'My Size'])
+
     def testWriteWithLongLongField(self):
         ml = QgsVectorLayer('NoGeometry?crs=epsg:4326&field=fldlonglong:long',
                             'test2', 'memory')
@@ -118,48 +170,6 @@ class TestQgsVectorFileWriter(unittest.TestCase):
         # test values
         idx = vl.fields().indexFromName('fldlonglong')
         self.assertEqual(vl.getFeature(1).attributes()[idx], 2262000000)
-
-        del vl
-        os.unlink(filename + '.gpkg')
-
-    def testWriteWithBoolField(self):
-
-        # init connection string
-        dbconn = 'service=qgis_test'
-        if 'QGIS_PGTEST_DB' in os.environ:
-            dbconn = os.environ['QGIS_PGTEST_DB']
-
-        # create a vector layer
-        vl = QgsVectorLayer('{} table="qgis_test"."boolean_table" sql='.format(dbconn), "testbool", "postgres")
-        self.assertTrue(vl.isValid())
-
-        # check that 1 of its fields is a bool
-        fields = vl.fields()
-        self.assertEqual(fields.at(fields.indexFromName('fld1')).type(), QVariant.Bool)
-
-        # write a gpkg package with a bool field
-        crs = QgsCoordinateReferenceSystem('EPSG:4326')
-        filename = os.path.join(str(QDir.tempPath()), 'with_bool_field')
-        rc, errmsg = QgsVectorFileWriter.writeAsVectorFormat(vl,
-                                                             filename,
-                                                             'utf-8',
-                                                             crs,
-                                                             'GPKG')
-
-        self.assertEqual(rc, QgsVectorFileWriter.NoError)
-
-        # open the resulting geopackage
-        vl = QgsVectorLayer(filename + '.gpkg', '', 'ogr')
-        self.assertTrue(vl.isValid())
-        fields = vl.fields()
-
-        # test type of converted field
-        idx = fields.indexFromName('fld1')
-        self.assertEqual(fields.at(idx).type(), QVariant.Bool)
-
-        # test values
-        self.assertEqual(vl.getFeature(1).attributes()[idx], 1)
-        self.assertEqual(vl.getFeature(2).attributes()[idx], 0)
 
         del vl
         os.unlink(filename + '.gpkg')
@@ -211,7 +221,7 @@ class TestQgsVectorFileWriter(unittest.TestCase):
         time_idx = created_layer.fields().lookupField('time_f')
         # shapefiles do not support time types
         self.assertIsInstance(f.attributes()[time_idx], str)
-        self.assertEqual(f.attributes()[time_idx], '13:45:22')
+        self.assertTrue(f.attributes()[time_idx].startswith('13:45:22'))
         # shapefiles do not support datetime types
         datetime_idx = created_layer.fields().lookupField('dt_f')
         self.assertIsInstance(f.attributes()[datetime_idx], str)
@@ -870,6 +880,9 @@ class TestQgsVectorFileWriter(unittest.TestCase):
         self.assertTrue('ods' in formats)
         parts = formats.split(';;')
         for i in range(2, len(parts) - 1):
+            if 'GeoJSON - Newline Delimited' in parts[i] or 'GeoJSON - Newline Delimited' in parts[i + 1]:
+                # Python's < operator doesn't do locale aware sorting, so skip this problematic one
+                continue
             self.assertLess(parts[i].lower(), parts[i + 1].lower())
 
         # alphabetical sorting
@@ -877,6 +890,9 @@ class TestQgsVectorFileWriter(unittest.TestCase):
         self.assertNotEqual(formats.index('gpkg'), formats2.index('gpkg'))
         parts = formats2.split(';;')
         for i in range(len(parts) - 1):
+            if 'GeoJSON - Newline Delimited' in parts[i] or 'GeoJSON - Newline Delimited' in parts[i + 1]:
+                # Python's < operator doesn't do locale aware sorting, so skip this problematic one
+                continue
             self.assertLess(parts[i].lower(), parts[i + 1].lower())
 
         # hide non spatial
@@ -1039,30 +1055,133 @@ class TestQgsVectorFileWriter(unittest.TestCase):
         f = next(created_layer.getFeatures(QgsFeatureRequest()))
         self.assertEqual(f.geometry().asWkt(), 'Point (10 10)')
 
-    @unittest.skip(int(gdal.VersionInfo('VERSION_NUM')) < GDAL_COMPUTE_VERSION(2, 4, 0))
     def testWriteWithStringListField(self):
         """
         Test writing with a string list field
         :return:
         """
-        tmpfile = os.path.join(self.basetestpath, 'newstringlistfield.gml')
-        ds = ogr.GetDriverByName('GML').CreateDataSource(tmpfile)
-        lyr = ds.CreateLayer('test', geom_type=ogr.wkbPoint)
-        lyr.CreateField(ogr.FieldDefn('strfield', ogr.OFTString))
-        lyr.CreateField(ogr.FieldDefn('intfield', ogr.OFTInteger))
-        lyr.CreateField(ogr.FieldDefn('strlistfield', ogr.OFTStringList))
-        ds = None
+        source_fields = QgsFields()
+        source_fields.append(QgsField('int', QVariant.Int))
+        source_fields.append(QgsField('stringlist', QVariant.StringList, subType=QVariant.String))
+        vl = QgsMemoryProviderUtils.createMemoryLayer('test', source_fields)
+        f = QgsFeature()
+        f.setAttributes([1, ['ab', 'cd']])
+        vl.dataProvider().addFeature(f)
 
-        vl = QgsVectorLayer(tmpfile)
-        self.assertTrue(vl.isValid())
-
-        # write a gml dataset with a string list field
-        filename = os.path.join(str(QDir.tempPath()), 'with_stringlist_field.gml')
+        filename = os.path.join(str(QDir.tempPath()), 'with_stringlist_field.geojson')
         rc, errmsg = QgsVectorFileWriter.writeAsVectorFormat(vl,
                                                              filename,
                                                              'utf-8',
                                                              vl.crs(),
-                                                             'GML')
+                                                             'GeoJSON')
+
+        self.assertEqual(rc, QgsVectorFileWriter.NoError)
+
+        # open the resulting geojson
+        vl = QgsVectorLayer(filename, '', 'ogr')
+        self.assertTrue(vl.isValid())
+        fields = vl.fields()
+
+        # test type of converted field
+        idx = fields.indexFromName('stringlist')
+        self.assertEqual(fields.at(idx).type(), QVariant.StringList)
+        self.assertEqual(fields.at(idx).subType(), QVariant.String)
+
+        self.assertEqual([f.attributes() for f in vl.getFeatures()], [[1, ['ab', 'cd']]])
+
+        os.unlink(filename)
+
+    def testWriteWithIntegerListField(self):
+        """
+        Test writing with a integer list field
+        :return:
+        """
+        source_fields = QgsFields()
+        source_fields.append(QgsField('int', QVariant.Int))
+        source_fields.append(QgsField('intlist', QVariant.List, subType=QVariant.Int))
+        vl = QgsMemoryProviderUtils.createMemoryLayer('test', source_fields)
+        f = QgsFeature()
+        f.setAttributes([1, [11, 12]])
+        vl.dataProvider().addFeature(f)
+
+        filename = os.path.join(str(QDir.tempPath()), 'with_intlist_field.geojson')
+        rc, errmsg = QgsVectorFileWriter.writeAsVectorFormat(vl,
+                                                             filename,
+                                                             'utf-8',
+                                                             vl.crs(),
+                                                             'GeoJSON')
+
+        self.assertEqual(rc, QgsVectorFileWriter.NoError)
+
+        # open the resulting geojson
+        vl = QgsVectorLayer(filename, '', 'ogr')
+        self.assertTrue(vl.isValid())
+        fields = vl.fields()
+
+        # test type of converted field
+        idx = fields.indexFromName('intlist')
+        self.assertEqual(fields.at(idx).type(), QVariant.List)
+        self.assertEqual(fields.at(idx).subType(), QVariant.Int)
+
+        self.assertEqual([f.attributes() for f in vl.getFeatures()], [[1, [11, 12]]])
+
+        os.unlink(filename)
+
+    def testWriteWithDoubleListField(self):
+        """
+        Test writing with a double list field
+        :return:
+        """
+        source_fields = QgsFields()
+        source_fields.append(QgsField('int', QVariant.Int))
+        source_fields.append(QgsField('reallist', QVariant.List, subType=QVariant.Double))
+        vl = QgsMemoryProviderUtils.createMemoryLayer('test', source_fields)
+        f = QgsFeature()
+        f.setAttributes([1, [11.1, 12.2]])
+        vl.dataProvider().addFeature(f)
+
+        filename = os.path.join(str(QDir.tempPath()), 'with_intlist_field.geojson')
+        rc, errmsg = QgsVectorFileWriter.writeAsVectorFormat(vl,
+                                                             filename,
+                                                             'utf-8',
+                                                             vl.crs(),
+                                                             'GeoJSON')
+
+        self.assertEqual(rc, QgsVectorFileWriter.NoError)
+
+        # open the resulting geojson
+        vl = QgsVectorLayer(filename, '', 'ogr')
+        self.assertTrue(vl.isValid())
+        fields = vl.fields()
+
+        # test type of converted field
+        idx = fields.indexFromName('reallist')
+        self.assertEqual(fields.at(idx).type(), QVariant.List)
+        self.assertEqual(fields.at(idx).subType(), QVariant.Double)
+
+        self.assertEqual([f.attributes() for f in vl.getFeatures()], [[1, [11.1, 12.2]]])
+
+        os.unlink(filename)
+
+    def testWriteWithLongLongListField(self):
+        """
+        Test writing with a long long list field
+        :return:
+        """
+        source_fields = QgsFields()
+        source_fields.append(QgsField('int', QVariant.Int))
+        source_fields.append(QgsField('int64list', QVariant.List, subType=QVariant.LongLong))
+        vl = QgsMemoryProviderUtils.createMemoryLayer('test', source_fields)
+        f = QgsFeature()
+        f.setAttributes([1, [1234567890123, 1234567890124]])
+        vl.dataProvider().addFeature(f)
+
+        filename = os.path.join(str(QDir.tempPath()), 'with_longlist_field.geojson')
+        rc, errmsg = QgsVectorFileWriter.writeAsVectorFormat(vl,
+                                                             filename,
+                                                             'utf-8',
+                                                             vl.crs(),
+                                                             'GeoJSON')
 
         self.assertEqual(rc, QgsVectorFileWriter.NoError)
 
@@ -1072,11 +1191,12 @@ class TestQgsVectorFileWriter(unittest.TestCase):
         fields = vl.fields()
 
         # test type of converted field
-        idx = fields.indexFromName('strlistfield')
+        idx = fields.indexFromName('int64list')
         self.assertEqual(fields.at(idx).type(), QVariant.List)
-        self.assertEqual(fields.at(idx).subType(), QVariant.String)
+        self.assertEqual(fields.at(idx).subType(), QVariant.LongLong)
 
-        del vl
+        self.assertEqual([f.attributes() for f in vl.getFeatures()], [[1, [1234567890123, 1234567890124]]])
+
         os.unlink(filename)
 
     def testWriteWithBinaryField(self):
@@ -1286,6 +1406,50 @@ class TestQgsVectorFileWriter(unittest.TestCase):
         del writer
         vl = QgsVectorLayer(dest_file_name)
         self.assertTrue(vl.isValid())
+
+    def testPersistMetadata(self):
+        """
+        Test that metadata from the source layer is saved as default for the destination if the
+        persist metadat option is enabled
+        """
+        vl = QgsVectorLayer('Point?crs=epsg:4326&field=int:integer', 'test', 'memory')
+        self.assertTrue(vl.startEditing())
+        f = QgsFeature(vl.fields())
+        f.setGeometry(QgsGeometry.fromWkt('point(9 45)'))
+        f.setAttribute(0, 'QGIS Rocks!')  # not valid!
+        self.assertTrue(vl.addFeatures([f]))
+        f.setAttribute(0, 12345)  # valid!
+        self.assertTrue(vl.addFeatures([f]))
+
+        # set some metadata on the source layer
+        metadata = QgsLayerMetadata()
+        metadata.setTitle('my title')
+        metadata.setAbstract('my abstract')
+        metadata.setLicenses(['l1', 'l2'])
+
+        dest_file_name = os.path.join(str(QDir.tempPath()), 'save_metadata.gpkg')
+
+        options = QgsVectorFileWriter.SaveVectorOptions()
+        options.driverName = 'GPKG'
+        options.layerName = 'test'
+        options.saveMetadata = True
+        options.layerMetadata = metadata
+
+        write_result, error_message, new_file, new_layer = QgsVectorFileWriter.writeAsVectorFormatV3(
+            vl,
+            dest_file_name,
+            QgsProject.instance().transformContext(),
+            options)
+        self.assertEqual(write_result, QgsVectorFileWriter.ErrFeatureWriteFailed, error_message)
+
+        # Open result and check
+        created_layer = QgsVectorLayer(f'{new_file}|layerName={new_layer}', 'test', 'ogr')
+        self.assertTrue(created_layer.isValid())
+
+        # layer should have metadata stored
+        self.assertEqual(created_layer.metadata().title(), 'my title')
+        self.assertEqual(created_layer.metadata().abstract(), 'my abstract')
+        self.assertEqual(created_layer.metadata().licenses(), ['l1', 'l2'])
 
 
 if __name__ == '__main__':

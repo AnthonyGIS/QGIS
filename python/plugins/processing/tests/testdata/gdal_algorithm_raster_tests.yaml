@@ -24,6 +24,7 @@ tests:
       INPUT:
         name: dem.tif
         type: raster
+      OVERCRS: false
       NODATA: 0.0
       OPTIONS: ''
       PROJWIN: 18.673038221977773,18.699957975064194,45.782253906735804,45.80350236352593
@@ -39,6 +40,7 @@ tests:
       INPUT:
         name: dem.tif
         type: raster
+      OVERCRS: false
       NODATA: 0.0
       OPTIONS: ''
       PROJWIN: 18.674136950224096,18.70011285383855,45.78239420868433,45.80342583519035
@@ -64,7 +66,9 @@ tests:
       OPTIONS: ''
     results:
       OUTPUT:
-        hash: 4f4720e4efe59a7f238f622659917bbeb5262369d15d5e2917dbcf8b
+        hash:
+        - 4f4720e4efe59a7f238f622659917bbeb5262369d15d5e2917dbcf8b
+        - f8771d80825db2f6ffcd33ac3ac7d16e80000711dbb6562723101742
         type: rasterhash
 
   - algorithm: gdal:colorrelief
@@ -109,7 +113,6 @@ tests:
       BAND: 1
       CREATE_3D: false
       FIELD_NAME: ELEV
-      CREATE_3D: true
       IGNORE_NODATA: false
       INPUT:
         name: dem.tif
@@ -121,9 +124,10 @@ tests:
       OUTPUT:
         name: expected/gdal/contour.gml
         type: vector
+        compare: False
 
   - algorithm: gdal:extractprojection
-    name: Extract Projection (extractprojection)
+    name: Extract Projection (extractprojection), create prj
     params:
       INPUT:
         name: dem.tif
@@ -134,7 +138,9 @@ tests:
         name: expected/gdal/dem.wld
         type: file
       PRJ_FILE:
-        name: expected/gdal/dem.prj
+        name:
+        - expected/gdal/dem.prj
+        - expected/gdal/demproj6.prj
         type: file
 
   - algorithm: gdal:extractprojection

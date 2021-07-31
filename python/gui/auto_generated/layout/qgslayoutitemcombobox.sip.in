@@ -11,8 +11,8 @@
 
 class QgsLayoutItemComboBox : QComboBox
 {
-%Docstring
-The QgsLayoutItemComboBox class is a combo box which displays items of
+%Docstring(signature="appended")
+The :py:class:`QgsLayoutItemComboBox` class is a combo box which displays items of
 a matching type from a layout.
 
 .. versionadded:: 3.0
@@ -49,7 +49,7 @@ Returns the current layout containing the items shown in the combo box.
 %Docstring
 Sets a filter for the item type to show in the combo box.
 
-:param itemType: type of items to show. Set to QgsLayoutItemRegistry.LayoutItem to
+:param itemType: type of items to show. Set to :py:class:`QgsLayoutItemRegistry`.LayoutItem to
                  show all items.
 
 .. seealso:: :py:func:`itemType`
@@ -92,6 +92,28 @@ Returns ``True`` if the model includes the empty item choice.
 .. seealso:: :py:func:`setAllowEmptyItem`
 
 .. versionadded:: 3.8
+%End
+
+    void setItemFlags( QgsLayoutItem::Flags flags );
+%Docstring
+Sets layout item flags to use for filtering the available items.
+
+Set ``flags`` to ``None`` to clear the flag based filtering.
+
+.. seealso:: :py:func:`itemFlags`
+
+.. versionadded:: 3.16
+%End
+
+    QgsLayoutItem::Flags itemFlags() const;
+%Docstring
+Returns the layout item flags used for filtering the available items.
+
+Returns ``None`` if no flag based filtering is occurring.
+
+.. seealso:: :py:func:`setItemFlags`
+
+.. versionadded:: 3.16
 %End
 
     QgsLayoutItem *item( int index ) const;

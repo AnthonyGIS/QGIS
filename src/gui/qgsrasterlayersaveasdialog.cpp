@@ -31,9 +31,12 @@
 #include <gdal.h>
 #include "qgsmessagelog.h"
 #include "qgsgui.h"
+#include "qgsdoublevalidator.h"
+#include "qgsdatums.h"
 
 #include <QFileDialog>
 #include <QMessageBox>
+#include <QRegularExpression>
 
 QgsRasterLayerSaveAsDialog::QgsRasterLayerSaveAsDialog( QgsRasterLayer *rasterLayer,
     QgsRasterDataProvider *sourceProvider, const QgsRectangle &currentExtent,
@@ -138,6 +141,19 @@ QgsRasterLayerSaveAsDialog::QgsRasterLayerSaveAsDialog( QgsRasterLayer *rasterLa
   // don't restore nodata, it needs user input
   // pyramids are not necessarily built every time
 
+  try
+  {
+    const QgsDatumEnsemble ensemble = mLayerCrs.datumEnsemble();
+    if ( ensemble.isValid() )
+    {
+      mCrsSelector->setSourceEnsemble( ensemble.name() );
+    }
+  }
+  catch ( QgsNotSupportedException & )
+  {
+  }
+  mCrsSelector->setShowAccuracyWarnings( true );
+
   mCrsSelector->setLayerCrs( mLayerCrs );
   //default to layer CRS - see https://github.com/qgis/QGIS/issues/22211 for discussion
   mCrsSelector->setCrs( mLayerCrs );
@@ -217,7 +233,7 @@ QgsRasterLayerSaveAsDialog::QgsRasterLayerSaveAsDialog( QgsRasterLayer *rasterLa
           break;
 
         if ( QMessageBox::warning( this, tr( "Save Raster Layer" ),
-                                   tr( "The directory %1 contains files which will be overwritten: %2" ).arg( dir.absolutePath(), files.join( QStringLiteral( ", " ) ) ),
+                                   tr( "The directory %1 contains files which will be overwritten: %2" ).arg( dir.absolutePath(), files.join( QLatin1String( ", " ) ) ),
                                    QMessageBox::Ok | QMessageBox::Cancel ) == QMessageBox::Ok )
           break;
 
@@ -263,12 +279,12 @@ void QgsRasterLayerSaveAsDialog::insertAvailableOutputFormats()
           // skip GDAL vrt driver, since we handle that format manually
           continue;
         }
-        else if ( driverShortName == QStringLiteral( "GTiff" ) )
+        else if ( driverShortName == QLatin1String( "GTiff" ) )
         {
           // always list geotiff first
           topPriorityDrivers.insert( 1, qMakePair( driverLongName, driverShortName ) );
         }
-        else if ( driverShortName == QStringLiteral( "GPKG" ) )
+        else if ( driverShortName == QLatin1String( "GPKG" ) )
         {
           // and gpkg second
           topPriorityDrivers.insert( 2, qMakePair( driverLongName, driverShortName ) );
@@ -296,8 +312,8 @@ void QgsRasterLayerSaveAsDialog::insertAvailableOutputFormats()
 
 void QgsRasterLayerSaveAsDialog::setValidators()
 {
-  mXResolutionLineEdit->setValidator( new QDoubleValidator( this ) );
-  mYResolutionLineEdit->setValidator( new QDoubleValidator( this ) );
+  mXResolutionLineEdit->setValidator( new QgsDoubleValidator( this ) );
+  mYResolutionLineEdit->setValidator( new QgsDoubleValidator( this ) );
   mColumnsLineEdit->setValidator( new QIntValidator( this ) );
   mRowsLineEdit->setValidator( new QIntValidator( this ) );
   mMaximumSizeXLineEdit->setValidator( new QIntValidator( this ) );
@@ -320,15 +336,15 @@ void QgsRasterLayerSaveAsDialog::mFormatComboBox_currentIndexChanged( const QStr
   else
   {
     filter = QStringLiteral( "%1 (*.%2);;%3" ).arg( mFormatComboBox->currentText(),
-             extensions.join( QStringLiteral( " *." ) ),
+             extensions.join( QLatin1String( " *." ) ),
              tr( "All files (*.*)" ) );
   }
   mFilename->setFilter( filter );
 
   // Disable mTileModeCheckBox for GeoPackages
-  mTileModeCheckBox->setEnabled( outputFormat() != QStringLiteral( "GPKG" ) );
-  mFilename->setConfirmOverwrite( outputFormat() != QStringLiteral( "GPKG" ) );
-  mLayerName->setEnabled( outputFormat() == QStringLiteral( "GPKG" ) );
+  mTileModeCheckBox->setEnabled( outputFormat() != QLatin1String( "GPKG" ) );
+  mFilename->setConfirmOverwrite( outputFormat() != QLatin1String( "GPKG" ) );
+  mLayerName->setEnabled( outputFormat() == QLatin1String( "GPKG" ) );
   if ( mLayerName->isEnabled() )
   {
     QString layerName = QFileInfo( mFilename->filePath() ).baseName();
@@ -353,12 +369,12 @@ int QgsRasterLayerSaveAsDialog::nRows() const
 
 double QgsRasterLayerSaveAsDialog::xResolution() const
 {
-  return mXResolutionLineEdit->text().toDouble();
+  return QgsDoubleValidator::toDouble( mXResolutionLineEdit->text() );
 }
 
 double QgsRasterLayerSaveAsDialog::yResolution() const
 {
-  return mYResolutionLineEdit->text().toDouble();
+  return QgsDoubleValidator::toDouble( mYResolutionLineEdit->text() );
 }
 
 int QgsRasterLayerSaveAsDialog::maximumTileSizeX() const
@@ -412,7 +428,7 @@ QString QgsRasterLayerSaveAsDialog::outputFileName() const
 
 QString QgsRasterLayerSaveAsDialog::outputLayerName() const
 {
-  if ( mLayerName->text().isEmpty() && outputFormat() == QStringLiteral( "GPKG" ) && !mTileModeCheckBox->isChecked() )
+  if ( mLayerName->text().isEmpty() && outputFormat() == QLatin1String( "GPKG" ) && !mTileModeCheckBox->isChecked() )
   {
     // Always return layer name for GeoPackages
     return QFileInfo( mFilename->filePath() ).baseName();
@@ -431,7 +447,7 @@ QString QgsRasterLayerSaveAsDialog::outputFormat() const
 QStringList QgsRasterLayerSaveAsDialog::createOptions() const
 {
   QStringList options = mCreateOptionsGroupBox->isChecked() ? mCreateOptionsWidget->options() : QStringList();
-  if ( outputFormat() == QStringLiteral( "GPKG" ) )
+  if ( outputFormat() == QLatin1String( "GPKG" ) )
   {
     // Overwrite the GPKG table options
     int indx = options.indexOf( QRegularExpression( "^RASTER_TABLE=.*", QRegularExpression::CaseInsensitiveOption | QRegularExpression::MultilineOption ) );
@@ -534,8 +550,8 @@ void QgsRasterLayerSaveAsDialog::setResolution( double xRes, double yRes, const 
     xRes = extent.width();
     yRes = extent.height();
   }
-  mXResolutionLineEdit->setText( QString::number( xRes ) );
-  mYResolutionLineEdit->setText( QString::number( yRes ) );
+  mXResolutionLineEdit->setText( QLocale().toString( xRes ) );
+  mYResolutionLineEdit->setText( QLocale().toString( yRes ) );
 }
 
 void QgsRasterLayerSaveAsDialog::recalcSize()
@@ -560,8 +576,8 @@ void QgsRasterLayerSaveAsDialog::recalcResolution()
   QgsRectangle extent = outputRectangle();
   double xRes = nColumns() != 0 ? extent.width() / nColumns() : 0;
   double yRes = nRows() != 0 ? extent.height() / nRows() : 0;
-  mXResolutionLineEdit->setText( QString::number( xRes ) );
-  mYResolutionLineEdit->setText( QString::number( yRes ) );
+  mXResolutionLineEdit->setText( QLocale().toString( xRes ) );
+  mYResolutionLineEdit->setText( QLocale().toString( yRes ) );
   updateResolutionStateMsg();
 }
 
@@ -700,9 +716,9 @@ void QgsRasterLayerSaveAsDialog::addNoDataRow( double min, double max )
     QString valueString;
     switch ( mRasterLayer->dataProvider()->sourceDataType( 1 ) )
     {
-      case Qgis::Float32:
-      case Qgis::Float64:
-        lineEdit->setValidator( new QDoubleValidator( nullptr ) );
+      case Qgis::DataType::Float32:
+      case Qgis::DataType::Float64:
+        lineEdit->setValidator( new QgsDoubleValidator( nullptr ) );
         if ( !std::isnan( value ) )
         {
           valueString = QgsRasterBlock::printValue( value );
@@ -712,7 +728,7 @@ void QgsRasterLayerSaveAsDialog::addNoDataRow( double min, double max )
         lineEdit->setValidator( new QIntValidator( nullptr ) );
         if ( !std::isnan( value ) )
         {
-          valueString = QString::number( static_cast<int>( value ) );
+          valueString = QLocale().toString( static_cast<int>( value ) );
         }
         break;
     }
@@ -822,15 +838,12 @@ void QgsRasterLayerSaveAsDialog::populatePyramidsLevels()
       if ( ! mPyramidsOptionsWidget->overviewList().isEmpty() )
         myPyramidList = mDataProvider->buildPyramidList( mPyramidsOptionsWidget->overviewList() );
     }
-    QList<QgsRasterPyramid>::iterator myRasterPyramidIterator;
-    for ( myRasterPyramidIterator = myPyramidList.begin();
-          myRasterPyramidIterator != myPyramidList.end();
-          ++myRasterPyramidIterator )
+    for ( const QgsRasterPyramid &pyramid : std::as_const( myPyramidList ) )
     {
-      if ( ! mPyramidsUseExistingCheckBox->isChecked() ||  myRasterPyramidIterator->exists )
+      if ( ! mPyramidsUseExistingCheckBox->isChecked() || pyramid.getExists() )
       {
-        text += QString::number( myRasterPyramidIterator->xDim ) + QStringLiteral( "x" ) +
-                QString::number( myRasterPyramidIterator->yDim ) + ' ';
+        text += QString::number( pyramid.getXDim() ) + QStringLiteral( "x" ) +
+                QString::number( pyramid.getYDim() ) + ' ';
       }
     }
   }
@@ -854,7 +867,7 @@ double QgsRasterLayerSaveAsDialog::noDataCellValue( int row, int column ) const
   {
     return std::numeric_limits<double>::quiet_NaN();
   }
-  return lineEdit->text().toDouble();
+  return QgsDoubleValidator::toDouble( lineEdit->text() );
 }
 
 void QgsRasterLayerSaveAsDialog::adjustNoDataCellWidth( int row, int column )
@@ -921,7 +934,7 @@ bool QgsRasterLayerSaveAsDialog::outputLayerExists() const
 {
   QString vectorUri;
   QString rasterUri;
-  if ( outputFormat() == QStringLiteral( "GPKG" ) )
+  if ( outputFormat() == QLatin1String( "GPKG" ) )
   {
     rasterUri = QStringLiteral( "GPKG:%1:%2" ).arg( outputFileName(), outputLayerName() );
     vectorUri = QStringLiteral( "%1|layername=%2" ).arg( outputFileName(), outputLayerName() );
@@ -950,7 +963,7 @@ void QgsRasterLayerSaveAsDialog::accept()
     return;
   }
 
-  if ( outputFormat() == QStringLiteral( "GPKG" ) && outputLayerExists() &&
+  if ( outputFormat() == QLatin1String( "GPKG" ) && outputLayerExists() &&
        QMessageBox::warning( this, tr( "Save Raster Layer" ),
                              tr( "The layer %1 already exists in the target file, and overwriting layers in GeoPackage is not supported. "
                                  "Do you want to overwrite the whole file?" ).arg( outputLayerName() ),
@@ -964,5 +977,5 @@ void QgsRasterLayerSaveAsDialog::accept()
 
 void QgsRasterLayerSaveAsDialog::showHelp()
 {
-  QgsHelp::openHelp( QStringLiteral( "managing_data_source/create_layers.html#save-layer-from-an-existing-file" ) );
+  QgsHelp::openHelp( QStringLiteral( "managing_data_source/create_layers.html#creating-new-layers-from-an-existing-layer" ) );
 }

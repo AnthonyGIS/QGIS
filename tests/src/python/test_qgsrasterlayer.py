@@ -14,9 +14,11 @@ __copyright__ = 'Copyright 2012, The QGIS Project'
 
 import qgis  # NOQA
 
+from osgeo import gdal
 import os
 import filecmp
 from shutil import copyfile
+import numpy as np
 
 from qgis.PyQt.QtCore import QSize, QFileInfo, Qt, QTemporaryDir
 
@@ -28,7 +30,8 @@ from qgis.PyQt.QtGui import (
 )
 from qgis.PyQt.QtXml import QDomDocument
 
-from qgis.core import (QgsRaster,
+from qgis.core import (Qgis,
+                       QgsRaster,
                        QgsRasterLayer,
                        QgsReadWriteContext,
                        QgsColorRampShader,
@@ -52,7 +55,11 @@ from qgis.core import (QgsRaster,
                        QgsRasterHistogram,
                        QgsCubicRasterResampler,
                        QgsBilinearRasterResampler,
-                       QgsLayerDefinition
+                       QgsLayerDefinition,
+                       QgsRasterPipe,
+                       QgsProperty,
+                       QgsExpressionContext,
+                       QgsExpressionContextScope
                        )
 from utilities import unitTestDataPath
 from qgis.testing import start_app, unittest
@@ -537,6 +544,27 @@ class TestQgsRasterLayer(unittest.TestCase):
 
         self.assertTrue(checker.runTest("expected_raster_gamma222"), "Gamma correction (gamma = 2.22) rendering test failed")
 
+    def testInvertColors(self):
+        """ test raster invert colors filter"""
+        path = os.path.join(unitTestDataPath(),
+                            'landsat_4326.tif')
+        info = QFileInfo(path)
+        base_name = info.baseName()
+        layer = QgsRasterLayer(path, base_name)
+        self.assertTrue(layer.isValid(), 'Raster not loaded: {}'.format(path))
+
+        layer.hueSaturationFilter().setInvertColors(True)
+
+        ms = QgsMapSettings()
+        ms.setLayers([layer])
+        ms.setExtent(layer.extent())
+
+        checker = QgsRenderChecker()
+        checker.setControlName("expected_raster_invertcolors")
+        checker.setMapSettings(ms)
+
+        self.assertTrue(checker.runTest("expected_raster_invertcolors"), "Invert colors rendering test failed")
+
     def testPalettedColorTableToClassData(self):
         entries = [QgsColorRampShader.ColorRampItem(5, QColor(255, 0, 0), 'item1'),
                    QgsColorRampShader.ColorRampItem(3, QColor(0, 255, 0), 'item2'),
@@ -813,6 +841,36 @@ class TestQgsRasterLayer(unittest.TestCase):
         self.assertEqual(renderer.nColors(), 2)
         self.assertEqual(renderer.usesBands(), [1])
 
+    def testPalettedRendererWithFloats(self):
+        """Tests for https://github.com/qgis/QGIS/issues/39058"""
+
+        tempdir = QTemporaryDir()
+        temppath = os.path.join(tempdir.path(), 'paletted.tif')
+
+        # Create a float raster with unique values up to 65536 + one extra row
+        driver = gdal.GetDriverByName('GTiff')
+        outRaster = driver.Create(temppath, 256, 256 + 1, 1, gdal.GDT_Float32)
+        outband = outRaster.GetRasterBand(1)
+        data = []
+        for r in range(256 + 1):
+            data.append(list(range(r * 256, (r + 1) * 256)))
+        npdata = np.array(data, np.float32)
+        outband.WriteArray(npdata)
+        outband.FlushCache()
+        outRaster.FlushCache()
+        del outRaster
+
+        layer = QgsRasterLayer(temppath, 'paletted')
+        self.assertTrue(layer.isValid())
+        self.assertEqual(layer.dataProvider().dataType(1), Qgis.Float32)
+        classes = QgsPalettedRasterRenderer.classDataFromRaster(layer.dataProvider(), 1)
+        # Check max classes count, hardcoded in QGIS renderer
+        self.assertEqual(len(classes), 65536)
+        class_values = []
+        for c in classes:
+            class_values.append(c.value)
+        self.assertEqual(sorted(class_values), list(range(65536)))
+
     def testClone(self):
         myPath = os.path.join(unitTestDataPath('raster'),
                               'band1_float32_noct_epsg4326.tif')
@@ -981,6 +1039,16 @@ class TestQgsRasterLayer(unittest.TestCase):
         temp = rule.firstChildElement('sld:MaxScaleDenominator')
         self.assertFalse(temp.isNull())
         self.assertEqual(temp.text(), '0.01')
+
+        # check non default hueSaturationFilter values
+        hue = myRasterLayer.hueSaturationFilter()
+        hue.setInvertColors(True)
+        dom, root, errorMessage = self.layerToSld(myRasterLayer)
+        elements = dom.elementsByTagName('sld:RasterSymbolizer')
+        self.assertEqual(len(elements), 1)
+        element = elements.at(0).toElement()
+        self.assertFalse(element.isNull())
+        self.assertVendorOption(element, 'invertColors', '1')
 
         # check non default hueSaturationFilter values
         hue = myRasterLayer.hueSaturationFilter()
@@ -1369,6 +1437,59 @@ class TestQgsRasterLayerTransformContext(unittest.TestCase):
             p.transformContext().hasTransform(QgsCoordinateReferenceSystem('EPSG:4326'), QgsCoordinateReferenceSystem('EPSG:3857')))
         self.assertTrue(
             rl.transformContext().hasTransform(QgsCoordinateReferenceSystem('EPSG:4326'), QgsCoordinateReferenceSystem('EPSG:3857')))
+
+    def test_save_restore_pipe_data_defined_settings(self):
+        """
+        Test that raster pipe data defined settings are correctly saved/restored along with the layer
+        """
+        rl = QgsRasterLayer(self.rpath, 'raster')
+        rl.pipe().dataDefinedProperties().setProperty(QgsRasterPipe.RendererOpacity, QgsProperty.fromExpression('100/2'))
+
+        doc = QDomDocument()
+        layer_elem = doc.createElement("maplayer")
+        self.assertTrue(rl.writeLayerXml(layer_elem, doc, QgsReadWriteContext()))
+
+        rl2 = QgsRasterLayer(self.rpath, 'raster')
+        self.assertEqual(rl2.pipe().dataDefinedProperties().property(QgsRasterPipe.RendererOpacity),
+                         QgsProperty())
+
+        self.assertTrue(rl2.readXml(layer_elem, QgsReadWriteContext()))
+        self.assertEqual(rl2.pipe().dataDefinedProperties().property(QgsRasterPipe.RendererOpacity),
+                         QgsProperty.fromExpression('100/2'))
+
+    def test_render_data_defined_opacity(self):
+        path = os.path.join(unitTestDataPath('raster'),
+                            'band1_float32_noct_epsg4326.tif')
+        raster_layer = QgsRasterLayer(path, 'test')
+        self.assertTrue(raster_layer.isValid())
+
+        renderer = QgsSingleBandGrayRenderer(raster_layer.dataProvider(), 1)
+        raster_layer.setRenderer(renderer)
+        raster_layer.setContrastEnhancement(
+            QgsContrastEnhancement.StretchToMinimumMaximum,
+            QgsRasterMinMaxOrigin.MinMax)
+
+        raster_layer.pipe().dataDefinedProperties().setProperty(QgsRasterPipe.RendererOpacity, QgsProperty.fromExpression('@layer_opacity'))
+
+        ce = raster_layer.renderer().contrastEnhancement()
+        ce.setMinimumValue(-3.3319999287625854e+38)
+        ce.setMaximumValue(3.3999999521443642e+38)
+
+        map_settings = QgsMapSettings()
+        map_settings.setLayers([raster_layer])
+        map_settings.setExtent(raster_layer.extent())
+
+        context = QgsExpressionContext()
+        scope = QgsExpressionContextScope()
+        scope.setVariable('layer_opacity', 50)
+        context.appendScope(scope)
+        map_settings.setExpressionContext(context)
+
+        checker = QgsRenderChecker()
+        checker.setControlName("expected_raster_data_defined_opacity")
+        checker.setMapSettings(map_settings)
+
+        self.assertTrue(checker.runTest("raster_data_defined_opacity"))
 
 
 if __name__ == '__main__':

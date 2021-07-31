@@ -18,6 +18,7 @@
 #include "qgsproject.h"
 #include "qgsrelationmanager.h"
 #include "qgsrelationreferencewidget.h"
+#include "qgsattributeform.h"
 
 QgsRelationReferenceWidgetWrapper::QgsRelationReferenceWidgetWrapper( QgsVectorLayer *vl, int fieldIdx, QWidget *editor, QgsMapCanvas *canvas, QgsMessageBar *messageBar, QWidget *parent )
   : QgsEditorWidgetWrapper( vl, fieldIdx, editor, parent )
@@ -62,6 +63,10 @@ void QgsRelationReferenceWidgetWrapper::initWidget( QWidget *editor )
   {
     mWidget->setFilterFields( config( QStringLiteral( "FilterFields" ) ).toStringList() );
     mWidget->setChainFilters( config( QStringLiteral( "ChainFilters" ) ).toBool() );
+  }
+  if ( !config( QStringLiteral( "FilterExpression" ) ).toString().isEmpty() )
+  {
+    mWidget->setFilterExpression( config( QStringLiteral( "FilterExpression" ) ).toString() );
   }
   mWidget->setAllowAddFeatures( config( QStringLiteral( "AllowAddFeatures" ), false ).toBool() );
 
@@ -202,8 +207,10 @@ void QgsRelationReferenceWidgetWrapper::updateValues( const QVariant &val, const
   }
   Q_ASSERT( values.count() == fieldPairs.count() );
 
+  mBlockChanges++;
   mWidget->setForeignKeys( values );
   mWidget->setFormFeature( formFeature() );
+  mBlockChanges--;
 }
 
 void QgsRelationReferenceWidgetWrapper::setEnabled( bool enabled )
@@ -216,6 +223,9 @@ void QgsRelationReferenceWidgetWrapper::setEnabled( bool enabled )
 
 void QgsRelationReferenceWidgetWrapper::foreignKeysChanged( const QVariantList &values )
 {
+  if ( mBlockChanges != 0 ) // initial value is being set, we can ignore this signal
+    return;
+
   QVariant mainValue = QVariant( field().type() );
 
   if ( !mWidget || !mWidget->relation().isValid() )

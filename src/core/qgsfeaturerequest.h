@@ -31,7 +31,8 @@
 
 /**
  * \ingroup core
- * This class wraps a request for features to a vector layer (or directly its vector data provider).
+ * \brief This class wraps a request for features to a vector layer (or directly its vector data provider).
+ *
  * The request may apply a filter to fetch only a particular subset of features. Currently supported filters:
  *
  * - no filter - all features are returned
@@ -80,7 +81,9 @@ class CORE_EXPORT QgsFeatureRequest
       NoFlags            = 0,
       NoGeometry         = 1,  //!< Geometry is not required. It may still be returned if e.g. required for a filter condition.
       SubsetOfAttributes = 2,  //!< Fetch only a subset of attributes (setSubsetOfAttributes sets this flag)
-      ExactIntersect     = 4   //!< Use exact geometry intersection (slower) instead of bounding boxes
+      ExactIntersect     = 4,   //!< Use exact geometry intersection (slower) instead of bounding boxes
+      IgnoreStaticNodesDuringExpressionCompilation = 8, //!< If a feature request uses a filter expression which can be partially precalculated due to static nodes in the expression, setting this flag will prevent these precalculated values from being utilized during compilation of the filter for the backend provider. This flag significantly slows down feature requests and should be used for debugging purposes only. (Since QGIS 3.18)
+      EmbeddedSymbols    = 16,  //!< Retrieve any embedded feature symbology (since QGIS 3.20)
     };
     Q_DECLARE_FLAGS( Flags, Flag )
 
@@ -105,7 +108,7 @@ class CORE_EXPORT QgsFeatureRequest
 
     /**
      * \ingroup core
-     * The OrderByClause class represents an order by clause for a QgsFeatureRequest.
+     * \brief The OrderByClause class represents an order by clause for a QgsFeatureRequest.
      *
      * It can be a simple field or an expression. Multiple order by clauses can be added to
      * a QgsFeatureRequest to fine tune the behavior if a single field or expression is not
@@ -221,7 +224,7 @@ class CORE_EXPORT QgsFeatureRequest
 
     /**
      * \ingroup core
-     * Represents a list of OrderByClauses, with the most important first and the least
+     * \brief Represents a list of OrderByClauses, with the most important first and the least
      * important last.
      *
      * \since QGIS 2.14
@@ -489,14 +492,18 @@ class CORE_EXPORT QgsFeatureRequest
      * \see limit()
      * \since QGIS 2.14
      */
-    QgsFeatureRequest &setLimit( long limit );
+    QgsFeatureRequest &setLimit( long long limit );
 
     /**
      * Returns the maximum number of features to request, or -1 if no limit set.
      * \see setLimit
      * \since QGIS 2.14
      */
-    long limit() const { return mLimit; }
+#ifndef SIP_RUN
+    long long limit() const { return mLimit; }
+#else
+    long long limit() const;
+#endif
 
     //! Sets flags that affect how features will be fetched
     QgsFeatureRequest &setFlags( QgsFeatureRequest::Flags flags );
@@ -707,6 +714,29 @@ class CORE_EXPORT QgsFeatureRequest
      */
     QgsFeatureRequest &setRequestMayBeNested( bool requestMayBeNested );
 
+    /**
+     * Attach a \a feedback object that can be queried regularly by the iterator to check
+     * if it should be canceled.
+     *
+     * Ownership of \a feedback is NOT transferred, and the caller must take care that it exists
+     * for the lifetime of the feature request and feature iterators.
+     *
+     * \see feedback()
+     *
+     * \since QGIS 3.20
+     */
+    void setFeedback( QgsFeedback *feedback );
+
+    /**
+     * Returns the feedback object that can be queried regularly by the iterator to check
+     * if it should be canceled, if set.
+     *
+     * \see setFeedback()
+     *
+     * \since QGIS 3.20
+     */
+    QgsFeedback *feedback() const;
+
   protected:
     FilterType mFilter = FilterNone;
     QgsRectangle mFilterRect;
@@ -714,10 +744,10 @@ class CORE_EXPORT QgsFeatureRequest
     QgsFeatureIds mFilterFids;
     std::unique_ptr< QgsExpression > mFilterExpression;
     QgsExpressionContext mExpressionContext;
-    Flags mFlags;
+    Flags mFlags = Flags();
     QgsAttributeList mAttrs;
     QgsSimplifyMethod mSimplifyMethod;
-    long mLimit = -1;
+    long long mLimit = -1;
     OrderBy mOrderBy;
     InvalidGeometryCheck mInvalidGeometryFilter = GeometryNoCheck;
     std::function< void( const QgsFeature & ) > mInvalidGeometryCallback;
@@ -726,6 +756,7 @@ class CORE_EXPORT QgsFeatureRequest
     QgsCoordinateTransformContext mTransformContext;
     int mTimeout = -1;
     int mRequestMayBeNested = false;
+    QgsFeedback *mFeedback = nullptr;
 };
 
 Q_DECLARE_OPERATORS_FOR_FLAGS( QgsFeatureRequest::Flags )
@@ -736,7 +767,7 @@ class QgsAbstractFeatureIterator;
 
 /**
  * \ingroup core
- * Base class that can be used for any class that is capable of returning features
+ * \brief Base class that can be used for any class that is capable of returning features
  * \since QGIS 2.4
  */
 class CORE_EXPORT QgsAbstractFeatureSource
@@ -744,12 +775,19 @@ class CORE_EXPORT QgsAbstractFeatureSource
   public:
     virtual ~QgsAbstractFeatureSource();
 
+
+    // IMPORTANT -- do NOT remove the /TransferBack/ annotation here -- while it looks completely wrong, it's
+    // required for Python data providers to work correctly! Argh!
+
     /**
      * Gets an iterator for features matching the specified request
      * \param request The request
      * \returns A feature iterator
      */
-    virtual QgsFeatureIterator getFeatures( const QgsFeatureRequest &request = QgsFeatureRequest() ) = 0;
+    virtual QgsFeatureIterator getFeatures( const QgsFeatureRequest &request = QgsFeatureRequest() ) = 0 SIP_TRANSFERBACK;
+
+    // IMPORTANT -- do NOT remove the /TransferBack/ annotation here -- while it looks completely wrong, it's
+    // required for Python data providers to work correctly! Argh!
 
   protected:
     void iteratorOpened( QgsAbstractFeatureIterator *it );

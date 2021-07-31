@@ -155,7 +155,7 @@ QVariant QgsFieldMappingModel::data( const QModelIndex &index, int role ) const
           {
             constraintDescription.push_back( tr( "Expression" ) );
           }
-          return constraintDescription.join( QStringLiteral( "<br>" ) );
+          return constraintDescription.join( QLatin1String( "<br>" ) );
         }
         break;
       }
@@ -288,7 +288,7 @@ QString QgsFieldMappingModel::findExpressionForDestinationField( const QgsFieldM
 {
   // Search for fields in the source
   // 1. match by name
-  for ( const QgsField &sf : qgis::as_const( mSourceFields ) )
+  for ( const QgsField &sf : std::as_const( mSourceFields ) )
   {
     if ( sf.name() == f.field.name() )
     {
@@ -297,7 +297,7 @@ QString QgsFieldMappingModel::findExpressionForDestinationField( const QgsFieldM
     }
   }
   // 2. match by type
-  for ( const QgsField &sf : qgis::as_const( mSourceFields ) )
+  for ( const QgsField &sf : std::as_const( mSourceFields ) )
   {
     if ( excludedFieldNames.contains( sf.name() ) || sf.type() != f.field.type() )
       continue;
@@ -310,9 +310,11 @@ QString QgsFieldMappingModel::findExpressionForDestinationField( const QgsFieldM
 void QgsFieldMappingModel::setSourceFields( const QgsFields &sourceFields )
 {
   mSourceFields = sourceFields;
+  if ( mExpressionContextGenerator )
+    mExpressionContextGenerator->setSourceFields( mSourceFields );
   QStringList usedFields;
   beginResetModel();
-  for ( const Field &f : qgis::as_const( mMapping ) )
+  for ( const Field &f : std::as_const( mMapping ) )
   {
     if ( QgsExpression( f.expression ).isField() )
     {
@@ -504,7 +506,7 @@ QgsExpressionContext QgsFieldMappingModel::ExpressionContextGenerator::createExp
   if ( mBaseGenerator )
   {
     QgsExpressionContext ctx = mBaseGenerator->createExpressionContext();
-    std::unique_ptr< QgsExpressionContextScope > fieldMappingScope = qgis::make_unique< QgsExpressionContextScope >( tr( "Field Mapping" ) );
+    std::unique_ptr< QgsExpressionContextScope > fieldMappingScope = std::make_unique< QgsExpressionContextScope >( tr( "Field Mapping" ) );
     fieldMappingScope->setFields( mSourceFields );
     ctx.appendScope( fieldMappingScope.release() );
     return ctx;
@@ -524,4 +526,9 @@ QgsExpressionContext QgsFieldMappingModel::ExpressionContextGenerator::createExp
 void QgsFieldMappingModel::ExpressionContextGenerator::setBaseExpressionContextGenerator( const QgsExpressionContextGenerator *generator )
 {
   mBaseGenerator = generator;
+}
+
+void QgsFieldMappingModel::ExpressionContextGenerator::setSourceFields( const QgsFields &fields )
+{
+  mSourceFields = fields;
 }

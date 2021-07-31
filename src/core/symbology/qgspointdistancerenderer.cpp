@@ -23,6 +23,7 @@
 #include "qgslogger.h"
 #include "qgsstyleentityvisitor.h"
 #include "qgsexpressioncontextutils.h"
+#include "qgsmarkersymbol.h"
 
 #include <QDomElement>
 #include <QPainter>
@@ -41,7 +42,7 @@ QgsPointDistanceRenderer::QgsPointDistanceRenderer( const QString &rendererName,
   mRenderer.reset( QgsFeatureRenderer::defaultRenderer( QgsWkbTypes::PointGeometry ) );
 }
 
-void QgsPointDistanceRenderer::toSld( QDomDocument &doc, QDomElement &element, const QgsStringMap &props ) const
+void QgsPointDistanceRenderer::toSld( QDomDocument &doc, QDomElement &element, const QVariantMap &props ) const
 {
   mRenderer->toSld( doc, element, props );
 }
@@ -238,7 +239,7 @@ QgsFeatureRenderer::Capabilities QgsPointDistanceRenderer::capabilities()
 {
   if ( !mRenderer )
   {
-    return nullptr;
+    return Capabilities();
   }
   return mRenderer->capabilities();
 }
@@ -428,7 +429,7 @@ void QgsPointDistanceRenderer::drawLabels( QPointF centerPoint, QgsSymbolRenderC
     currentLabelShift = *labelPosIt;
     if ( currentLabelShift.x() < 0 )
     {
-      currentLabelShift.setX( currentLabelShift.x() - fontMetrics.width( groupIt->label ) );
+      currentLabelShift.setX( currentLabelShift.x() - fontMetrics.horizontalAdvance( groupIt->label ) );
     }
     if ( currentLabelShift.y() > 0 )
     {
@@ -504,3 +505,12 @@ QgsMarkerSymbol *QgsPointDistanceRenderer::firstSymbolForFeature( const QgsFeatu
 
   return dynamic_cast< QgsMarkerSymbol * >( symbolList.at( 0 ) );
 }
+
+QgsPointDistanceRenderer::GroupedFeature::GroupedFeature( const QgsFeature &feature, QgsMarkerSymbol *symbol, bool isSelected, const QString &label )
+  : feature( feature )
+  , isSelected( isSelected )
+  , label( label )
+  , mSymbol( symbol )
+{}
+
+QgsPointDistanceRenderer::GroupedFeature::~GroupedFeature() = default;

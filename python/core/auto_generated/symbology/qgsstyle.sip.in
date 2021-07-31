@@ -11,7 +11,6 @@
 
 
 
-
 typedef QMap<QString, QgsColorRamp * > QgsVectorColorRampMap;
 typedef QMap<int, QString> QgsSymbolGroupMap;
 
@@ -97,6 +96,7 @@ Constructor for QgsStyle.
       TextFormatEntity,
       LabelSettingsEntity,
       LegendPatchShapeEntity,
+      Symbol3DEntity,
     };
 
     bool addEntity( const QString &name, const QgsStyleEntityInterface *entity, bool update = false );
@@ -187,6 +187,21 @@ Returns ``True`` if the operation was successful.
    Adding legend patch shapes with the name of existing ones replaces them.
 
 .. versionadded:: 3.14
+%End
+
+    bool addSymbol3D( const QString &name, QgsAbstract3DSymbol *symbol /Transfer/, bool update = false );
+%Docstring
+Adds a 3d ``symbol`` with the specified ``name`` to the style. Ownership of ``symbol`` is transferred.
+
+If ``update`` is set to ``True``, the style database will be automatically updated with the new legend patch shape.
+
+Returns ``True`` if the operation was successful.
+
+.. note::
+
+   Adding 3d symbols with the name of existing ones replaces them.
+
+.. versionadded:: 3.16
 %End
 
     int addTag( const QString &tagName );
@@ -305,19 +320,41 @@ Returns count of legend patch shapes in the style.
 .. versionadded:: 3.14
 %End
 
-    QgsSymbol::SymbolType legendPatchShapeSymbolType( const QString &name ) const;
+    Qgis::SymbolType legendPatchShapeSymbolType( const QString &name ) const;
 %Docstring
 Returns the symbol type corresponding to the legend patch shape
-with the specified ``name``, or QgsSymbol.Hybrid
+with the specified ``name``, or :py:class:`QgsSymbol`.Hybrid
 if a matching legend patch shape is not present.
 
 .. versionadded:: 3.14
 %End
 
+    QgsAbstract3DSymbol *symbol3D( const QString &name ) const /Factory/;
+%Docstring
+Returns a new copy of the 3D symbol with the specified ``name``.
+
+.. versionadded:: 3.16
+%End
+
+    int symbol3DCount() const;
+%Docstring
+Returns count of 3D symbols in the style.
+
+.. versionadded:: 3.16
+%End
+
+    QList< QgsWkbTypes::GeometryType > symbol3DCompatibleGeometryTypes( const QString &name ) const;
+%Docstring
+Returns the list of the vector layer geometry types which are compatible with the 3D symbol
+with the specified ``name``, or an empty list if a matching 3d symbol is not present.
+
+.. versionadded:: 3.16
+%End
+
     QgsWkbTypes::GeometryType labelSettingsLayerType( const QString &name ) const;
 %Docstring
 Returns the layer geometry type corresponding to the label settings
-with the specified ``name``, or QgsWkbTypes.UnknownGeometry
+with the specified ``name``, or :py:class:`QgsWkbTypes`.UnknownGeometry
 if matching label settings are not present.
 
 .. versionadded:: 3.10
@@ -530,7 +567,7 @@ Removes the entry of the specified ``type`` with matching ``name`` from the data
 Adds the symbol to the database with tags.
 
 :param name: is the name of the symbol as QString
-:param symbol: is the pointer to the new QgsSymbol being saved
+:param symbol: is the pointer to the new :py:class:`QgsSymbol` being saved
 :param favorite: is a boolean value to specify whether the symbol should be added to favorites
 :param tags: is a list of tags that are associated with the symbol as a QStringList.
 
@@ -542,7 +579,7 @@ Adds the symbol to the database with tags.
 Adds the colorramp to the database.
 
 :param name: is the name of the colorramp as QString
-:param ramp: is the pointer to the new QgsColorRamp being saved
+:param ramp: is the pointer to the new :py:class:`QgsColorRamp` being saved
 :param favorite: is a boolean value to specify whether the colorramp should be added to favorites
 :param tags: is a list of tags that are associated with the color ramp as a QStringList.
 
@@ -648,7 +685,7 @@ Ownership of the symbol is not transferred.
 .. versionadded:: 3.14
 %End
 
-    QgsLegendPatchShape defaultPatch( QgsSymbol::SymbolType type, QSizeF size ) const;
+    QgsLegendPatchShape defaultPatch( Qgis::SymbolType type, QSizeF size ) const;
 %Docstring
 Returns the default legend patch shape for the given symbol ``type``.
 
@@ -657,13 +694,53 @@ Returns the default legend patch shape for the given symbol ``type``.
 .. versionadded:: 3.14
 %End
 
-    QList< QList< QPolygonF > > defaultPatchAsQPolygonF( QgsSymbol::SymbolType type, QSizeF size ) const;
+    QList< QList< QPolygonF > > defaultPatchAsQPolygonF( Qgis::SymbolType type, QSizeF size ) const;
 %Docstring
 Returns the default patch geometry for the given symbol ``type`` and ``size`` as a set of QPolygonF objects (parts and rings).
 
 .. seealso:: :py:func:`defaultPatch`
 
 .. versionadded:: 3.14
+%End
+
+    enum class TextFormatContext
+    {
+      Labeling,
+    };
+
+    QgsTextFormat defaultTextFormat( QgsStyle::TextFormatContext context = QgsStyle::TextFormatContext::Labeling ) const;
+%Docstring
+Returns the default text format to use for new text based objects in the specified ``context``.
+
+.. versionadded:: 3.20
+%End
+
+    bool saveSymbol3D( const QString &name, QgsAbstract3DSymbol *symbol /Transfer/, bool favorite, const QStringList &tags );
+%Docstring
+Adds a 3d ``symbol`` to the database.
+
+:param name: is the name of the 3d symbol
+:param symbol: 3d symbol to save. Ownership is transferred.
+:param favorite: is a boolean value to specify whether the 3d symbol should be added to favorites
+:param tags: is a list of tags that are associated with the 3d symbol
+
+:return: returns the success state of the save operation
+
+.. versionadded:: 3.16
+%End
+
+    bool renameSymbol3D( const QString &oldName, const QString &newName );
+%Docstring
+Changes a 3d symbol's name.
+
+.. versionadded:: 3.16
+%End
+
+    QStringList symbol3DNames() const;
+%Docstring
+Returns a list of names of 3d symbols in the style.
+
+.. versionadded:: 3.16
 %End
 
     bool createDatabase( const QString &filename );
@@ -789,7 +866,7 @@ Returns the smart groups list
 
     QgsSmartConditionMap smartgroup( int id );
 %Docstring
-Returns the QgsSmartConditionMap for the given id
+Returns the :py:class:`QgsSmartConditionMap` for the given id
 %End
 
     QString smartgroupOperator( int id );
@@ -1051,7 +1128,7 @@ name or tag changes.
 
 class QgsStyleEntityInterface
 {
-%Docstring
+%Docstring(signature="appended")
 An interface for entities which can be placed in a QgsStyle database.
 
 .. versionadded:: 3.10
@@ -1098,8 +1175,8 @@ Returns the type of style entity.
 
 class QgsStyleSymbolEntity : QgsStyleEntityInterface
 {
-%Docstring
-A symbol entity for QgsStyle databases.
+%Docstring(signature="appended")
+A symbol entity for :py:class:`QgsStyle` databases.
 
 .. versionadded:: 3.10
 %End
@@ -1109,7 +1186,7 @@ A symbol entity for QgsStyle databases.
 %End
   public:
 
-    QgsStyleSymbolEntity( const QgsSymbol *symbol );
+    QgsStyleSymbolEntity( QgsSymbol *symbol );
 %Docstring
 Constructor for QgsStyleSymbolEntity, with the specified ``symbol``.
 
@@ -1119,7 +1196,7 @@ Ownership of ``symbol`` is NOT transferred.
     virtual QgsStyle::StyleEntity type() const;
 
 
-    const QgsSymbol *symbol() const;
+    QgsSymbol *symbol() const;
 %Docstring
 Returns the entity's symbol.
 %End
@@ -1128,8 +1205,8 @@ Returns the entity's symbol.
 
 class QgsStyleColorRampEntity : QgsStyleEntityInterface
 {
-%Docstring
-A color ramp entity for QgsStyle databases.
+%Docstring(signature="appended")
+A color ramp entity for :py:class:`QgsStyle` databases.
 
 .. versionadded:: 3.10
 %End
@@ -1139,7 +1216,7 @@ A color ramp entity for QgsStyle databases.
 %End
   public:
 
-    QgsStyleColorRampEntity( const QgsColorRamp *ramp );
+    QgsStyleColorRampEntity( QgsColorRamp *ramp );
 %Docstring
 Constructor for QgsStyleColorRampEntity, with the specified color ``ramp``.
 
@@ -1149,7 +1226,7 @@ Ownership of ``ramp`` is NOT transferred.
     virtual QgsStyle::StyleEntity type() const;
 
 
-    const QgsColorRamp *ramp() const;
+    QgsColorRamp *ramp() const;
 %Docstring
 Returns the entity's color ramp.
 %End
@@ -1158,8 +1235,8 @@ Returns the entity's color ramp.
 
 class QgsStyleTextFormatEntity : QgsStyleEntityInterface
 {
-%Docstring
-A text format entity for QgsStyle databases.
+%Docstring(signature="appended")
+A text format entity for :py:class:`QgsStyle` databases.
 
 .. versionadded:: 3.10
 %End
@@ -1186,8 +1263,8 @@ Returns the entity's text format.
 
 class QgsStyleLabelSettingsEntity : QgsStyleEntityInterface
 {
-%Docstring
-A label settings entity for QgsStyle databases.
+%Docstring(signature="appended")
+A label settings entity for :py:class:`QgsStyle` databases.
 
 .. versionadded:: 3.10
 %End
@@ -1215,8 +1292,8 @@ Returns the entity's label settings.
 
 class QgsStyleLegendPatchShapeEntity : QgsStyleEntityInterface
 {
-%Docstring
-A legend patch shape entity for QgsStyle databases.
+%Docstring(signature="appended")
+A legend patch shape entity for :py:class:`QgsStyle` databases.
 
 .. versionadded:: 3.14
 %End
@@ -1238,6 +1315,36 @@ Constructor for QgsStyleLegendPatchShapeEntity, with the specified legend patch 
     const QgsLegendPatchShape &shape() const;
 %Docstring
 Returns the entity's legend patch shape.
+%End
+
+};
+
+class QgsStyleSymbol3DEntity : QgsStyleEntityInterface
+{
+%Docstring(signature="appended")
+A 3d symbol entity for :py:class:`QgsStyle` databases.
+
+.. versionadded:: 3.16
+%End
+
+%TypeHeaderCode
+#include "qgsstyle.h"
+%End
+  public:
+
+    QgsStyleSymbol3DEntity( const QgsAbstract3DSymbol *symbol );
+%Docstring
+Constructor for QgsStyleSymbol3DEntity, with the specified ``symbol``.
+
+Ownership of ``symbol`` is NOT transferred.
+%End
+
+    virtual QgsStyle::StyleEntity type() const;
+
+
+    const QgsAbstract3DSymbol *symbol() const;
+%Docstring
+Returns the entity's symbol.
 %End
 
 };

@@ -34,6 +34,9 @@
 #include "qgspolygon.h"
 #include "qgslinestring.h"
 #include "qgsexpressioncontextutils.h"
+#include "qgssymbol.h"
+#include "qgsmarkersymbol.h"
+#include "qgslinesymbol.h"
 
 #include <QPainter>
 #include <QFile>
@@ -57,6 +60,8 @@ QgsSimpleFillSymbolLayer::QgsSimpleFillSymbolLayer( const QColor &color, Qt::Bru
   mColor = color;
 }
 
+QgsSimpleFillSymbolLayer::~QgsSimpleFillSymbolLayer() = default;
+
 void QgsSimpleFillSymbolLayer::setOutputUnit( QgsUnitTypes::RenderUnit unit )
 {
   mStrokeWidthUnit = unit;
@@ -71,6 +76,12 @@ QgsUnitTypes::RenderUnit QgsSimpleFillSymbolLayer::outputUnit() const
     return QgsUnitTypes::RenderUnknownUnit;
   }
   return unit;
+}
+
+bool QgsSimpleFillSymbolLayer::usesMapUnits() const
+{
+  return mStrokeWidthUnit == QgsUnitTypes::RenderMapUnits || mStrokeWidthUnit == QgsUnitTypes::RenderMetersInMapUnits
+         || mOffsetUnit == QgsUnitTypes::RenderMapUnits || mOffsetUnit == QgsUnitTypes::RenderMetersInMapUnits;
 }
 
 void QgsSimpleFillSymbolLayer::setMapUnitScale( const QgsMapUnitScale &scale )
@@ -98,30 +109,37 @@ void QgsSimpleFillSymbolLayer::applyDataDefinedSymbology( QgsSymbolRenderContext
   if ( mDataDefinedProperties.isActive( QgsSymbolLayer::PropertyFillColor ) )
   {
     context.setOriginalValueVariable( QgsSymbolLayerUtils::encodeColor( mColor ) );
-    brush.setColor( mDataDefinedProperties.valueAsColor( QgsSymbolLayer::PropertyFillColor, context.renderContext().expressionContext(), mColor ) );
+    QColor fillColor = mDataDefinedProperties.valueAsColor( QgsSymbolLayer::PropertyFillColor, context.renderContext().expressionContext(), mColor );
+    fillColor.setAlphaF( context.opacity() * fillColor.alphaF() );
+    brush.setColor( fillColor );
   }
   if ( mDataDefinedProperties.isActive( QgsSymbolLayer::PropertyFillStyle ) )
   {
     context.setOriginalValueVariable( QgsSymbolLayerUtils::encodeBrushStyle( mBrushStyle ) );
     QVariant exprVal = mDataDefinedProperties.value( QgsSymbolLayer::PropertyFillStyle, context.renderContext().expressionContext() );
-    if ( exprVal.isValid() )
+    if ( !exprVal.isNull() )
       brush.setStyle( QgsSymbolLayerUtils::decodeBrushStyle( exprVal.toString() ) );
   }
   if ( mDataDefinedProperties.isActive( QgsSymbolLayer::PropertyStrokeColor ) )
   {
     context.setOriginalValueVariable( QgsSymbolLayerUtils::encodeColor( mStrokeColor ) );
-    pen.setColor( mDataDefinedProperties.valueAsColor( QgsSymbolLayer::PropertyStrokeColor, context.renderContext().expressionContext(), mStrokeColor ) );
+    QColor penColor = mDataDefinedProperties.valueAsColor( QgsSymbolLayer::PropertyStrokeColor, context.renderContext().expressionContext(), mStrokeColor );
+    penColor.setAlphaF( context.opacity() * penColor.alphaF() );
+    pen.setColor( penColor );
   }
   if ( mDataDefinedProperties.isActive( QgsSymbolLayer::PropertyStrokeWidth ) )
   {
     context.setOriginalValueVariable( mStrokeWidth );
     QVariant exprVal = mDataDefinedProperties.value( QgsSymbolLayer::PropertyStrokeWidth, context.renderContext().expressionContext() );
-    double width = exprVal.toDouble( &ok );
-    if ( ok )
+    if ( !exprVal.isNull() )
     {
-      width = context.renderContext().convertToPainterUnits( width, mStrokeWidthUnit, mStrokeWidthMapUnitScale );
-      pen.setWidthF( width );
-      selPen.setWidthF( width );
+      double width = exprVal.toDouble( &ok );
+      if ( ok )
+      {
+        width = context.renderContext().convertToPainterUnits( width, mStrokeWidthUnit, mStrokeWidthMapUnitScale );
+        pen.setWidthF( width );
+        selPen.setWidthF( width );
+      }
     }
   }
   if ( mDataDefinedProperties.isActive( QgsSymbolLayer::PropertyStrokeStyle ) )
@@ -147,7 +165,7 @@ void QgsSimpleFillSymbolLayer::applyDataDefinedSymbology( QgsSymbolRenderContext
 }
 
 
-QgsSymbolLayer *QgsSimpleFillSymbolLayer::create( const QgsStringMap &props )
+QgsSymbolLayer *QgsSimpleFillSymbolLayer::create( const QVariantMap &props )
 {
   QColor color = DEFAULT_SIMPLEFILL_COLOR;
   Qt::BrushStyle style = DEFAULT_SIMPLEFILL_STYLE;
@@ -158,35 +176,35 @@ QgsSymbolLayer *QgsSimpleFillSymbolLayer::create( const QgsStringMap &props )
   QPointF offset;
 
   if ( props.contains( QStringLiteral( "color" ) ) )
-    color = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "color" )] );
+    color = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "color" )].toString() );
   if ( props.contains( QStringLiteral( "style" ) ) )
-    style = QgsSymbolLayerUtils::decodeBrushStyle( props[QStringLiteral( "style" )] );
+    style = QgsSymbolLayerUtils::decodeBrushStyle( props[QStringLiteral( "style" )].toString() );
   if ( props.contains( QStringLiteral( "color_border" ) ) )
   {
     //pre 2.5 projects used "color_border"
-    strokeColor = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "color_border" )] );
+    strokeColor = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "color_border" )].toString() );
   }
   else if ( props.contains( QStringLiteral( "outline_color" ) ) )
   {
-    strokeColor = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "outline_color" )] );
+    strokeColor = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "outline_color" )].toString() );
   }
   else if ( props.contains( QStringLiteral( "line_color" ) ) )
   {
-    strokeColor = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "line_color" )] );
+    strokeColor = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "line_color" )].toString() );
   }
 
   if ( props.contains( QStringLiteral( "style_border" ) ) )
   {
     //pre 2.5 projects used "style_border"
-    strokeStyle = QgsSymbolLayerUtils::decodePenStyle( props[QStringLiteral( "style_border" )] );
+    strokeStyle = QgsSymbolLayerUtils::decodePenStyle( props[QStringLiteral( "style_border" )].toString() );
   }
   else if ( props.contains( QStringLiteral( "outline_style" ) ) )
   {
-    strokeStyle = QgsSymbolLayerUtils::decodePenStyle( props[QStringLiteral( "outline_style" )] );
+    strokeStyle = QgsSymbolLayerUtils::decodePenStyle( props[QStringLiteral( "outline_style" )].toString() );
   }
   else if ( props.contains( QStringLiteral( "line_style" ) ) )
   {
-    strokeStyle = QgsSymbolLayerUtils::decodePenStyle( props[QStringLiteral( "line_style" )] );
+    strokeStyle = QgsSymbolLayerUtils::decodePenStyle( props[QStringLiteral( "line_style" )].toString() );
   }
   if ( props.contains( QStringLiteral( "width_border" ) ) )
   {
@@ -202,31 +220,31 @@ QgsSymbolLayer *QgsSimpleFillSymbolLayer::create( const QgsStringMap &props )
     strokeWidth = props[QStringLiteral( "line_width" )].toDouble();
   }
   if ( props.contains( QStringLiteral( "offset" ) ) )
-    offset = QgsSymbolLayerUtils::decodePoint( props[QStringLiteral( "offset" )] );
+    offset = QgsSymbolLayerUtils::decodePoint( props[QStringLiteral( "offset" )].toString() );
   if ( props.contains( QStringLiteral( "joinstyle" ) ) )
-    penJoinStyle = QgsSymbolLayerUtils::decodePenJoinStyle( props[QStringLiteral( "joinstyle" )] );
+    penJoinStyle = QgsSymbolLayerUtils::decodePenJoinStyle( props[QStringLiteral( "joinstyle" )].toString() );
 
-  std::unique_ptr< QgsSimpleFillSymbolLayer > sl = qgis::make_unique< QgsSimpleFillSymbolLayer >( color, style, strokeColor, strokeStyle, strokeWidth, penJoinStyle );
+  std::unique_ptr< QgsSimpleFillSymbolLayer > sl = std::make_unique< QgsSimpleFillSymbolLayer >( color, style, strokeColor, strokeStyle, strokeWidth, penJoinStyle );
   sl->setOffset( offset );
   if ( props.contains( QStringLiteral( "border_width_unit" ) ) )
   {
-    sl->setStrokeWidthUnit( QgsUnitTypes::decodeRenderUnit( props[QStringLiteral( "border_width_unit" )] ) );
+    sl->setStrokeWidthUnit( QgsUnitTypes::decodeRenderUnit( props[QStringLiteral( "border_width_unit" )].toString() ) );
   }
   else if ( props.contains( QStringLiteral( "outline_width_unit" ) ) )
   {
-    sl->setStrokeWidthUnit( QgsUnitTypes::decodeRenderUnit( props[QStringLiteral( "outline_width_unit" )] ) );
+    sl->setStrokeWidthUnit( QgsUnitTypes::decodeRenderUnit( props[QStringLiteral( "outline_width_unit" )].toString() ) );
   }
   else if ( props.contains( QStringLiteral( "line_width_unit" ) ) )
   {
-    sl->setStrokeWidthUnit( QgsUnitTypes::decodeRenderUnit( props[QStringLiteral( "line_width_unit" )] ) );
+    sl->setStrokeWidthUnit( QgsUnitTypes::decodeRenderUnit( props[QStringLiteral( "line_width_unit" )].toString() ) );
   }
   if ( props.contains( QStringLiteral( "offset_unit" ) ) )
-    sl->setOffsetUnit( QgsUnitTypes::decodeRenderUnit( props[QStringLiteral( "offset_unit" )] ) );
+    sl->setOffsetUnit( QgsUnitTypes::decodeRenderUnit( props[QStringLiteral( "offset_unit" )].toString() ) );
 
   if ( props.contains( QStringLiteral( "border_width_map_unit_scale" ) ) )
-    sl->setStrokeWidthMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( props[QStringLiteral( "border_width_map_unit_scale" )] ) );
+    sl->setStrokeWidthMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( props[QStringLiteral( "border_width_map_unit_scale" )].toString() ) );
   if ( props.contains( QStringLiteral( "offset_map_unit_scale" ) ) )
-    sl->setOffsetMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( props[QStringLiteral( "offset_map_unit_scale" )] ) );
+    sl->setOffsetMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( props[QStringLiteral( "offset_map_unit_scale" )].toString() ) );
 
   sl->restoreOldDataDefinedProperties( props );
 
@@ -277,13 +295,31 @@ void QgsSimpleFillSymbolLayer::renderPolygon( const QPolygonF &points, const QVe
     return;
   }
 
+  QColor fillColor = mColor;
+  fillColor.setAlphaF( context.opacity() * mColor.alphaF() );
+  mBrush.setColor( fillColor );
+  QColor strokeColor = mStrokeColor;
+  strokeColor.setAlphaF( context.opacity() * mStrokeColor.alphaF() );
+  mPen.setColor( strokeColor );
+
   applyDataDefinedSymbology( context, mBrush, mPen, mSelPen );
 
-  QPointF offset;
-  if ( !mOffset.isNull() )
+  QPointF offset = mOffset;
+
+  if ( mDataDefinedProperties.isActive( QgsSymbolLayer::PropertyOffset ) )
   {
-    offset.setX( context.renderContext().convertToPainterUnits( mOffset.x(), mOffsetUnit, mOffsetMapUnitScale ) );
-    offset.setY( context.renderContext().convertToPainterUnits( mOffset.y(), mOffsetUnit, mOffsetMapUnitScale ) );
+    context.setOriginalValueVariable( QgsSymbolLayerUtils::encodePoint( mOffset ) );
+    const QVariant val = mDataDefinedProperties.value( QgsSymbolLayer::PropertyOffset, context.renderContext().expressionContext(), QString() );
+    bool ok = false;
+    const QPointF res = QgsSymbolLayerUtils::toPoint( val, &ok );
+    if ( ok )
+      offset = res;
+  }
+
+  if ( !offset.isNull() )
+  {
+    offset.setX( context.renderContext().convertToPainterUnits( offset.x(), mOffsetUnit, mOffsetMapUnitScale ) );
+    offset.setY( context.renderContext().convertToPainterUnits( offset.y(), mOffsetUnit, mOffsetMapUnitScale ) );
     p->translate( offset );
   }
 
@@ -311,15 +347,15 @@ void QgsSimpleFillSymbolLayer::renderPolygon( const QPolygonF &points, const QVe
   }
 #endif
 
-  if ( !mOffset.isNull() )
+  if ( !offset.isNull() )
   {
     p->translate( -offset );
   }
 }
 
-QgsStringMap QgsSimpleFillSymbolLayer::properties() const
+QVariantMap QgsSimpleFillSymbolLayer::properties() const
 {
-  QgsStringMap map;
+  QVariantMap map;
   map[QStringLiteral( "color" )] = QgsSymbolLayerUtils::encodeColor( mColor );
   map[QStringLiteral( "style" )] = QgsSymbolLayerUtils::encodeBrushStyle( mBrushStyle );
   map[QStringLiteral( "outline_color" )] = QgsSymbolLayerUtils::encodeColor( mStrokeColor );
@@ -336,7 +372,7 @@ QgsStringMap QgsSimpleFillSymbolLayer::properties() const
 
 QgsSimpleFillSymbolLayer *QgsSimpleFillSymbolLayer::clone() const
 {
-  std::unique_ptr< QgsSimpleFillSymbolLayer > sl = qgis::make_unique< QgsSimpleFillSymbolLayer >( mColor, mBrushStyle, mStrokeColor, mStrokeStyle, mStrokeWidth, mPenJoinStyle );
+  std::unique_ptr< QgsSimpleFillSymbolLayer > sl = std::make_unique< QgsSimpleFillSymbolLayer >( mColor, mBrushStyle, mStrokeColor, mStrokeStyle, mStrokeWidth, mPenJoinStyle );
   sl->setOffset( mOffset );
   sl->setOffsetUnit( mOffsetUnit );
   sl->setOffsetMapUnitScale( mOffsetMapUnitScale );
@@ -347,18 +383,18 @@ QgsSimpleFillSymbolLayer *QgsSimpleFillSymbolLayer::clone() const
   return sl.release();
 }
 
-void QgsSimpleFillSymbolLayer::toSld( QDomDocument &doc, QDomElement &element, const QgsStringMap &props ) const
+void QgsSimpleFillSymbolLayer::toSld( QDomDocument &doc, QDomElement &element, const QVariantMap &props ) const
 {
   if ( mBrushStyle == Qt::NoBrush && mStrokeStyle == Qt::NoPen )
     return;
 
   QDomElement symbolizerElem = doc.createElement( QStringLiteral( "se:PolygonSymbolizer" ) );
-  if ( !props.value( QStringLiteral( "uom" ), QString() ).isEmpty() )
-    symbolizerElem.setAttribute( QStringLiteral( "uom" ), props.value( QStringLiteral( "uom" ), QString() ) );
+  if ( !props.value( QStringLiteral( "uom" ), QString() ).toString().isEmpty() )
+    symbolizerElem.setAttribute( QStringLiteral( "uom" ), props.value( QStringLiteral( "uom" ), QString() ).toString() );
   element.appendChild( symbolizerElem );
 
   // <Geometry>
-  QgsSymbolLayerUtils::createGeometryElement( doc, symbolizerElem, props.value( QStringLiteral( "geom" ), QString() ) );
+  QgsSymbolLayerUtils::createGeometryElement( doc, symbolizerElem, props.value( QStringLiteral( "geom" ), QString() ).toString() );
 
   if ( mBrushStyle != Qt::NoBrush )
   {
@@ -414,7 +450,7 @@ QgsSymbolLayer *QgsSimpleFillSymbolLayer::createFromSld( QDomElement &element )
   offset.setY( QgsSymbolLayerUtils::sizeInPixelsFromSldUom( uom, offset.y() ) );
   strokeWidth = QgsSymbolLayerUtils::sizeInPixelsFromSldUom( uom, strokeWidth );
 
-  std::unique_ptr< QgsSimpleFillSymbolLayer > sl = qgis::make_unique< QgsSimpleFillSymbolLayer >( color, fillStyle, strokeColor, strokeStyle, strokeWidth );
+  std::unique_ptr< QgsSimpleFillSymbolLayer > sl = std::make_unique< QgsSimpleFillSymbolLayer >( color, fillStyle, strokeColor, strokeStyle, strokeWidth );
   sl->setOutputUnit( QgsUnitTypes::RenderUnit::RenderPixels );
   sl->setOffset( offset );
   return sl.release();
@@ -501,7 +537,7 @@ QgsGradientFillSymbolLayer::~QgsGradientFillSymbolLayer()
   delete mGradientRamp;
 }
 
-QgsSymbolLayer *QgsGradientFillSymbolLayer::create( const QgsStringMap &props )
+QgsSymbolLayer *QgsGradientFillSymbolLayer::create( const QVariantMap &props )
 {
   //default to a two-color, linear gradient with feature mode and pad spreading
   GradientType type = QgsGradientFillSymbolLayer::Linear;
@@ -529,34 +565,34 @@ QgsSymbolLayer *QgsGradientFillSymbolLayer::create( const QgsStringMap &props )
   if ( props.contains( QStringLiteral( "gradient_color" ) ) )
   {
     //pre 2.5 projects used "gradient_color"
-    color = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "gradient_color" )] );
+    color = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "gradient_color" )].toString() );
   }
   else if ( props.contains( QStringLiteral( "color" ) ) )
   {
-    color = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "color" )] );
+    color = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "color" )].toString() );
   }
   if ( props.contains( QStringLiteral( "gradient_color2" ) ) )
   {
-    color2 = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "gradient_color2" )] );
+    color2 = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "gradient_color2" )].toString() );
   }
 
   if ( props.contains( QStringLiteral( "reference_point1" ) ) )
-    referencePoint1 = QgsSymbolLayerUtils::decodePoint( props[QStringLiteral( "reference_point1" )] );
+    referencePoint1 = QgsSymbolLayerUtils::decodePoint( props[QStringLiteral( "reference_point1" )].toString() );
   if ( props.contains( QStringLiteral( "reference_point1_iscentroid" ) ) )
     refPoint1IsCentroid = props[QStringLiteral( "reference_point1_iscentroid" )].toInt();
   if ( props.contains( QStringLiteral( "reference_point2" ) ) )
-    referencePoint2 = QgsSymbolLayerUtils::decodePoint( props[QStringLiteral( "reference_point2" )] );
+    referencePoint2 = QgsSymbolLayerUtils::decodePoint( props[QStringLiteral( "reference_point2" )].toString() );
   if ( props.contains( QStringLiteral( "reference_point2_iscentroid" ) ) )
     refPoint2IsCentroid = props[QStringLiteral( "reference_point2_iscentroid" )].toInt();
   if ( props.contains( QStringLiteral( "angle" ) ) )
     angle = props[QStringLiteral( "angle" )].toDouble();
 
   if ( props.contains( QStringLiteral( "offset" ) ) )
-    offset = QgsSymbolLayerUtils::decodePoint( props[QStringLiteral( "offset" )] );
+    offset = QgsSymbolLayerUtils::decodePoint( props[QStringLiteral( "offset" )].toString() );
 
   //attempt to create color ramp from props
   QgsColorRamp *gradientRamp = nullptr;
-  if ( props.contains( QStringLiteral( "rampType" ) ) && props[QStringLiteral( "rampType" )] == QStringLiteral( "cpt-city" ) )
+  if ( props.contains( QStringLiteral( "rampType" ) ) && props[QStringLiteral( "rampType" )] == QgsCptCityColorRamp::typeString() )
   {
     gradientRamp = QgsCptCityColorRamp::create( props );
   }
@@ -566,12 +602,12 @@ QgsSymbolLayer *QgsGradientFillSymbolLayer::create( const QgsStringMap &props )
   }
 
   //create a new gradient fill layer with desired properties
-  std::unique_ptr< QgsGradientFillSymbolLayer > sl = qgis::make_unique< QgsGradientFillSymbolLayer >( color, color2, colorType, type, coordinateMode, gradientSpread );
+  std::unique_ptr< QgsGradientFillSymbolLayer > sl = std::make_unique< QgsGradientFillSymbolLayer >( color, color2, colorType, type, coordinateMode, gradientSpread );
   sl->setOffset( offset );
   if ( props.contains( QStringLiteral( "offset_unit" ) ) )
-    sl->setOffsetUnit( QgsUnitTypes::decodeRenderUnit( props[QStringLiteral( "offset_unit" )] ) );
+    sl->setOffsetUnit( QgsUnitTypes::decodeRenderUnit( props[QStringLiteral( "offset_unit" )].toString() ) );
   if ( props.contains( QStringLiteral( "offset_map_unit_scale" ) ) )
-    sl->setOffsetMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( props[QStringLiteral( "offset_map_unit_scale" )] ) );
+    sl->setOffsetMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( props[QStringLiteral( "offset_map_unit_scale" )].toString() ) );
   sl->setReferencePoint1( referencePoint1 );
   sl->setReferencePoint1IsCentroid( refPoint1IsCentroid );
   sl->setReferencePoint2( referencePoint2 );
@@ -614,6 +650,7 @@ void QgsGradientFillSymbolLayer::applyDataDefinedSymbology( QgsSymbolRenderConte
   {
     context.setOriginalValueVariable( QgsSymbolLayerUtils::encodeColor( mColor ) );
     color = mDataDefinedProperties.valueAsColor( QgsSymbolLayer::PropertyFillColor, context.renderContext().expressionContext(), mColor );
+    color.setAlphaF( context.opacity() * color.alphaF() );
   }
 
   //second gradient color
@@ -622,6 +659,7 @@ void QgsGradientFillSymbolLayer::applyDataDefinedSymbology( QgsSymbolRenderConte
   {
     context.setOriginalValueVariable( QgsSymbolLayerUtils::encodeColor( mColor2 ) );
     color2 = mDataDefinedProperties.valueAsColor( QgsSymbolLayer::PropertySecondaryColor, context.renderContext().expressionContext(), mColor2 );
+    color2.setAlphaF( context.opacity() * color2.alphaF() );
   }
 
   //gradient rotation angle
@@ -837,7 +875,7 @@ void QgsGradientFillSymbolLayer::applyGradient( const QgsSymbolRenderContext &co
 
   //add stops to gradient
   if ( gradientColorType == QgsGradientFillSymbolLayer::ColorRamp && gradientRamp &&
-       ( gradientRamp->type() == QLatin1String( "gradient" ) || gradientRamp->type() == QLatin1String( "cpt-city" ) ) )
+       ( gradientRamp->type() == QgsGradientColorRamp::typeString() || gradientRamp->type() == QgsCptCityColorRamp::typeString() ) )
   {
     //color ramp gradient
     QgsGradientColorRamp *gradRamp = static_cast<QgsGradientColorRamp *>( gradientRamp );
@@ -880,25 +918,35 @@ void QgsGradientFillSymbolLayer::renderPolygon( const QPolygonF &points, const Q
   p->setBrush( context.selected() ? mSelBrush : mBrush );
   p->setPen( Qt::NoPen );
 
-  QPointF offset;
-  if ( !mOffset.isNull() )
+  QPointF offset = mOffset;
+  if ( mDataDefinedProperties.isActive( QgsSymbolLayer::PropertyOffset ) )
   {
-    offset.setX( context.renderContext().convertToPainterUnits( mOffset.x(), mOffsetUnit, mOffsetMapUnitScale ) );
-    offset.setY( context.renderContext().convertToPainterUnits( mOffset.y(), mOffsetUnit, mOffsetMapUnitScale ) );
+    context.setOriginalValueVariable( QgsSymbolLayerUtils::encodePoint( mOffset ) );
+    const QVariant val = mDataDefinedProperties.value( QgsSymbolLayer::PropertyOffset, context.renderContext().expressionContext(), QString() );
+    bool ok = false;
+    const QPointF res = QgsSymbolLayerUtils::toPoint( val, &ok );
+    if ( ok )
+      offset = res;
+  }
+
+  if ( !offset.isNull() )
+  {
+    offset.setX( context.renderContext().convertToPainterUnits( offset.x(), mOffsetUnit, mOffsetMapUnitScale ) );
+    offset.setY( context.renderContext().convertToPainterUnits( offset.y(), mOffsetUnit, mOffsetMapUnitScale ) );
     p->translate( offset );
   }
 
   _renderPolygon( p, points, rings, context );
 
-  if ( !mOffset.isNull() )
+  if ( !offset.isNull() )
   {
     p->translate( -offset );
   }
 }
 
-QgsStringMap QgsGradientFillSymbolLayer::properties() const
+QVariantMap QgsGradientFillSymbolLayer::properties() const
 {
-  QgsStringMap map;
+  QVariantMap map;
   map[QStringLiteral( "color" )] = QgsSymbolLayerUtils::encodeColor( mColor );
   map[QStringLiteral( "gradient_color2" )] = QgsSymbolLayerUtils::encodeColor( mColor2 );
   map[QStringLiteral( "color_type" )] = QString::number( mGradientColorType );
@@ -915,14 +963,18 @@ QgsStringMap QgsGradientFillSymbolLayer::properties() const
   map[QStringLiteral( "offset_map_unit_scale" )] = QgsSymbolLayerUtils::encodeMapUnitScale( mOffsetMapUnitScale );
   if ( mGradientRamp )
   {
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
     map.unite( mGradientRamp->properties() );
+#else
+    map.insert( mGradientRamp->properties() );
+#endif
   }
   return map;
 }
 
 QgsGradientFillSymbolLayer *QgsGradientFillSymbolLayer::clone() const
 {
-  std::unique_ptr< QgsGradientFillSymbolLayer > sl = qgis::make_unique< QgsGradientFillSymbolLayer >( mColor, mColor2, mGradientColorType, mGradientType, mCoordinateMode, mGradientSpread );
+  std::unique_ptr< QgsGradientFillSymbolLayer > sl = std::make_unique< QgsGradientFillSymbolLayer >( mColor, mColor2, mGradientColorType, mGradientType, mCoordinateMode, mGradientSpread );
   if ( mGradientRamp )
     sl->setColorRamp( mGradientRamp->clone() );
   sl->setReferencePoint1( mReferencePoint1 );
@@ -944,6 +996,11 @@ double QgsGradientFillSymbolLayer::estimateMaxBleed( const QgsRenderContext &con
   return offsetBleed;
 }
 
+bool QgsGradientFillSymbolLayer::canCauseArtifactsBetweenAdjacentTiles() const
+{
+  return true;
+}
+
 void QgsGradientFillSymbolLayer::setOutputUnit( QgsUnitTypes::RenderUnit unit )
 {
   mOffsetUnit = unit;
@@ -952,6 +1009,11 @@ void QgsGradientFillSymbolLayer::setOutputUnit( QgsUnitTypes::RenderUnit unit )
 QgsUnitTypes::RenderUnit QgsGradientFillSymbolLayer::outputUnit() const
 {
   return mOffsetUnit;
+}
+
+bool QgsGradientFillSymbolLayer::usesMapUnits() const
+{
+  return mOffsetUnit == QgsUnitTypes::RenderMapUnits || mOffsetUnit == QgsUnitTypes::RenderMetersInMapUnits;
 }
 
 void QgsGradientFillSymbolLayer::setMapUnitScale( const QgsMapUnitScale &scale )
@@ -979,7 +1041,7 @@ QgsShapeburstFillSymbolLayer::QgsShapeburstFillSymbolLayer( const QColor &color,
 
 QgsShapeburstFillSymbolLayer::~QgsShapeburstFillSymbolLayer() = default;
 
-QgsSymbolLayer *QgsShapeburstFillSymbolLayer::create( const QgsStringMap &props )
+QgsSymbolLayer *QgsShapeburstFillSymbolLayer::create( const QVariantMap &props )
 {
   //default to a two-color gradient
   ShapeburstColorType colorType = QgsShapeburstFillSymbolLayer::SimpleTwoColor;
@@ -997,21 +1059,21 @@ QgsSymbolLayer *QgsShapeburstFillSymbolLayer::create( const QgsStringMap &props 
   if ( props.contains( QStringLiteral( "shapeburst_color" ) ) )
   {
     //pre 2.5 projects used "shapeburst_color"
-    color = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "shapeburst_color" )] );
+    color = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "shapeburst_color" )].toString() );
   }
   else if ( props.contains( QStringLiteral( "color" ) ) )
   {
-    color = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "color" )] );
+    color = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "color" )].toString() );
   }
 
   if ( props.contains( QStringLiteral( "shapeburst_color2" ) ) )
   {
     //pre 2.5 projects used "shapeburst_color2"
-    color2 = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "shapeburst_color2" )] );
+    color2 = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "shapeburst_color2" )].toString() );
   }
   else if ( props.contains( QStringLiteral( "gradient_color2" ) ) )
   {
-    color2 = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "gradient_color2" )] );
+    color2 = QgsSymbolLayerUtils::decodeColor( props[QStringLiteral( "gradient_color2" )].toString() );
   }
   if ( props.contains( QStringLiteral( "blur_radius" ) ) )
   {
@@ -1027,12 +1089,12 @@ QgsSymbolLayer *QgsShapeburstFillSymbolLayer::create( const QgsStringMap &props 
   }
   if ( props.contains( QStringLiteral( "offset" ) ) )
   {
-    offset = QgsSymbolLayerUtils::decodePoint( props[QStringLiteral( "offset" )] );
+    offset = QgsSymbolLayerUtils::decodePoint( props[QStringLiteral( "offset" )].toString() );
   }
 
   //attempt to create color ramp from props
   QgsColorRamp *gradientRamp = nullptr;
-  if ( props.contains( QStringLiteral( "rampType" ) ) && props[QStringLiteral( "rampType" )] == QStringLiteral( "cpt-city" ) )
+  if ( props.contains( QStringLiteral( "rampType" ) ) && props[QStringLiteral( "rampType" )] == QgsCptCityColorRamp::typeString() )
   {
     gradientRamp = QgsCptCityColorRamp::create( props );
   }
@@ -1042,23 +1104,23 @@ QgsSymbolLayer *QgsShapeburstFillSymbolLayer::create( const QgsStringMap &props 
   }
 
   //create a new shapeburst fill layer with desired properties
-  std::unique_ptr< QgsShapeburstFillSymbolLayer > sl = qgis::make_unique< QgsShapeburstFillSymbolLayer >( color, color2, colorType, blurRadius, useWholeShape, maxDistance );
+  std::unique_ptr< QgsShapeburstFillSymbolLayer > sl = std::make_unique< QgsShapeburstFillSymbolLayer >( color, color2, colorType, blurRadius, useWholeShape, maxDistance );
   sl->setOffset( offset );
   if ( props.contains( QStringLiteral( "offset_unit" ) ) )
   {
-    sl->setOffsetUnit( QgsUnitTypes::decodeRenderUnit( props[QStringLiteral( "offset_unit" )] ) );
+    sl->setOffsetUnit( QgsUnitTypes::decodeRenderUnit( props[QStringLiteral( "offset_unit" )].toString() ) );
   }
   if ( props.contains( QStringLiteral( "distance_unit" ) ) )
   {
-    sl->setDistanceUnit( QgsUnitTypes::decodeRenderUnit( props[QStringLiteral( "distance_unit" )] ) );
+    sl->setDistanceUnit( QgsUnitTypes::decodeRenderUnit( props[QStringLiteral( "distance_unit" )].toString() ) );
   }
   if ( props.contains( QStringLiteral( "offset_map_unit_scale" ) ) )
   {
-    sl->setOffsetMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( props[QStringLiteral( "offset_map_unit_scale" )] ) );
+    sl->setOffsetMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( props[QStringLiteral( "offset_map_unit_scale" )].toString() ) );
   }
   if ( props.contains( QStringLiteral( "distance_map_unit_scale" ) ) )
   {
-    sl->setDistanceMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( props[QStringLiteral( "distance_map_unit_scale" )] ) );
+    sl->setDistanceMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( props[QStringLiteral( "distance_map_unit_scale" )].toString() ) );
   }
   if ( props.contains( QStringLiteral( "ignore_rings" ) ) )
   {
@@ -1166,15 +1228,26 @@ void QgsShapeburstFillSymbolLayer::renderPolygon( const QPolygonF &points, const
   {
     //feature is selected, draw using selection style
     p->setBrush( mSelBrush );
-    QPointF offset;
-    if ( !mOffset.isNull() )
+    QPointF offset = mOffset;
+
+    if ( mDataDefinedProperties.isActive( QgsSymbolLayer::PropertyOffset ) )
     {
-      offset.setX( context.renderContext().convertToPainterUnits( mOffset.x(), mOffsetUnit, mOffsetMapUnitScale ) );
-      offset.setY( context.renderContext().convertToPainterUnits( mOffset.y(), mOffsetUnit, mOffsetMapUnitScale ) );
+      context.setOriginalValueVariable( QgsSymbolLayerUtils::encodePoint( mOffset ) );
+      const QVariant val = mDataDefinedProperties.value( QgsSymbolLayer::PropertyOffset, context.renderContext().expressionContext(), QString() );
+      bool ok = false;
+      const QPointF res = QgsSymbolLayerUtils::toPoint( val, &ok );
+      if ( ok )
+        offset = res;
+    }
+
+    if ( !offset.isNull() )
+    {
+      offset.setX( context.renderContext().convertToPainterUnits( offset.x(), mOffsetUnit, mOffsetMapUnitScale ) );
+      offset.setY( context.renderContext().convertToPainterUnits( offset.y(), mOffsetUnit, mOffsetMapUnitScale ) );
       p->translate( offset );
     }
     _renderPolygon( p, points, rings, context );
-    if ( !mOffset.isNull() )
+    if ( !offset.isNull() )
     {
       p->translate( -offset );
     }
@@ -1201,7 +1274,7 @@ void QgsShapeburstFillSymbolLayer::renderPolygon( const QPolygonF &points, const
   std::unique_ptr< QgsGradientColorRamp > twoColorGradientRamp;
   if ( mColorType == QgsShapeburstFillSymbolLayer::SimpleTwoColor )
   {
-    twoColorGradientRamp = qgis::make_unique< QgsGradientColorRamp >( color1, color2 );
+    twoColorGradientRamp = std::make_unique< QgsGradientColorRamp >( color1, color2 );
   }
 
   //no stroke for shapeburst fills
@@ -1214,7 +1287,7 @@ void QgsShapeburstFillSymbolLayer::renderPolygon( const QPolygonF &points, const
   int pointsHeight = static_cast< int >( std::round( points.boundingRect().height() ) );
   int imWidth = pointsWidth + ( sideBuffer * 2 );
   int imHeight = pointsHeight + ( sideBuffer * 2 );
-  std::unique_ptr< QImage > fillImage = qgis::make_unique< QImage >( imWidth,
+  std::unique_ptr< QImage > fillImage = std::make_unique< QImage >( imWidth,
                                         imHeight, QImage::Format_ARGB32_Premultiplied );
   if ( fillImage->isNull() )
   {
@@ -1223,7 +1296,7 @@ void QgsShapeburstFillSymbolLayer::renderPolygon( const QPolygonF &points, const
   }
 
   //also create an image to store the alpha channel
-  std::unique_ptr< QImage > alphaImage = qgis::make_unique< QImage >( fillImage->width(), fillImage->height(), QImage::Format_ARGB32_Premultiplied );
+  std::unique_ptr< QImage > alphaImage = std::make_unique< QImage >( fillImage->width(), fillImage->height(), QImage::Format_ARGB32_Premultiplied );
   if ( alphaImage->isNull() )
   {
     QgsMessageLog::logMessage( QObject::tr( "Could not allocate sufficient memory for shapeburst fill" ) );
@@ -1298,17 +1371,26 @@ void QgsShapeburstFillSymbolLayer::renderPolygon( const QPolygonF &points, const
   //draw shapeburst image in correct place in the destination painter
 
   QgsScopedQPainterState painterState( p );
-  QPointF offset;
-  if ( !mOffset.isNull() )
+  QPointF offset = mOffset;
+  if ( mDataDefinedProperties.isActive( QgsSymbolLayer::PropertyOffset ) )
   {
-    offset.setX( context.renderContext().convertToPainterUnits( mOffset.x(), mOffsetUnit, mOffsetMapUnitScale ) );
-    offset.setY( context.renderContext().convertToPainterUnits( mOffset.y(), mOffsetUnit, mOffsetMapUnitScale ) );
+    context.setOriginalValueVariable( QgsSymbolLayerUtils::encodePoint( mOffset ) );
+    const QVariant val = mDataDefinedProperties.value( QgsSymbolLayer::PropertyOffset, context.renderContext().expressionContext(), QString() );
+    bool ok = false;
+    const QPointF res = QgsSymbolLayerUtils::toPoint( val, &ok );
+    if ( ok )
+      offset = res;
+  }
+  if ( !offset.isNull() )
+  {
+    offset.setX( context.renderContext().convertToPainterUnits( offset.x(), mOffsetUnit, mOffsetMapUnitScale ) );
+    offset.setY( context.renderContext().convertToPainterUnits( offset.y(), mOffsetUnit, mOffsetMapUnitScale ) );
     p->translate( offset );
   }
 
   p->drawImage( points.boundingRect().left() - sideBuffer, points.boundingRect().top() - sideBuffer, *fillImage );
 
-  if ( !mOffset.isNull() )
+  if ( !offset.isNull() )
   {
     p->translate( -offset );
   }
@@ -1498,9 +1580,9 @@ void QgsShapeburstFillSymbolLayer::dtArrayToQImage( double *array, QImage *im, Q
   }
 }
 
-QgsStringMap QgsShapeburstFillSymbolLayer::properties() const
+QVariantMap QgsShapeburstFillSymbolLayer::properties() const
 {
-  QgsStringMap map;
+  QVariantMap map;
   map[QStringLiteral( "color" )] = QgsSymbolLayerUtils::encodeColor( mColor );
   map[QStringLiteral( "gradient_color2" )] = QgsSymbolLayerUtils::encodeColor( mColor2 );
   map[QStringLiteral( "color_type" )] = QString::number( mColorType );
@@ -1515,7 +1597,11 @@ QgsStringMap QgsShapeburstFillSymbolLayer::properties() const
   map[QStringLiteral( "offset_map_unit_scale" )] = QgsSymbolLayerUtils::encodeMapUnitScale( mOffsetMapUnitScale );
   if ( mGradientRamp )
   {
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
     map.unite( mGradientRamp->properties() );
+#else
+    map.insert( mGradientRamp->properties() );
+#endif
   }
 
   return map;
@@ -1523,7 +1609,7 @@ QgsStringMap QgsShapeburstFillSymbolLayer::properties() const
 
 QgsShapeburstFillSymbolLayer *QgsShapeburstFillSymbolLayer::clone() const
 {
-  std::unique_ptr< QgsShapeburstFillSymbolLayer > sl = qgis::make_unique< QgsShapeburstFillSymbolLayer >( mColor, mColor2, mColorType, mBlurRadius, mUseWholeShape, mMaxDistance );
+  std::unique_ptr< QgsShapeburstFillSymbolLayer > sl = std::make_unique< QgsShapeburstFillSymbolLayer >( mColor, mColor2, mColorType, mBlurRadius, mUseWholeShape, mMaxDistance );
   if ( mGradientRamp )
   {
     sl->setColorRamp( mGradientRamp->clone() );
@@ -1545,6 +1631,11 @@ double QgsShapeburstFillSymbolLayer::estimateMaxBleed( const QgsRenderContext &c
   return offsetBleed;
 }
 
+bool QgsShapeburstFillSymbolLayer::canCauseArtifactsBetweenAdjacentTiles() const
+{
+  return true;
+}
+
 void QgsShapeburstFillSymbolLayer::setOutputUnit( QgsUnitTypes::RenderUnit unit )
 {
   mDistanceUnit = unit;
@@ -1558,6 +1649,12 @@ QgsUnitTypes::RenderUnit QgsShapeburstFillSymbolLayer::outputUnit() const
     return mDistanceUnit;
   }
   return QgsUnitTypes::RenderUnknownUnit;
+}
+
+bool QgsShapeburstFillSymbolLayer::usesMapUnits() const
+{
+  return mDistanceUnit == QgsUnitTypes::RenderMapUnits || mDistanceUnit == QgsUnitTypes::RenderMetersInMapUnits
+         || mOffsetUnit == QgsUnitTypes::RenderMapUnits || mOffsetUnit == QgsUnitTypes::RenderMetersInMapUnits;
 }
 
 void QgsShapeburstFillSymbolLayer::setMapUnitScale( const QgsMapUnitScale &scale )
@@ -1583,6 +1680,8 @@ QgsImageFillSymbolLayer::QgsImageFillSymbolLayer()
   setSubSymbol( new QgsLineSymbol() );
 }
 
+QgsImageFillSymbolLayer::~QgsImageFillSymbolLayer() = default;
+
 void QgsImageFillSymbolLayer::renderPolygon( const QPolygonF &points, const QVector<QPolygonF> *rings, QgsSymbolRenderContext &context )
 {
   QPainter *p = context.renderContext().painter();
@@ -1600,14 +1699,6 @@ void QgsImageFillSymbolLayer::renderPolygon( const QPolygonF &points, const QVec
   if ( applyBrushTransformFromContext() && !context.renderContext().textureOrigin().isNull() )
   {
     QPointF leftCorner = context.renderContext().textureOrigin();
-    QTransform t = mBrush.transform();
-    t.translate( leftCorner.x(), leftCorner.y() );
-    mBrush.setTransform( t );
-  }
-  else if ( context.renderContext().testFlag( QgsRenderContext::RenderMapTile ) )
-  {
-    //transform brush to upper left corner of geometry bbox
-    QPointF leftCorner = points.boundingRect().topLeft();
     QTransform t = mBrush.transform();
     t.translate( leftCorner.x(), leftCorner.y() );
     mBrush.setTransform( t );
@@ -1643,6 +1734,11 @@ void QgsImageFillSymbolLayer::renderPolygon( const QPolygonF &points, const QVec
   mBrush.setTransform( bkTransform );
 }
 
+QgsSymbol *QgsImageFillSymbolLayer::subSymbol()
+{
+  return mStroke.get();
+}
+
 bool QgsImageFillSymbolLayer::setSubSymbol( QgsSymbol *symbol )
 {
   if ( !symbol ) //unset current stroke
@@ -1651,7 +1747,7 @@ bool QgsImageFillSymbolLayer::setSubSymbol( QgsSymbol *symbol )
     return true;
   }
 
-  if ( symbol->type() != QgsSymbol::Line )
+  if ( symbol->type() != Qgis::SymbolType::Line )
   {
     delete symbol;
     return false;
@@ -1782,6 +1878,8 @@ QgsSVGFillSymbolLayer::QgsSVGFillSymbolLayer( const QByteArray &svgData, double 
   setDefaultSvgParams();
 }
 
+QgsSVGFillSymbolLayer::~QgsSVGFillSymbolLayer() = default;
+
 void QgsSVGFillSymbolLayer::setOutputUnit( QgsUnitTypes::RenderUnit unit )
 {
   QgsImageFillSymbolLayer::setOutputUnit( unit );
@@ -1829,7 +1927,7 @@ void QgsSVGFillSymbolLayer::setSvgFilePath( const QString &svgPath )
   setDefaultSvgParams();
 }
 
-QgsSymbolLayer *QgsSVGFillSymbolLayer::create( const QgsStringMap &properties )
+QgsSymbolLayer *QgsSVGFillSymbolLayer::create( const QVariantMap &properties )
 {
   QByteArray data;
   double width = 20;
@@ -1842,7 +1940,7 @@ QgsSymbolLayer *QgsSVGFillSymbolLayer::create( const QgsStringMap &properties )
   }
   if ( properties.contains( QStringLiteral( "svgFile" ) ) )
   {
-    svgFilePath = properties[QStringLiteral( "svgFile" )];
+    svgFilePath = properties[QStringLiteral( "svgFile" )].toString();
   }
   if ( properties.contains( QStringLiteral( "angle" ) ) )
   {
@@ -1852,39 +1950,39 @@ QgsSymbolLayer *QgsSVGFillSymbolLayer::create( const QgsStringMap &properties )
   std::unique_ptr< QgsSVGFillSymbolLayer > symbolLayer;
   if ( !svgFilePath.isEmpty() )
   {
-    symbolLayer = qgis::make_unique< QgsSVGFillSymbolLayer >( svgFilePath, width, angle );
+    symbolLayer = std::make_unique< QgsSVGFillSymbolLayer >( svgFilePath, width, angle );
   }
   else
   {
     if ( properties.contains( QStringLiteral( "data" ) ) )
     {
-      data = QByteArray::fromHex( properties[QStringLiteral( "data" )].toLocal8Bit() );
+      data = QByteArray::fromHex( properties[QStringLiteral( "data" )].toString().toLocal8Bit() );
     }
-    symbolLayer = qgis::make_unique< QgsSVGFillSymbolLayer >( data, width, angle );
+    symbolLayer = std::make_unique< QgsSVGFillSymbolLayer >( data, width, angle );
   }
 
   //svg parameters
   if ( properties.contains( QStringLiteral( "svgFillColor" ) ) )
   {
     //pre 2.5 projects used "svgFillColor"
-    symbolLayer->setSvgFillColor( QgsSymbolLayerUtils::decodeColor( properties[QStringLiteral( "svgFillColor" )] ) );
+    symbolLayer->setSvgFillColor( QgsSymbolLayerUtils::decodeColor( properties[QStringLiteral( "svgFillColor" )].toString() ) );
   }
   else if ( properties.contains( QStringLiteral( "color" ) ) )
   {
-    symbolLayer->setSvgFillColor( QgsSymbolLayerUtils::decodeColor( properties[QStringLiteral( "color" )] ) );
+    symbolLayer->setSvgFillColor( QgsSymbolLayerUtils::decodeColor( properties[QStringLiteral( "color" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "svgOutlineColor" ) ) )
   {
     //pre 2.5 projects used "svgOutlineColor"
-    symbolLayer->setSvgStrokeColor( QgsSymbolLayerUtils::decodeColor( properties[QStringLiteral( "svgOutlineColor" )] ) );
+    symbolLayer->setSvgStrokeColor( QgsSymbolLayerUtils::decodeColor( properties[QStringLiteral( "svgOutlineColor" )].toString() ) );
   }
   else if ( properties.contains( QStringLiteral( "outline_color" ) ) )
   {
-    symbolLayer->setSvgStrokeColor( QgsSymbolLayerUtils::decodeColor( properties[QStringLiteral( "outline_color" )] ) );
+    symbolLayer->setSvgStrokeColor( QgsSymbolLayerUtils::decodeColor( properties[QStringLiteral( "outline_color" )].toString() ) );
   }
   else if ( properties.contains( QStringLiteral( "line_color" ) ) )
   {
-    symbolLayer->setSvgStrokeColor( QgsSymbolLayerUtils::decodeColor( properties[QStringLiteral( "line_color" )] ) );
+    symbolLayer->setSvgStrokeColor( QgsSymbolLayerUtils::decodeColor( properties[QStringLiteral( "line_color" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "svgOutlineWidth" ) ) )
   {
@@ -1903,27 +2001,33 @@ QgsSymbolLayer *QgsSVGFillSymbolLayer::create( const QgsStringMap &properties )
   //units
   if ( properties.contains( QStringLiteral( "pattern_width_unit" ) ) )
   {
-    symbolLayer->setPatternWidthUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "pattern_width_unit" )] ) );
+    symbolLayer->setPatternWidthUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "pattern_width_unit" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "pattern_width_map_unit_scale" ) ) )
   {
-    symbolLayer->setPatternWidthMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "pattern_width_map_unit_scale" )] ) );
+    symbolLayer->setPatternWidthMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "pattern_width_map_unit_scale" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "svg_outline_width_unit" ) ) )
   {
-    symbolLayer->setSvgStrokeWidthUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "svg_outline_width_unit" )] ) );
+    symbolLayer->setSvgStrokeWidthUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "svg_outline_width_unit" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "svg_outline_width_map_unit_scale" ) ) )
   {
-    symbolLayer->setSvgStrokeWidthMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "svg_outline_width_map_unit_scale" )] ) );
+    symbolLayer->setSvgStrokeWidthMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "svg_outline_width_map_unit_scale" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "outline_width_unit" ) ) )
   {
-    symbolLayer->setStrokeWidthUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "outline_width_unit" )] ) );
+    symbolLayer->setStrokeWidthUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "outline_width_unit" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "outline_width_map_unit_scale" ) ) )
   {
-    symbolLayer->setStrokeWidthMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "outline_width_map_unit_scale" )] ) );
+    symbolLayer->setStrokeWidthMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "outline_width_map_unit_scale" )].toString() ) );
+  }
+
+  if ( properties.contains( QStringLiteral( "parameters" ) ) )
+  {
+    const QVariantMap parameters = properties[QStringLiteral( "parameters" )].toMap();
+    symbolLayer->setParameters( QgsProperty::variantMapToPropertyMap( parameters ) );
   }
 
   symbolLayer->restoreOldDataDefinedProperties( properties );
@@ -1931,15 +2035,15 @@ QgsSymbolLayer *QgsSVGFillSymbolLayer::create( const QgsStringMap &properties )
   return symbolLayer.release();
 }
 
-void QgsSVGFillSymbolLayer::resolvePaths( QgsStringMap &properties, const QgsPathResolver &pathResolver, bool saving )
+void QgsSVGFillSymbolLayer::resolvePaths( QVariantMap &properties, const QgsPathResolver &pathResolver, bool saving )
 {
-  QgsStringMap::iterator it = properties.find( QStringLiteral( "svgFile" ) );
+  QVariantMap::iterator it = properties.find( QStringLiteral( "svgFile" ) );
   if ( it != properties.end() )
   {
     if ( saving )
-      it.value() = QgsSymbolLayerUtils::svgSymbolPathToName( it.value(), pathResolver );
+      it.value() = QgsSymbolLayerUtils::svgSymbolPathToName( it.value().toString(), pathResolver );
     else
-      it.value() = QgsSymbolLayerUtils::svgSymbolNameToPath( it.value(), pathResolver );
+      it.value() = QgsSymbolLayerUtils::svgSymbolNameToPath( it.value().toString(), pathResolver );
   }
 }
 
@@ -1951,7 +2055,7 @@ QString QgsSVGFillSymbolLayer::layerType() const
 void QgsSVGFillSymbolLayer::applyPattern( QBrush &brush, const QString &svgFilePath, double patternWidth, QgsUnitTypes::RenderUnit patternWidthUnit,
     const QColor &svgFillColor, const QColor &svgStrokeColor, double svgStrokeWidth,
     QgsUnitTypes::RenderUnit svgStrokeWidthUnit, const QgsSymbolRenderContext &context,
-    const QgsMapUnitScale &patternWidthMapUnitScale, const QgsMapUnitScale &svgStrokeWidthMapUnitScale )
+    const QgsMapUnitScale &patternWidthMapUnitScale, const QgsMapUnitScale &svgStrokeWidthMapUnitScale, const QgsStringMap svgParameters )
 {
   if ( mSvgViewBox.isNull() )
   {
@@ -1969,7 +2073,7 @@ void QgsSVGFillSymbolLayer::applyPattern( QBrush &brush, const QString &svgFileP
     bool fitsInCache = true;
     double strokeWidth = context.renderContext().convertToPainterUnits( svgStrokeWidth, svgStrokeWidthUnit, svgStrokeWidthMapUnitScale );
     QImage patternImage = QgsApplication::svgCache()->svgAsImage( svgFilePath, size, svgFillColor, svgStrokeColor, strokeWidth,
-                          context.renderContext().scaleFactor(), fitsInCache, 0, ( context.renderContext().flags() & QgsRenderContext::RenderBlocking ) );
+                          context.renderContext().scaleFactor(), fitsInCache, 0, ( context.renderContext().flags() & QgsRenderContext::RenderBlocking ), svgParameters );
     if ( !fitsInCache )
     {
       QPicture patternPict = QgsApplication::svgCache()->svgAsPicture( svgFilePath, size, svgFillColor, svgStrokeColor, strokeWidth,
@@ -2003,8 +2107,9 @@ void QgsSVGFillSymbolLayer::applyPattern( QBrush &brush, const QString &svgFileP
 
 void QgsSVGFillSymbolLayer::startRender( QgsSymbolRenderContext &context )
 {
+  QgsStringMap evaluatedParameters = QgsSymbolLayerUtils::evaluatePropertiesMap( mParameters, context.renderContext().expressionContext() );
 
-  applyPattern( mBrush, mSvgFilePath, mPatternWidth, mPatternWidthUnit, mColor, mSvgStrokeColor, mSvgStrokeWidth, mSvgStrokeWidthUnit, context, mPatternWidthMapUnitScale, mSvgStrokeWidthMapUnitScale );
+  applyPattern( mBrush, mSvgFilePath, mPatternWidth, mPatternWidthUnit, mColor, mSvgStrokeColor, mSvgStrokeWidth, mSvgStrokeWidthUnit, context, mPatternWidthMapUnitScale, mSvgStrokeWidthMapUnitScale, evaluatedParameters );
 
   if ( mStroke )
   {
@@ -2020,9 +2125,9 @@ void QgsSVGFillSymbolLayer::stopRender( QgsSymbolRenderContext &context )
   }
 }
 
-QgsStringMap QgsSVGFillSymbolLayer::properties() const
+QVariantMap QgsSVGFillSymbolLayer::properties() const
 {
-  QgsStringMap map;
+  QVariantMap map;
   if ( !mSvgFilePath.isEmpty() )
   {
     map.insert( QStringLiteral( "svgFile" ), mSvgFilePath );
@@ -2047,6 +2152,9 @@ QgsStringMap QgsSVGFillSymbolLayer::properties() const
   map.insert( QStringLiteral( "svg_outline_width_map_unit_scale" ), QgsSymbolLayerUtils::encodeMapUnitScale( mSvgStrokeWidthMapUnitScale ) );
   map.insert( QStringLiteral( "outline_width_unit" ), QgsUnitTypes::encodeUnit( mStrokeWidthUnit ) );
   map.insert( QStringLiteral( "outline_width_map_unit_scale" ), QgsSymbolLayerUtils::encodeMapUnitScale( mStrokeWidthMapUnitScale ) );
+
+  map[QStringLiteral( "parameters" )] = QgsProperty::propertyMapToVariantMap( mParameters );
+
   return map;
 }
 
@@ -2055,14 +2163,14 @@ QgsSVGFillSymbolLayer *QgsSVGFillSymbolLayer::clone() const
   std::unique_ptr< QgsSVGFillSymbolLayer > clonedLayer;
   if ( !mSvgFilePath.isEmpty() )
   {
-    clonedLayer = qgis::make_unique< QgsSVGFillSymbolLayer >( mSvgFilePath, mPatternWidth, mAngle );
+    clonedLayer = std::make_unique< QgsSVGFillSymbolLayer >( mSvgFilePath, mPatternWidth, mAngle );
     clonedLayer->setSvgFillColor( mColor );
     clonedLayer->setSvgStrokeColor( mSvgStrokeColor );
     clonedLayer->setSvgStrokeWidth( mSvgStrokeWidth );
   }
   else
   {
-    clonedLayer = qgis::make_unique< QgsSVGFillSymbolLayer >( mSvgData, mPatternWidth, mAngle );
+    clonedLayer = std::make_unique< QgsSVGFillSymbolLayer >( mSvgData, mPatternWidth, mAngle );
   }
 
   clonedLayer->setPatternWidthUnit( mPatternWidthUnit );
@@ -2071,6 +2179,8 @@ QgsSVGFillSymbolLayer *QgsSVGFillSymbolLayer::clone() const
   clonedLayer->setSvgStrokeWidthMapUnitScale( mSvgStrokeWidthMapUnitScale );
   clonedLayer->setStrokeWidthUnit( mStrokeWidthUnit );
   clonedLayer->setStrokeWidthMapUnitScale( mStrokeWidthMapUnitScale );
+
+  clonedLayer->setParameters( mParameters );
 
   if ( mStroke )
   {
@@ -2081,14 +2191,14 @@ QgsSVGFillSymbolLayer *QgsSVGFillSymbolLayer::clone() const
   return clonedLayer.release();
 }
 
-void QgsSVGFillSymbolLayer::toSld( QDomDocument &doc, QDomElement &element, const QgsStringMap &props ) const
+void QgsSVGFillSymbolLayer::toSld( QDomDocument &doc, QDomElement &element, const QVariantMap &props ) const
 {
   QDomElement symbolizerElem = doc.createElement( QStringLiteral( "se:PolygonSymbolizer" ) );
-  if ( !props.value( QStringLiteral( "uom" ), QString() ).isEmpty() )
-    symbolizerElem.setAttribute( QStringLiteral( "uom" ), props.value( QStringLiteral( "uom" ), QString() ) );
+  if ( !props.value( QStringLiteral( "uom" ), QString() ).toString().isEmpty() )
+    symbolizerElem.setAttribute( QStringLiteral( "uom" ), props.value( QStringLiteral( "uom" ), QString() ).toString() );
   element.appendChild( symbolizerElem );
 
-  QgsSymbolLayerUtils::createGeometryElement( doc, symbolizerElem, props.value( QStringLiteral( "geom" ), QString() ) );
+  QgsSymbolLayerUtils::createGeometryElement( doc, symbolizerElem, props.value( QStringLiteral( "geom" ), QString() ).toString() );
 
   QDomElement fillElem = doc.createElement( QStringLiteral( "se:Fill" ) );
   symbolizerElem.appendChild( fillElem );
@@ -2119,7 +2229,7 @@ void QgsSVGFillSymbolLayer::toSld( QDomDocument &doc, QDomElement &element, cons
   double angle = props.value( QStringLiteral( "angle" ), QStringLiteral( "0" ) ).toDouble( &ok );
   if ( !ok )
   {
-    angleFunc = QStringLiteral( "%1 + %2" ).arg( props.value( QStringLiteral( "angle" ), QStringLiteral( "0" ) ) ).arg( mAngle );
+    angleFunc = QStringLiteral( "%1 + %2" ).arg( props.value( QStringLiteral( "angle" ), QStringLiteral( "0" ) ).toString() ).arg( mAngle );
   }
   else if ( !qgsDoubleNear( angle + mAngle, 0.0 ) )
   {
@@ -2134,6 +2244,12 @@ void QgsSVGFillSymbolLayer::toSld( QDomDocument &doc, QDomElement &element, cons
     // have more than one layer
     mStroke->toSld( doc, element, props );
   }
+}
+
+bool QgsSVGFillSymbolLayer::usesMapUnits() const
+{
+  return mPatternWidthUnit == QgsUnitTypes::RenderMapUnits || mPatternWidthUnit == QgsUnitTypes::RenderMetersInMapUnits
+         || mSvgStrokeWidthUnit == QgsUnitTypes::RenderMapUnits || mSvgStrokeWidthUnit == QgsUnitTypes::RenderMetersInMapUnits;
 }
 
 QgsSymbolLayer *QgsSVGFillSymbolLayer::createFromSld( QDomElement &element )
@@ -2177,7 +2293,7 @@ QgsSymbolLayer *QgsSVGFillSymbolLayer::createFromSld( QDomElement &element )
       angle = d;
   }
 
-  std::unique_ptr< QgsSVGFillSymbolLayer > sl = qgis::make_unique< QgsSVGFillSymbolLayer >( path, size, angle );
+  std::unique_ptr< QgsSVGFillSymbolLayer > sl = std::make_unique< QgsSVGFillSymbolLayer >( path, size, angle );
   sl->setOutputUnit( QgsUnitTypes::RenderUnit::RenderPixels );
   sl->setSvgFillColor( fillColor );
   sl->setSvgStrokeColor( strokeColor );
@@ -2245,8 +2361,10 @@ void QgsSVGFillSymbolLayer::applyDataDefinedSettings( QgsSymbolRenderContext &co
     context.setOriginalValueVariable( mSvgStrokeWidth );
     strokeWidth = mDataDefinedProperties.valueAsDouble( QgsSymbolLayer::PropertyStrokeWidth, context.renderContext().expressionContext(), mSvgStrokeWidth );
   }
+  QgsStringMap evaluatedParameters = QgsSymbolLayerUtils::evaluatePropertiesMap( mParameters, context.renderContext().expressionContext() );
+
   applyPattern( mBrush, svgFile, width, mPatternWidthUnit, svgFillColor, svgStrokeColor, strokeWidth,
-                mSvgStrokeWidthUnit, context, mPatternWidthMapUnitScale, mSvgStrokeWidthMapUnitScale );
+                mSvgStrokeWidthUnit, context, mPatternWidthMapUnitScale, mSvgStrokeWidthMapUnitScale, evaluatedParameters );
 
 }
 
@@ -2309,12 +2427,22 @@ void QgsSVGFillSymbolLayer::setDefaultSvgParams()
   }
 }
 
+void QgsSVGFillSymbolLayer::setParameters( const QMap<QString, QgsProperty> &parameters )
+{
+  mParameters = parameters;
+}
+
 
 QgsLinePatternFillSymbolLayer::QgsLinePatternFillSymbolLayer()
   : QgsImageFillSymbolLayer()
 {
   setSubSymbol( new QgsLineSymbol() );
   QgsImageFillSymbolLayer::setSubSymbol( nullptr ); //no stroke
+}
+
+QgsLinePatternFillSymbolLayer::~QgsLinePatternFillSymbolLayer()
+{
+  delete mFillLineSymbol;
 }
 
 void QgsLinePatternFillSymbolLayer::setLineWidth( double w )
@@ -2334,11 +2462,6 @@ QColor QgsLinePatternFillSymbolLayer::color() const
   return mFillLineSymbol ? mFillLineSymbol->color() : mColor;
 }
 
-QgsLinePatternFillSymbolLayer::~QgsLinePatternFillSymbolLayer()
-{
-  delete mFillLineSymbol;
-}
-
 bool QgsLinePatternFillSymbolLayer::setSubSymbol( QgsSymbol *symbol )
 {
   if ( !symbol )
@@ -2346,7 +2469,7 @@ bool QgsLinePatternFillSymbolLayer::setSubSymbol( QgsSymbol *symbol )
     return false;
   }
 
-  if ( symbol->type() == QgsSymbol::Line )
+  if ( symbol->type() == Qgis::SymbolType::Line )
   {
     QgsLineSymbol *lineSymbol = dynamic_cast<QgsLineSymbol *>( symbol );
     if ( lineSymbol )
@@ -2406,6 +2529,13 @@ QgsUnitTypes::RenderUnit QgsLinePatternFillSymbolLayer::outputUnit() const
   return unit;
 }
 
+bool QgsLinePatternFillSymbolLayer::usesMapUnits() const
+{
+  return mDistanceUnit == QgsUnitTypes::RenderMapUnits || mDistanceUnit == QgsUnitTypes::RenderMetersInMapUnits
+         || mLineWidthUnit == QgsUnitTypes::RenderMapUnits || mLineWidthUnit == QgsUnitTypes::RenderMetersInMapUnits
+         || mOffsetUnit == QgsUnitTypes::RenderMapUnits || mOffsetUnit == QgsUnitTypes::RenderMetersInMapUnits;
+}
+
 void QgsLinePatternFillSymbolLayer::setMapUnitScale( const QgsMapUnitScale &scale )
 {
   QgsImageFillSymbolLayer::setMapUnitScale( scale );
@@ -2425,9 +2555,9 @@ QgsMapUnitScale QgsLinePatternFillSymbolLayer::mapUnitScale() const
   return QgsMapUnitScale();
 }
 
-QgsSymbolLayer *QgsLinePatternFillSymbolLayer::create( const QgsStringMap &properties )
+QgsSymbolLayer *QgsLinePatternFillSymbolLayer::create( const QVariantMap &properties )
 {
-  std::unique_ptr< QgsLinePatternFillSymbolLayer > patternLayer = qgis::make_unique< QgsLinePatternFillSymbolLayer >();
+  std::unique_ptr< QgsLinePatternFillSymbolLayer > patternLayer = std::make_unique< QgsLinePatternFillSymbolLayer >();
 
   //default values
   double lineAngle = 45;
@@ -2470,15 +2600,15 @@ QgsSymbolLayer *QgsLinePatternFillSymbolLayer::create( const QgsStringMap &prope
 
   if ( properties.contains( QStringLiteral( "color" ) ) )
   {
-    color = QgsSymbolLayerUtils::decodeColor( properties[QStringLiteral( "color" )] );
+    color = QgsSymbolLayerUtils::decodeColor( properties[QStringLiteral( "color" )].toString() );
   }
   else if ( properties.contains( QStringLiteral( "outline_color" ) ) )
   {
-    color = QgsSymbolLayerUtils::decodeColor( properties[QStringLiteral( "outline_color" )] );
+    color = QgsSymbolLayerUtils::decodeColor( properties[QStringLiteral( "outline_color" )].toString() );
   }
   else if ( properties.contains( QStringLiteral( "line_color" ) ) )
   {
-    color = QgsSymbolLayerUtils::decodeColor( properties[QStringLiteral( "line_color" )] );
+    color = QgsSymbolLayerUtils::decodeColor( properties[QStringLiteral( "line_color" )].toString() );
   }
   patternLayer->setColor( color );
 
@@ -2491,39 +2621,39 @@ QgsSymbolLayer *QgsLinePatternFillSymbolLayer::create( const QgsStringMap &prope
 
   if ( properties.contains( QStringLiteral( "distance_unit" ) ) )
   {
-    patternLayer->setDistanceUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "distance_unit" )] ) );
+    patternLayer->setDistanceUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "distance_unit" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "distance_map_unit_scale" ) ) )
   {
-    patternLayer->setDistanceMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "distance_map_unit_scale" )] ) );
+    patternLayer->setDistanceMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "distance_map_unit_scale" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "line_width_unit" ) ) )
   {
-    patternLayer->setLineWidthUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "line_width_unit" )] ) );
+    patternLayer->setLineWidthUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "line_width_unit" )].toString() ) );
   }
   else if ( properties.contains( QStringLiteral( "outline_width_unit" ) ) )
   {
-    patternLayer->setLineWidthUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "outline_width_unit" )] ) );
+    patternLayer->setLineWidthUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "outline_width_unit" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "line_width_map_unit_scale" ) ) )
   {
-    patternLayer->setLineWidthMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "line_width_map_unit_scale" )] ) );
+    patternLayer->setLineWidthMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "line_width_map_unit_scale" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "offset_unit" ) ) )
   {
-    patternLayer->setOffsetUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "offset_unit" )] ) );
+    patternLayer->setOffsetUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "offset_unit" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "offset_map_unit_scale" ) ) )
   {
-    patternLayer->setOffsetMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "offset_map_unit_scale" )] ) );
+    patternLayer->setOffsetMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "offset_map_unit_scale" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "outline_width_unit" ) ) )
   {
-    patternLayer->setStrokeWidthUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "outline_width_unit" )] ) );
+    patternLayer->setStrokeWidthUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "outline_width_unit" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "outline_width_map_unit_scale" ) ) )
   {
-    patternLayer->setStrokeWidthMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "outline_width_map_unit_scale" )] ) );
+    patternLayer->setStrokeWidthMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "outline_width_map_unit_scale" )].toString() ) );
   }
 
   patternLayer->restoreOldDataDefinedProperties( properties );
@@ -2796,7 +2926,7 @@ void QgsLinePatternFillSymbolLayer::applyPattern( const QgsSymbolRenderContext &
     polygons.append( QPolygonF() << p5 << p6 );
   }
 
-  for ( const QPolygonF &polygon : qgis::as_const( polygons ) )
+  for ( const QPolygonF &polygon : std::as_const( polygons ) )
   {
     fillLineSymbol->renderPolyline( polygon, context.feature(), lineRenderContext, -1, context.selected() );
   }
@@ -2841,9 +2971,9 @@ void QgsLinePatternFillSymbolLayer::stopRender( QgsSymbolRenderContext &context 
   }
 }
 
-QgsStringMap QgsLinePatternFillSymbolLayer::properties() const
+QVariantMap QgsLinePatternFillSymbolLayer::properties() const
 {
-  QgsStringMap map;
+  QVariantMap map;
   map.insert( QStringLiteral( "angle" ), QString::number( mLineAngle ) );
   map.insert( QStringLiteral( "distance" ), QString::number( mDistance ) );
   map.insert( QStringLiteral( "line_width" ), QString::number( mLineWidth ) );
@@ -2872,15 +3002,15 @@ QgsLinePatternFillSymbolLayer *QgsLinePatternFillSymbolLayer::clone() const
   return clonedLayer;
 }
 
-void QgsLinePatternFillSymbolLayer::toSld( QDomDocument &doc, QDomElement &element, const QgsStringMap &props ) const
+void QgsLinePatternFillSymbolLayer::toSld( QDomDocument &doc, QDomElement &element, const QVariantMap &props ) const
 {
   QDomElement symbolizerElem = doc.createElement( QStringLiteral( "se:PolygonSymbolizer" ) );
-  if ( !props.value( QStringLiteral( "uom" ), QString() ).isEmpty() )
-    symbolizerElem.setAttribute( QStringLiteral( "uom" ), props.value( QStringLiteral( "uom" ), QString() ) );
+  if ( !props.value( QStringLiteral( "uom" ), QString() ).toString().isEmpty() )
+    symbolizerElem.setAttribute( QStringLiteral( "uom" ), props.value( QStringLiteral( "uom" ), QString() ).toString() );
   element.appendChild( symbolizerElem );
 
   // <Geometry>
-  QgsSymbolLayerUtils::createGeometryElement( doc, symbolizerElem, props.value( QStringLiteral( "geom" ), QString() ) );
+  QgsSymbolLayerUtils::createGeometryElement( doc, symbolizerElem, props.value( QStringLiteral( "geom" ), QString() ).toString() );
 
   QDomElement fillElem = doc.createElement( QStringLiteral( "se:Fill" ) );
   symbolizerElem.appendChild( fillElem );
@@ -2904,7 +3034,7 @@ void QgsLinePatternFillSymbolLayer::toSld( QDomDocument &doc, QDomElement &eleme
   double angle = props.value( QStringLiteral( "angle" ), QStringLiteral( "0" ) ).toDouble( &ok );
   if ( !ok )
   {
-    angleFunc = QStringLiteral( "%1 + %2" ).arg( props.value( QStringLiteral( "angle" ), QStringLiteral( "0" ) ) ).arg( mLineAngle );
+    angleFunc = QStringLiteral( "%1 + %2" ).arg( props.value( QStringLiteral( "angle" ), QStringLiteral( "0" ) ).toString() ).arg( mLineAngle );
   }
   else if ( !qgsDoubleNear( angle + mLineAngle, 0.0 ) )
   {
@@ -2923,7 +3053,7 @@ QString QgsLinePatternFillSymbolLayer::ogrFeatureStyleWidth( double widthScaleFa
   QString featureStyle;
   featureStyle.append( "Brush(" );
   featureStyle.append( QStringLiteral( "fc:%1" ).arg( mColor.name() ) );
-  featureStyle.append( QStringLiteral( ",bc:%1" ).arg( QStringLiteral( "#00000000" ) ) ); //transparent background
+  featureStyle.append( QStringLiteral( ",bc:%1" ).arg( QLatin1String( "#00000000" ) ) ); //transparent background
   featureStyle.append( ",id:\"ogr-brush-2\"" );
   featureStyle.append( QStringLiteral( ",a:%1" ).arg( mLineAngle ) );
   featureStyle.append( QStringLiteral( ",s:%1" ).arg( mLineWidth * widthScaleFactor ) );
@@ -3002,7 +3132,7 @@ QgsSymbolLayer *QgsLinePatternFillSymbolLayer::createFromSld( QDomElement &eleme
   size = QgsSymbolLayerUtils::sizeInPixelsFromSldUom( uom, size );
   lineWidth = QgsSymbolLayerUtils::sizeInPixelsFromSldUom( uom, lineWidth );
 
-  std::unique_ptr< QgsLinePatternFillSymbolLayer > sl = qgis::make_unique< QgsLinePatternFillSymbolLayer >();
+  std::unique_ptr< QgsLinePatternFillSymbolLayer > sl = std::make_unique< QgsLinePatternFillSymbolLayer >();
   sl->setOutputUnit( QgsUnitTypes::RenderUnit::RenderPixels );
   sl->setColor( lineColor );
   sl->setLineWidth( lineWidth );
@@ -3073,6 +3203,16 @@ QgsUnitTypes::RenderUnit QgsPointPatternFillSymbolLayer::outputUnit() const
   return unit;
 }
 
+bool QgsPointPatternFillSymbolLayer::usesMapUnits() const
+{
+  return mDistanceXUnit == QgsUnitTypes::RenderMapUnits || mDistanceXUnit == QgsUnitTypes::RenderMetersInMapUnits
+         || mDistanceYUnit == QgsUnitTypes::RenderMapUnits || mDistanceYUnit == QgsUnitTypes::RenderMetersInMapUnits
+         || mDisplacementXUnit == QgsUnitTypes::RenderMapUnits || mDisplacementXUnit == QgsUnitTypes::RenderMetersInMapUnits
+         || mDisplacementYUnit == QgsUnitTypes::RenderMapUnits || mDisplacementYUnit == QgsUnitTypes::RenderMetersInMapUnits
+         || mOffsetXUnit == QgsUnitTypes::RenderMapUnits || mOffsetXUnit == QgsUnitTypes::RenderMetersInMapUnits
+         || mOffsetYUnit == QgsUnitTypes::RenderMapUnits || mOffsetYUnit == QgsUnitTypes::RenderMetersInMapUnits;
+}
+
 void QgsPointPatternFillSymbolLayer::setMapUnitScale( const QgsMapUnitScale &scale )
 {
   QgsImageFillSymbolLayer::setMapUnitScale( scale );
@@ -3098,9 +3238,9 @@ QgsMapUnitScale QgsPointPatternFillSymbolLayer::mapUnitScale() const
   return QgsMapUnitScale();
 }
 
-QgsSymbolLayer *QgsPointPatternFillSymbolLayer::create( const QgsStringMap &properties )
+QgsSymbolLayer *QgsPointPatternFillSymbolLayer::create( const QVariantMap &properties )
 {
-  std::unique_ptr< QgsPointPatternFillSymbolLayer > layer = qgis::make_unique< QgsPointPatternFillSymbolLayer >();
+  std::unique_ptr< QgsPointPatternFillSymbolLayer > layer = std::make_unique< QgsPointPatternFillSymbolLayer >();
   if ( properties.contains( QStringLiteral( "distance_x" ) ) )
   {
     layer->setDistanceX( properties[QStringLiteral( "distance_x" )].toDouble() );
@@ -3128,60 +3268,60 @@ QgsSymbolLayer *QgsPointPatternFillSymbolLayer::create( const QgsStringMap &prop
 
   if ( properties.contains( QStringLiteral( "distance_x_unit" ) ) )
   {
-    layer->setDistanceXUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "distance_x_unit" )] ) );
+    layer->setDistanceXUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "distance_x_unit" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "distance_x_map_unit_scale" ) ) )
   {
-    layer->setDistanceXMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "distance_x_map_unit_scale" )] ) );
+    layer->setDistanceXMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "distance_x_map_unit_scale" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "distance_y_unit" ) ) )
   {
-    layer->setDistanceYUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "distance_y_unit" )] ) );
+    layer->setDistanceYUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "distance_y_unit" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "distance_y_map_unit_scale" ) ) )
   {
-    layer->setDistanceYMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "distance_y_map_unit_scale" )] ) );
+    layer->setDistanceYMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "distance_y_map_unit_scale" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "displacement_x_unit" ) ) )
   {
-    layer->setDisplacementXUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "displacement_x_unit" )] ) );
+    layer->setDisplacementXUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "displacement_x_unit" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "displacement_x_map_unit_scale" ) ) )
   {
-    layer->setDisplacementXMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "displacement_x_map_unit_scale" )] ) );
+    layer->setDisplacementXMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "displacement_x_map_unit_scale" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "displacement_y_unit" ) ) )
   {
-    layer->setDisplacementYUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "displacement_y_unit" )] ) );
+    layer->setDisplacementYUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "displacement_y_unit" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "displacement_y_map_unit_scale" ) ) )
   {
-    layer->setDisplacementYMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "displacement_y_map_unit_scale" )] ) );
+    layer->setDisplacementYMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "displacement_y_map_unit_scale" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "offset_x_unit" ) ) )
   {
-    layer->setOffsetXUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "offset_x_unit" )] ) );
+    layer->setOffsetXUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "offset_x_unit" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "offset_x_map_unit_scale" ) ) )
   {
-    layer->setOffsetXMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "offset_x_map_unit_scale" )] ) );
+    layer->setOffsetXMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "offset_x_map_unit_scale" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "offset_y_unit" ) ) )
   {
-    layer->setOffsetYUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "offset_y_unit" )] ) );
+    layer->setOffsetYUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "offset_y_unit" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "offset_y_map_unit_scale" ) ) )
   {
-    layer->setOffsetYMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "offset_y_map_unit_scale" )] ) );
+    layer->setOffsetYMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "offset_y_map_unit_scale" )].toString() ) );
   }
 
   if ( properties.contains( QStringLiteral( "outline_width_unit" ) ) )
   {
-    layer->setStrokeWidthUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "outline_width_unit" )] ) );
+    layer->setStrokeWidthUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "outline_width_unit" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "outline_width_map_unit_scale" ) ) )
   {
-    layer->setStrokeWidthMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "outline_width_map_unit_scale" )] ) );
+    layer->setStrokeWidthMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "outline_width_map_unit_scale" )].toString() ) );
   }
 
   layer->restoreOldDataDefinedProperties( properties );
@@ -3462,9 +3602,9 @@ void QgsPointPatternFillSymbolLayer::renderPolygon( const QPolygonF &points, con
   }
 }
 
-QgsStringMap QgsPointPatternFillSymbolLayer::properties() const
+QVariantMap QgsPointPatternFillSymbolLayer::properties() const
 {
-  QgsStringMap map;
+  QVariantMap map;
   map.insert( QStringLiteral( "distance_x" ), QString::number( mDistanceX ) );
   map.insert( QStringLiteral( "distance_y" ), QString::number( mDistanceY ) );
   map.insert( QStringLiteral( "displacement_x" ), QString::number( mDisplacementX ) );
@@ -3500,17 +3640,17 @@ QgsPointPatternFillSymbolLayer *QgsPointPatternFillSymbolLayer::clone() const
   return clonedLayer;
 }
 
-void QgsPointPatternFillSymbolLayer::toSld( QDomDocument &doc, QDomElement &element, const QgsStringMap &props ) const
+void QgsPointPatternFillSymbolLayer::toSld( QDomDocument &doc, QDomElement &element, const QVariantMap &props ) const
 {
   for ( int i = 0; i < mMarkerSymbol->symbolLayerCount(); i++ )
   {
     QDomElement symbolizerElem = doc.createElement( QStringLiteral( "se:PolygonSymbolizer" ) );
-    if ( !props.value( QStringLiteral( "uom" ), QString() ).isEmpty() )
-      symbolizerElem.setAttribute( QStringLiteral( "uom" ), props.value( QStringLiteral( "uom" ), QString() ) );
+    if ( !props.value( QStringLiteral( "uom" ), QString() ).toString().isEmpty() )
+      symbolizerElem.setAttribute( QStringLiteral( "uom" ), props.value( QStringLiteral( "uom" ), QString() ).toString() );
     element.appendChild( symbolizerElem );
 
     // <Geometry>
-    QgsSymbolLayerUtils::createGeometryElement( doc, symbolizerElem, props.value( QStringLiteral( "geom" ), QString() ) );
+    QgsSymbolLayerUtils::createGeometryElement( doc, symbolizerElem, props.value( QStringLiteral( "geom" ), QString() ).toString() );
 
     QDomElement fillElem = doc.createElement( QStringLiteral( "se:Fill" ) );
     symbolizerElem.appendChild( fillElem );
@@ -3526,15 +3666,19 @@ void QgsPointPatternFillSymbolLayer::toSld( QDomDocument &doc, QDomElement &elem
     symbolizerElem.appendChild( distanceElem );
 
     QgsSymbolLayer *layer = mMarkerSymbol->symbolLayer( i );
-    QgsMarkerSymbolLayer *markerLayer = static_cast<QgsMarkerSymbolLayer *>( layer );
-    if ( !markerLayer )
+    if ( QgsMarkerSymbolLayer *markerLayer = dynamic_cast<QgsMarkerSymbolLayer *>( layer ) )
     {
-      QString errorMsg = QStringLiteral( "MarkerSymbolLayerV2 expected, %1 found. Skip it." ).arg( layer->layerType() );
+      markerLayer->writeSldMarker( doc, graphicFillElem, props );
+    }
+    else if ( layer )
+    {
+      QString errorMsg = QStringLiteral( "QgsMarkerSymbolLayer expected, %1 found. Skip it." ).arg( layer->layerType() );
       graphicFillElem.appendChild( doc.createComment( errorMsg ) );
     }
     else
     {
-      markerLayer->writeSldMarker( doc, graphicFillElem, props );
+      QString errorMsg = QStringLiteral( "Missing point pattern symbol layer. Skip it." );
+      graphicFillElem.appendChild( doc.createComment( errorMsg ) );
     }
   }
 }
@@ -3552,13 +3696,18 @@ bool QgsPointPatternFillSymbolLayer::setSubSymbol( QgsSymbol *symbol )
     return false;
   }
 
-  if ( symbol->type() == QgsSymbol::Marker )
+  if ( symbol->type() == Qgis::SymbolType::Marker )
   {
     QgsMarkerSymbol *markerSymbol = static_cast<QgsMarkerSymbol *>( symbol );
     delete mMarkerSymbol;
     mMarkerSymbol = markerSymbol;
   }
   return true;
+}
+
+QgsSymbol *QgsPointPatternFillSymbolLayer::subSymbol()
+{
+  return mMarkerSymbol;
 }
 
 void QgsPointPatternFillSymbolLayer::applyDataDefinedSettings( QgsSymbolRenderContext &context )
@@ -3654,9 +3803,11 @@ QgsCentroidFillSymbolLayer::QgsCentroidFillSymbolLayer()
   setSubSymbol( new QgsMarkerSymbol() );
 }
 
-QgsSymbolLayer *QgsCentroidFillSymbolLayer::create( const QgsStringMap &properties )
+QgsCentroidFillSymbolLayer::~QgsCentroidFillSymbolLayer() = default;
+
+QgsSymbolLayer *QgsCentroidFillSymbolLayer::create( const QVariantMap &properties )
 {
-  std::unique_ptr< QgsCentroidFillSymbolLayer > sl = qgis::make_unique< QgsCentroidFillSymbolLayer >();
+  std::unique_ptr< QgsCentroidFillSymbolLayer > sl = std::make_unique< QgsCentroidFillSymbolLayer >();
 
   if ( properties.contains( QStringLiteral( "point_on_surface" ) ) )
     sl->setPointOnSurface( properties[QStringLiteral( "point_on_surface" )].toInt() != 0 );
@@ -3690,7 +3841,6 @@ QColor QgsCentroidFillSymbolLayer::color() const
 
 void QgsCentroidFillSymbolLayer::startRender( QgsSymbolRenderContext &context )
 {
-  mMarker->setOpacity( context.opacity() );
   mMarker->startRender( context.renderContext(), context.fields() );
 
   mCurrentFeatureId = -1;
@@ -3713,12 +3863,16 @@ void QgsCentroidFillSymbolLayer::renderPolygon( const QPolygonF &points, const Q
   {
     // in the middle of rendering a possibly multi-part feature, so we collect all the parts and defer the actual rendering
     // until after we've received the final part
+    mFeatureSymbolOpacity = context.opacity();
     mCurrentParts << part;
   }
   else
   {
     // not rendering a feature, so we can just render the polygon immediately
+    const double prevOpacity = mMarker->opacity();
+    mMarker->setOpacity( mMarker->opacity() * context.opacity() );
     render( context.renderContext(), QVector<Part>() << part, context.feature() ? *context.feature() : QgsFeature(), context.selected() );
+    mMarker->setOpacity( prevOpacity );
   }
 }
 
@@ -3731,7 +3885,13 @@ void QgsCentroidFillSymbolLayer::startFeatureRender( const QgsFeature &, QgsRend
 void QgsCentroidFillSymbolLayer::stopFeatureRender( const QgsFeature &feature, QgsRenderContext &context )
 {
   mRenderingFeature = false;
+
+  const double prevOpacity = mMarker->opacity();
+  mMarker->setOpacity( mMarker->opacity() * mFeatureSymbolOpacity );
+
   render( context, mCurrentParts, feature, false );
+  mFeatureSymbolOpacity = 1;
+  mMarker->setOpacity( prevOpacity );
 }
 
 void QgsCentroidFillSymbolLayer::render( QgsRenderContext &context, const QVector<QgsCentroidFillSymbolLayer::Part> &parts, const QgsFeature &feature, bool selected )
@@ -3819,9 +3979,9 @@ void QgsCentroidFillSymbolLayer::render( QgsRenderContext &context, const QVecto
   }
 }
 
-QgsStringMap QgsCentroidFillSymbolLayer::properties() const
+QVariantMap QgsCentroidFillSymbolLayer::properties() const
 {
-  QgsStringMap map;
+  QVariantMap map;
   map[QStringLiteral( "point_on_surface" )] = QString::number( mPointOnSurface );
   map[QStringLiteral( "point_on_all_parts" )] = QString::number( mPointOnAllParts );
   map[QStringLiteral( "clip_points" )] = QString::number( mClipPoints );
@@ -3831,7 +3991,7 @@ QgsStringMap QgsCentroidFillSymbolLayer::properties() const
 
 QgsCentroidFillSymbolLayer *QgsCentroidFillSymbolLayer::clone() const
 {
-  std::unique_ptr< QgsCentroidFillSymbolLayer > x = qgis::make_unique< QgsCentroidFillSymbolLayer >();
+  std::unique_ptr< QgsCentroidFillSymbolLayer > x = std::make_unique< QgsCentroidFillSymbolLayer >();
   x->mAngle = mAngle;
   x->mColor = mColor;
   x->setSubSymbol( mMarker->clone() );
@@ -3844,7 +4004,7 @@ QgsCentroidFillSymbolLayer *QgsCentroidFillSymbolLayer::clone() const
   return x.release();
 }
 
-void QgsCentroidFillSymbolLayer::toSld( QDomDocument &doc, QDomElement &element, const QgsStringMap &props ) const
+void QgsCentroidFillSymbolLayer::toSld( QDomDocument &doc, QDomElement &element, const QVariantMap &props ) const
 {
   // SLD 1.0 specs says: "if a line, polygon, or raster geometry is
   // used with PointSymbolizer, then the semantic is to use the centroid
@@ -3862,7 +4022,7 @@ QgsSymbolLayer *QgsCentroidFillSymbolLayer::createFromSld( QDomElement &element 
   layers.append( l );
   std::unique_ptr< QgsMarkerSymbol > marker( new QgsMarkerSymbol( layers ) );
 
-  std::unique_ptr< QgsCentroidFillSymbolLayer > sl = qgis::make_unique< QgsCentroidFillSymbolLayer >();
+  std::unique_ptr< QgsCentroidFillSymbolLayer > sl = std::make_unique< QgsCentroidFillSymbolLayer >();
   sl->setSubSymbol( marker.release() );
   sl->setPointOnAllParts( false );
   return sl.release();
@@ -3876,7 +4036,7 @@ QgsSymbol *QgsCentroidFillSymbolLayer::subSymbol()
 
 bool QgsCentroidFillSymbolLayer::setSubSymbol( QgsSymbol *symbol )
 {
-  if ( !symbol || symbol->type() != QgsSymbol::Marker )
+  if ( !symbol || symbol->type() != Qgis::SymbolType::Marker )
   {
     delete symbol;
     return false;
@@ -3906,6 +4066,11 @@ bool QgsCentroidFillSymbolLayer::hasDataDefinedProperties() const
   return false;
 }
 
+bool QgsCentroidFillSymbolLayer::canCauseArtifactsBetweenAdjacentTiles() const
+{
+  return true;
+}
+
 void QgsCentroidFillSymbolLayer::setOutputUnit( QgsUnitTypes::RenderUnit unit )
 {
   if ( mMarker )
@@ -3921,6 +4086,15 @@ QgsUnitTypes::RenderUnit QgsCentroidFillSymbolLayer::outputUnit() const
     return mMarker->outputUnit();
   }
   return QgsUnitTypes::RenderUnknownUnit; //mOutputUnit;
+}
+
+bool QgsCentroidFillSymbolLayer::usesMapUnits() const
+{
+  if ( mMarker )
+  {
+    return mMarker->usesMapUnits();
+  }
+  return false;
 }
 
 void QgsCentroidFillSymbolLayer::setMapUnitScale( const QgsMapUnitScale &scale )
@@ -3950,7 +4124,9 @@ QgsRasterFillSymbolLayer::QgsRasterFillSymbolLayer( const QString &imageFilePath
   QgsImageFillSymbolLayer::setSubSymbol( nullptr ); //disable sub symbol
 }
 
-QgsSymbolLayer *QgsRasterFillSymbolLayer::create( const QgsStringMap &properties )
+QgsRasterFillSymbolLayer::~QgsRasterFillSymbolLayer() = default;
+
+QgsSymbolLayer *QgsRasterFillSymbolLayer::create( const QVariantMap &properties )
 {
   FillCoordinateMode mode = QgsRasterFillSymbolLayer::Feature;
   double alpha = 1.0;
@@ -3961,7 +4137,7 @@ QgsSymbolLayer *QgsRasterFillSymbolLayer::create( const QgsStringMap &properties
   QString imagePath;
   if ( properties.contains( QStringLiteral( "imageFile" ) ) )
   {
-    imagePath = properties[QStringLiteral( "imageFile" )];
+    imagePath = properties[QStringLiteral( "imageFile" )].toString();
   }
   if ( properties.contains( QStringLiteral( "coordinate_mode" ) ) )
   {
@@ -3973,7 +4149,7 @@ QgsSymbolLayer *QgsRasterFillSymbolLayer::create( const QgsStringMap &properties
   }
   if ( properties.contains( QStringLiteral( "offset" ) ) )
   {
-    offset = QgsSymbolLayerUtils::decodePoint( properties[QStringLiteral( "offset" )] );
+    offset = QgsSymbolLayerUtils::decodePoint( properties[QStringLiteral( "offset" )].toString() );
   }
   if ( properties.contains( QStringLiteral( "angle" ) ) )
   {
@@ -3983,7 +4159,7 @@ QgsSymbolLayer *QgsRasterFillSymbolLayer::create( const QgsStringMap &properties
   {
     width = properties[QStringLiteral( "width" )].toDouble();
   }
-  std::unique_ptr< QgsRasterFillSymbolLayer > symbolLayer = qgis::make_unique< QgsRasterFillSymbolLayer >( imagePath );
+  std::unique_ptr< QgsRasterFillSymbolLayer > symbolLayer = std::make_unique< QgsRasterFillSymbolLayer >( imagePath );
   symbolLayer->setCoordinateMode( mode );
   symbolLayer->setOpacity( alpha );
   symbolLayer->setOffset( offset );
@@ -3991,19 +4167,19 @@ QgsSymbolLayer *QgsRasterFillSymbolLayer::create( const QgsStringMap &properties
   symbolLayer->setWidth( width );
   if ( properties.contains( QStringLiteral( "offset_unit" ) ) )
   {
-    symbolLayer->setOffsetUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "offset_unit" )] ) );
+    symbolLayer->setOffsetUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "offset_unit" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "offset_map_unit_scale" ) ) )
   {
-    symbolLayer->setOffsetMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "offset_map_unit_scale" )] ) );
+    symbolLayer->setOffsetMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "offset_map_unit_scale" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "width_unit" ) ) )
   {
-    symbolLayer->setWidthUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "width_unit" )] ) );
+    symbolLayer->setWidthUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "width_unit" )].toString() ) );
   }
   if ( properties.contains( QStringLiteral( "width_map_unit_scale" ) ) )
   {
-    symbolLayer->setWidthMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "width_map_unit_scale" )] ) );
+    symbolLayer->setWidthMapUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "width_map_unit_scale" )].toString() ) );
   }
 
   symbolLayer->restoreOldDataDefinedProperties( properties );
@@ -4011,15 +4187,15 @@ QgsSymbolLayer *QgsRasterFillSymbolLayer::create( const QgsStringMap &properties
   return symbolLayer.release();
 }
 
-void QgsRasterFillSymbolLayer::resolvePaths( QgsStringMap &properties, const QgsPathResolver &pathResolver, bool saving )
+void QgsRasterFillSymbolLayer::resolvePaths( QVariantMap &properties, const QgsPathResolver &pathResolver, bool saving )
 {
-  QgsStringMap::iterator it = properties.find( QStringLiteral( "imageFile" ) );
+  QVariantMap::iterator it = properties.find( QStringLiteral( "imageFile" ) );
   if ( it != properties.end() )
   {
     if ( saving )
-      it.value() = pathResolver.writePath( it.value() );
+      it.value() = pathResolver.writePath( it.value().toString() );
     else
-      it.value() = pathResolver.readPath( it.value() );
+      it.value() = pathResolver.readPath( it.value().toString() );
   }
 }
 
@@ -4042,11 +4218,20 @@ void QgsRasterFillSymbolLayer::renderPolygon( const QPolygonF &points, const QVe
     return;
   }
 
-  QPointF offset;
-  if ( !mOffset.isNull() )
+  QPointF offset = mOffset;
+  if ( mDataDefinedProperties.isActive( QgsSymbolLayer::PropertyOffset ) )
   {
-    offset.setX( context.renderContext().convertToPainterUnits( mOffset.x(), mOffsetUnit, mOffsetMapUnitScale ) );
-    offset.setY( context.renderContext().convertToPainterUnits( mOffset.y(), mOffsetUnit, mOffsetMapUnitScale ) );
+    context.setOriginalValueVariable( QgsSymbolLayerUtils::encodePoint( mOffset ) );
+    const QVariant val = mDataDefinedProperties.value( QgsSymbolLayer::PropertyOffset, context.renderContext().expressionContext(), QString() );
+    bool ok = false;
+    const QPointF res = QgsSymbolLayerUtils::toPoint( val, &ok );
+    if ( ok )
+      offset = res;
+  }
+  if ( !offset.isNull() )
+  {
+    offset.setX( context.renderContext().convertToPainterUnits( offset.x(), mOffsetUnit, mOffsetMapUnitScale ) );
+    offset.setY( context.renderContext().convertToPainterUnits( offset.y(), mOffsetUnit, mOffsetMapUnitScale ) );
     p->translate( offset );
   }
   if ( mCoordinateMode == Feature )
@@ -4057,7 +4242,7 @@ void QgsRasterFillSymbolLayer::renderPolygon( const QPolygonF &points, const QVe
   }
 
   QgsImageFillSymbolLayer::renderPolygon( points, rings, context );
-  if ( !mOffset.isNull() )
+  if ( !offset.isNull() )
   {
     p->translate( -offset );
   }
@@ -4065,7 +4250,7 @@ void QgsRasterFillSymbolLayer::renderPolygon( const QPolygonF &points, const QVe
 
 void QgsRasterFillSymbolLayer::startRender( QgsSymbolRenderContext &context )
 {
-  applyPattern( mBrush, mImageFilePath, mWidth, mOpacity, context );
+  applyPattern( mBrush, mImageFilePath, mWidth, mOpacity * context.opacity(), context );
 }
 
 void QgsRasterFillSymbolLayer::stopRender( QgsSymbolRenderContext &context )
@@ -4073,9 +4258,9 @@ void QgsRasterFillSymbolLayer::stopRender( QgsSymbolRenderContext &context )
   Q_UNUSED( context )
 }
 
-QgsStringMap QgsRasterFillSymbolLayer::properties() const
+QVariantMap QgsRasterFillSymbolLayer::properties() const
 {
-  QgsStringMap map;
+  QVariantMap map;
   map[QStringLiteral( "imageFile" )] = mImageFilePath;
   map[QStringLiteral( "coordinate_mode" )] = QString::number( mCoordinateMode );
   map[QStringLiteral( "alpha" )] = QString::number( mOpacity );
@@ -4091,7 +4276,7 @@ QgsStringMap QgsRasterFillSymbolLayer::properties() const
 
 QgsRasterFillSymbolLayer *QgsRasterFillSymbolLayer::clone() const
 {
-  std::unique_ptr< QgsRasterFillSymbolLayer > sl = qgis::make_unique< QgsRasterFillSymbolLayer >( mImageFilePath );
+  std::unique_ptr< QgsRasterFillSymbolLayer > sl = std::make_unique< QgsRasterFillSymbolLayer >( mImageFilePath );
   sl->setCoordinateMode( mCoordinateMode );
   sl->setOpacity( mOpacity );
   sl->setOffset( mOffset );
@@ -4109,6 +4294,12 @@ QgsRasterFillSymbolLayer *QgsRasterFillSymbolLayer::clone() const
 double QgsRasterFillSymbolLayer::estimateMaxBleed( const QgsRenderContext &context ) const
 {
   return context.convertToPainterUnits( std::max( std::fabs( mOffset.x() ), std::fabs( mOffset.y() ) ), mOffsetUnit, mOffsetMapUnitScale );
+}
+
+bool QgsRasterFillSymbolLayer::usesMapUnits() const
+{
+  return mWidthUnit == QgsUnitTypes::RenderMapUnits || mWidthUnit == QgsUnitTypes::RenderMetersInMapUnits
+         || mOffsetUnit == QgsUnitTypes::RenderMapUnits || mOffsetUnit == QgsUnitTypes::RenderMetersInMapUnits;
 }
 
 void QgsRasterFillSymbolLayer::setImageFilePath( const QString &imagePath )
@@ -4229,7 +4420,9 @@ QgsRandomMarkerFillSymbolLayer::QgsRandomMarkerFillSymbolLayer( int pointCount, 
   setSubSymbol( new QgsMarkerSymbol() );
 }
 
-QgsSymbolLayer *QgsRandomMarkerFillSymbolLayer::create( const QgsStringMap &properties )
+QgsRandomMarkerFillSymbolLayer::~QgsRandomMarkerFillSymbolLayer() = default;
+
+QgsSymbolLayer *QgsRandomMarkerFillSymbolLayer::create( const QVariantMap &properties )
 {
   const CountMethod countMethod  = static_cast< CountMethod >( properties.value( QStringLiteral( "count_method" ), QStringLiteral( "0" ) ).toInt() );
   const int pointCount = properties.value( QStringLiteral( "point_count" ), QStringLiteral( "10" ) ).toInt();
@@ -4237,7 +4430,7 @@ QgsSymbolLayer *QgsRandomMarkerFillSymbolLayer::create( const QgsStringMap &prop
 
   unsigned long seed = 0;
   if ( properties.contains( QStringLiteral( "seed" ) ) )
-    seed = properties.value( QStringLiteral( "seed" ) ).toULong();
+    seed = properties.value( QStringLiteral( "seed" ) ).toUInt();
   else
   {
     // if we a creating a new random marker fill from scratch, we default to a random seed
@@ -4248,12 +4441,12 @@ QgsSymbolLayer *QgsRandomMarkerFillSymbolLayer::create( const QgsStringMap &prop
     seed = uniformDist( mt );
   }
 
-  std::unique_ptr< QgsRandomMarkerFillSymbolLayer > sl = qgis::make_unique< QgsRandomMarkerFillSymbolLayer >( pointCount, countMethod, densityArea, seed );
+  std::unique_ptr< QgsRandomMarkerFillSymbolLayer > sl = std::make_unique< QgsRandomMarkerFillSymbolLayer >( pointCount, countMethod, densityArea, seed );
 
   if ( properties.contains( QStringLiteral( "density_area_unit" ) ) )
-    sl->setDensityAreaUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "density_area_unit" )] ) );
+    sl->setDensityAreaUnit( QgsUnitTypes::decodeRenderUnit( properties[QStringLiteral( "density_area_unit" )].toString() ) );
   if ( properties.contains( QStringLiteral( "density_area_unit_scale" ) ) )
-    sl->setDensityAreaUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "density_area_unit_scale" )] ) );
+    sl->setDensityAreaUnitScale( QgsSymbolLayerUtils::decodeMapUnitScale( properties[QStringLiteral( "density_area_unit_scale" )].toString() ) );
 
   if ( properties.contains( QStringLiteral( "clip_points" ) ) )
   {
@@ -4281,7 +4474,6 @@ QColor QgsRandomMarkerFillSymbolLayer::color() const
 
 void QgsRandomMarkerFillSymbolLayer::startRender( QgsSymbolRenderContext &context )
 {
-  mMarker->setOpacity( context.opacity() );
   mMarker->startRender( context.renderContext(), context.fields() );
 }
 
@@ -4301,12 +4493,16 @@ void QgsRandomMarkerFillSymbolLayer::renderPolygon( const QPolygonF &points, con
   {
     // in the middle of rendering a possibly multi-part feature, so we collect all the parts and defer the actual rendering
     // until after we've received the final part
+    mFeatureSymbolOpacity = context.opacity();
     mCurrentParts << part;
   }
   else
   {
     // not rendering a feature, so we can just render the polygon immediately
+    const double prevOpacity = mMarker->opacity();
+    mMarker->setOpacity( mMarker->opacity() * context.opacity() );
     render( context.renderContext(), QVector< Part>() << part, context.feature() ? *context.feature() : QgsFeature(), context.selected() );
+    mMarker->setOpacity( prevOpacity );
   }
 }
 
@@ -4406,7 +4602,7 @@ void QgsRandomMarkerFillSymbolLayer::render( QgsRenderContext &context, const QV
   int pointNum = 0;
   const bool needsExpressionContext = hasDataDefinedProperties();
 
-  for ( const QgsPointXY &p : qgis::as_const( randomPoints ) )
+  for ( const QgsPointXY &p : std::as_const( randomPoints ) )
   {
     if ( needsExpressionContext )
       scope->addVariable( QgsExpressionContextScope::StaticVariable( QgsExpressionContext::EXPR_GEOMETRY_POINT_NUM, ++pointNum, true ) );
@@ -4419,9 +4615,9 @@ void QgsRandomMarkerFillSymbolLayer::render( QgsRenderContext &context, const QV
   }
 }
 
-QgsStringMap QgsRandomMarkerFillSymbolLayer::properties() const
+QVariantMap QgsRandomMarkerFillSymbolLayer::properties() const
 {
-  QgsStringMap map;
+  QVariantMap map;
   map.insert( QStringLiteral( "count_method" ), QString::number( static_cast< int >( mCountMethod ) ) );
   map.insert( QStringLiteral( "point_count" ), QString::number( mPointCount ) );
   map.insert( QStringLiteral( "density_area" ), QString::number( mDensityArea ) );
@@ -4434,7 +4630,7 @@ QgsStringMap QgsRandomMarkerFillSymbolLayer::properties() const
 
 QgsRandomMarkerFillSymbolLayer *QgsRandomMarkerFillSymbolLayer::clone() const
 {
-  std::unique_ptr< QgsRandomMarkerFillSymbolLayer > res = qgis::make_unique< QgsRandomMarkerFillSymbolLayer >( mPointCount, mCountMethod, mDensityArea, mSeed );
+  std::unique_ptr< QgsRandomMarkerFillSymbolLayer > res = std::make_unique< QgsRandomMarkerFillSymbolLayer >( mPointCount, mCountMethod, mDensityArea, mSeed );
   res->mAngle = mAngle;
   res->mColor = mColor;
   res->setDensityAreaUnit( mDensityAreaUnit );
@@ -4446,6 +4642,11 @@ QgsRandomMarkerFillSymbolLayer *QgsRandomMarkerFillSymbolLayer::clone() const
   return res.release();
 }
 
+bool QgsRandomMarkerFillSymbolLayer::canCauseArtifactsBetweenAdjacentTiles() const
+{
+  return true;
+}
+
 QgsSymbol *QgsRandomMarkerFillSymbolLayer::subSymbol()
 {
   return mMarker.get();
@@ -4453,7 +4654,7 @@ QgsSymbol *QgsRandomMarkerFillSymbolLayer::subSymbol()
 
 bool QgsRandomMarkerFillSymbolLayer::setSubSymbol( QgsSymbol *symbol )
 {
-  if ( !symbol || symbol->type() != QgsSymbol::Marker )
+  if ( !symbol || symbol->type() != Qgis::SymbolType::Marker )
   {
     delete symbol;
     return false;
@@ -4542,7 +4743,14 @@ void QgsRandomMarkerFillSymbolLayer::startFeatureRender( const QgsFeature &, Qgs
 void QgsRandomMarkerFillSymbolLayer::stopFeatureRender( const QgsFeature &feature, QgsRenderContext &context )
 {
   mRenderingFeature = false;
+
+  const double prevOpacity = mMarker->opacity();
+  mMarker->setOpacity( mMarker->opacity() * mFeatureSymbolOpacity );
+
   render( context, mCurrentParts, feature, false );
+
+  mFeatureSymbolOpacity = 1;
+  mMarker->setOpacity( prevOpacity );
 }
 
 
@@ -4561,6 +4769,15 @@ QgsUnitTypes::RenderUnit QgsRandomMarkerFillSymbolLayer::outputUnit() const
     return mMarker->outputUnit();
   }
   return QgsUnitTypes::RenderUnknownUnit; //mOutputUnit;
+}
+
+bool QgsRandomMarkerFillSymbolLayer::usesMapUnits() const
+{
+  if ( mMarker )
+  {
+    return mMarker->usesMapUnits();
+  }
+  return false;
 }
 
 void QgsRandomMarkerFillSymbolLayer::setMapUnitScale( const QgsMapUnitScale &scale )

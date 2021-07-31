@@ -169,7 +169,7 @@ QSizeF QgsLegendRenderer::paintAndDetermineSize( QgsRenderContext &context )
   // until now. BUUUUUUUUUUUUT. Because everything sucks, we can't even start the actual render of items
   // at the same time we calculate this -- legend items REQUIRE the REAL width of the columns in order to
   // correctly align right or center-aligned symbols/text. Bah -- A triple iteration it is!
-  for ( const LegendComponentGroup &group : qgis::as_const( componentGroups ) )
+  for ( const LegendComponentGroup &group : std::as_const( componentGroups ) )
   {
     const QSizeF actualSize = drawGroup( group, context, ColumnContext() );
     maxEqualColumnWidth = std::max( actualSize.width(), maxEqualColumnWidth );
@@ -200,7 +200,7 @@ QSizeF QgsLegendRenderer::paintAndDetermineSize( QgsRenderContext &context )
   columnContext.right = std::max( mLegendSize.width() - mSettings.boxSpace(), mSettings.boxSpace() );
   double currentY = columnTop;
 
-  for ( const LegendComponentGroup &group : qgis::as_const( componentGroups ) )
+  for ( const LegendComponentGroup &group : std::as_const( componentGroups ) )
   {
     if ( group.column > column )
     {
@@ -270,7 +270,7 @@ void QgsLegendRenderer::widthAndOffsetForTitleText( const Qt::AlignmentFlag hali
   }
 }
 
-QList<QgsLegendRenderer::LegendComponentGroup> QgsLegendRenderer::createComponentGroupList( QgsLayerTreeGroup *parentGroup, QgsRenderContext &context )
+QList<QgsLegendRenderer::LegendComponentGroup> QgsLegendRenderer::createComponentGroupList( QgsLayerTreeGroup *parentGroup, QgsRenderContext &context, double indent )
 {
   QList<LegendComponentGroup> componentGroups;
 
@@ -283,15 +283,28 @@ QList<QgsLegendRenderer::LegendComponentGroup> QgsLegendRenderer::createComponen
     if ( QgsLayerTree::isGroup( node ) )
     {
       QgsLayerTreeGroup *nodeGroup = QgsLayerTree::toGroup( node );
+      QString style = node->customProperty( QStringLiteral( "legend/title-style" ) ).toString();
+      // Update the required indent for the group/subgroup items, starting from the indent accumulated from parent groups
+      double newIndent = indent;
+      if ( style == QLatin1String( "subgroup" ) )
+      {
+        newIndent += mSettings.style( QgsLegendStyle::Subgroup ).indent( );
+      }
+      else
+      {
+        newIndent += mSettings.style( QgsLegendStyle::Group ).indent( );
+      }
 
       // Group subitems
-      QList<LegendComponentGroup> subgroups = createComponentGroupList( nodeGroup, context );
+      QList<LegendComponentGroup> subgroups = createComponentGroupList( nodeGroup, context, newIndent );
+
       bool hasSubItems = !subgroups.empty();
 
       if ( nodeLegendStyle( nodeGroup ) != QgsLegendStyle::Hidden )
       {
         LegendComponent component;
         component.item = node;
+        component.indent = newIndent;
         component.size = drawGroupTitle( nodeGroup, context );
 
         if ( !subgroups.isEmpty() )
@@ -350,6 +363,7 @@ QList<QgsLegendRenderer::LegendComponentGroup> QgsLegendRenderer::createComponen
         LegendComponent component;
         component.item = node;
         component.size = drawLayerTitle( nodeLayer, context );
+        component.indent = indent;
         group.components.append( component );
         group.size.rwidth() = component.size.width();
         group.size.rheight() = component.size.height();
@@ -400,6 +414,7 @@ QList<QgsLegendRenderer::LegendComponentGroup> QgsLegendRenderer::createComponen
             group.size.rheight() += mSettings.style( QgsLegendStyle::Symbol ).margin( QgsLegendStyle::Top );
           }
           group.size.rheight() += symbolComponent.size.height();
+          symbolComponent.indent = indent;
           group.components.append( symbolComponent );
         }
         else
@@ -415,6 +430,7 @@ QList<QgsLegendRenderer::LegendComponentGroup> QgsLegendRenderer::createComponen
           }
           LegendComponentGroup symbolGroup;
           symbolGroup.placeColumnBreakBeforeGroup = forceBreak;
+          symbolComponent.indent = indent;
           symbolGroup.components.append( symbolComponent );
           symbolGroup.size.rwidth() = symbolComponent.size.width();
           symbolGroup.size.rheight() = symbolComponent.size.height();
@@ -442,15 +458,18 @@ int QgsLegendRenderer::setColumns( QList<LegendComponentGroup> &componentGroups 
   double totalHeight = 0;
   qreal maxGroupHeight = 0;
   int forcedColumnBreaks = 0;
-  for ( const LegendComponentGroup &group : qgis::as_const( componentGroups ) )
+  double totalSpaceAboveGroups = 0;
+  for ( const LegendComponentGroup &group : std::as_const( componentGroups ) )
   {
     totalHeight += spaceAboveGroup( group );
+    totalSpaceAboveGroups += spaceAboveGroup( group );
     totalHeight += group.size.height();
     maxGroupHeight = std::max( group.size.height(), maxGroupHeight );
 
     if ( group.placeColumnBreakBeforeGroup )
       forcedColumnBreaks++;
   }
+  double averageGroupHeight = ( totalHeight - totalSpaceAboveGroups ) / componentGroups.size();
 
   if ( mSettings.columnCount() == 0 && forcedColumnBreaks == 0 )
     return 0;
@@ -472,22 +491,37 @@ int QgsLegendRenderer::setColumns( QList<LegendComponentGroup> &componentGroups 
   double closedColumnsHeight = 0;
   int autoPlacedBreaks = 0;
 
+  // Calculate the expected average space between items
+  double averageSpaceAboveGroups = 0;
+  if ( componentGroups.size() > targetNumberColumns )
+    averageSpaceAboveGroups = totalSpaceAboveGroups / ( componentGroups.size() );
+  // Correct the totalHeight using the number of columns because the first item
+  // in each column does not get any space above it
+  totalHeight -= targetNumberColumns * averageSpaceAboveGroups;
+
   for ( int i = 0; i < componentGroups.size(); i++ )
   {
-    // Recalc average height for remaining columns including current
-    double avgColumnHeight = ( totalHeight - closedColumnsHeight ) / ( numberAutoPlacedBreaks + 1 - autoPlacedBreaks );
-
     LegendComponentGroup group = componentGroups.at( i );
     double currentHeight = currentColumnHeight;
     if ( currentColumnGroupCount > 0 )
       currentHeight += spaceAboveGroup( group );
     currentHeight += group.size.height();
 
+    int numberRemainingGroups = componentGroups.size() - i;
+
+    // Recalc average height for remaining columns including current
+    int numberRemainingColumns = numberAutoPlacedBreaks + 1 - autoPlacedBreaks;
+    double avgColumnHeight = ( currentHeight + numberRemainingGroups * averageGroupHeight + ( numberRemainingGroups - numberRemainingColumns - 1 ) *  averageSpaceAboveGroups ) / numberRemainingColumns;
+    // Round up to the next full number of groups to put in one column
+    // This ensures that earlier columns contain more elements than later columns
+    int averageGroupsPerColumn = std::ceil( avgColumnHeight / ( averageGroupHeight + averageSpaceAboveGroups ) );
+    avgColumnHeight = averageGroupsPerColumn * ( averageGroupHeight + averageSpaceAboveGroups ) - averageSpaceAboveGroups;
+
     bool canCreateNewColumn = ( currentColumnGroupCount > 0 )  // do not leave empty column
                               && ( currentColumn < targetNumberColumns - 1 ) // must not exceed max number of columns
                               && ( autoPlacedBreaks < numberAutoPlacedBreaks );
 
-    bool shouldCreateNewColumn = ( currentHeight - avgColumnHeight ) > group.size.height() / 2  // center of current group is over average height
+    bool shouldCreateNewColumn = currentHeight  > avgColumnHeight  // current group height is greater than expected group height
                                  && currentColumnGroupCount > 0 // do not leave empty column
                                  && currentHeight > maxGroupHeight  // no sense to make smaller columns than max group height
                                  && currentHeight > maxColumnHeight; // no sense to make smaller columns than max column already created
@@ -562,9 +596,9 @@ QSizeF QgsLegendRenderer::drawTitle( QgsRenderContext &context, double top, Qt::
   QStringList lines = mSettings.splitStringForWrapping( mSettings.title() );
   double y = top;
 
-  if ( context.painter() )
+  if ( auto *lPainter = context.painter() )
   {
-    context.painter()->setPen( mSettings.fontColor() );
+    lPainter->setPen( mSettings.fontColor() );
   }
 
   //calculate width and left pos of rectangle to draw text into
@@ -631,7 +665,7 @@ QSizeF QgsLegendRenderer::drawGroup( const LegendComponentGroup &group, QgsRende
   bool first = true;
   QSizeF size = QSizeF( group.size );
   double currentY = top;
-  for ( const LegendComponent &component : qgis::as_const( group.components ) )
+  for ( const LegendComponent &component : std::as_const( group.components ) )
   {
     if ( QgsLayerTreeGroup *groupItem = qobject_cast<QgsLayerTreeGroup *>( component.item ) )
     {
@@ -643,7 +677,27 @@ QSizeF QgsLegendRenderer::drawGroup( const LegendComponentGroup &group, QgsRende
           currentY += mSettings.style( s ).margin( QgsLegendStyle::Top );
         }
         QSizeF groupSize;
-        groupSize = drawGroupTitle( groupItem, context, columnContext, currentY );
+        ColumnContext columnContextForItem = columnContext;
+        double indentWidth =  component.indent;
+        if ( s == QgsLegendStyle::Subgroup )
+        {
+          // Remove indent - the subgroup items should be indented, not the subgroup title
+          indentWidth -= mSettings.style( QgsLegendStyle::Subgroup ).indent( );
+        }
+        else
+        {
+          // Remove indent - the group items should be indented, not the group title
+          indentWidth -= mSettings.style( QgsLegendStyle::Group ).indent( );
+        }
+        if ( mSettings.style( QgsLegendStyle::SymbolLabel ).alignment() == Qt::AlignLeft )
+        {
+          columnContextForItem.left += indentWidth;
+        }
+        if ( mSettings.style( QgsLegendStyle::SymbolLabel ).alignment() == Qt::AlignRight )
+        {
+          columnContextForItem.right -= indentWidth;
+        }
+        groupSize = drawGroupTitle( groupItem, context, columnContextForItem, currentY );
         size.rwidth() = std::max( groupSize.width(), size.width() );
       }
     }
@@ -657,7 +711,11 @@ QSizeF QgsLegendRenderer::drawGroup( const LegendComponentGroup &group, QgsRende
           currentY += mSettings.style( s ).margin( QgsLegendStyle::Top );
         }
         QSizeF subGroupSize;
-        subGroupSize = drawLayerTitle( layerItem, context, columnContext, currentY );
+
+        ColumnContext columnContextForItem = columnContext;
+        double indentWidth =  component.indent;
+        columnContextForItem.left += indentWidth;
+        subGroupSize = drawLayerTitle( layerItem, context, columnContextForItem, currentY );
         size.rwidth() = std::max( subGroupSize.width(), size.width() );
       }
     }
@@ -668,9 +726,21 @@ QSizeF QgsLegendRenderer::drawGroup( const LegendComponentGroup &group, QgsRende
         currentY += mSettings.style( QgsLegendStyle::Symbol ).margin( QgsLegendStyle::Top );
       }
 
-      LegendComponent symbolComponent = drawSymbolItem( legendNode, context, columnContext, currentY, component.maxSiblingSymbolWidth );
+      ColumnContext columnContextForItem = columnContext;
+      double indentWidth = 0;
+      indentWidth = component.indent;
+      if ( mSettings.style( QgsLegendStyle::SymbolLabel ).alignment() == Qt::AlignLeft )
+      {
+        columnContextForItem.left += indentWidth;
+      }
+      if ( mSettings.style( QgsLegendStyle::SymbolLabel ).alignment() == Qt::AlignRight )
+      {
+        columnContextForItem.right -= indentWidth;
+      }
+
+      LegendComponent symbolComponent = drawSymbolItem( legendNode, context, columnContextForItem, currentY, component.maxSiblingSymbolWidth );
       // expand width, it may be wider because of label offsets
-      size.rwidth() = std::max( symbolComponent.size.width(), size.width() );
+      size.rwidth() = std::max( symbolComponent.size.width() + indentWidth, size.width() );
     }
     currentY += component.size.height();
     first = false;
@@ -756,8 +826,8 @@ QSizeF QgsLegendRenderer::drawLayerTitle( QgsLayerTreeLayer *nodeLayer, QgsRende
 
   double y = top;
 
-  if ( context.painter() )
-    context.painter()->setPen( mSettings.layerFontColor() );
+  if ( auto *lPainter = context.painter() )
+    lPainter->setPen( mSettings.layerFontColor() );
 
   QFont layerFont = mSettings.style( nodeLegendStyle( nodeLayer ) ).font();
 
@@ -813,8 +883,8 @@ QSizeF QgsLegendRenderer::drawGroupTitle( QgsLayerTreeGroup *nodeGroup, QgsRende
 
   double y = top;
 
-  if ( context.painter() )
-    context.painter()->setPen( mSettings.fontColor() );
+  if ( auto *lPainter = context.painter() )
+    lPainter->setPen( mSettings.fontColor() );
 
   QFont groupFont = mSettings.style( nodeLegendStyle( nodeGroup ) ).font();
 

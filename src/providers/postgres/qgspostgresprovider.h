@@ -20,7 +20,6 @@
 
 #include "qgsvectordataprovider.h"
 #include "qgsrectangle.h"
-#include "qgsvectorlayerexporter.h"
 #include "qgspostgresconn.h"
 #include "qgsfields.h"
 #include "qgsprovidermetadata.h"
@@ -38,12 +37,12 @@ class QgsPostgresListener;
 #include "qgsdatasourceuri.h"
 
 /**
-  \class QgsPostgresProvider
-  \brief Data provider for PostgreSQL/PostGIS layers.
-
-  This provider implements the
-  interface defined in the QgsDataProvider class to provide access to spatial
-  data residing in a PostgreSQL/PostGIS enabled database.
+ * \class QgsPostgresProvider
+ * \brief Data provider for PostgreSQL/PostGIS layers.
+ *
+ * This provider implements the
+ * interface defined in the QgsDataProvider class to provide access to spatial
+ * data residing in a PostgreSQL/PostGIS enabled database.
   */
 class QgsPostgresProvider final: public QgsVectorDataProvider
 {
@@ -56,6 +55,7 @@ class QgsPostgresProvider final: public QgsVectorDataProvider
 
     enum Relkind
     {
+      NotSet,
       Unknown,
       OrdinaryTable, // r
       Index, // i
@@ -76,7 +76,7 @@ class QgsPostgresProvider final: public QgsVectorDataProvider
      * field names to lowercase), dropStringConstraints (set to true to remove
      * length constraints on character fields).
      */
-    static QgsVectorLayerExporter::ExportError createEmptyLayer(
+    static Qgis::VectorExportResult createEmptyLayer(
       const QString &uri,
       const QgsFields &fields,
       QgsWkbTypes::Type wkbType,
@@ -93,8 +93,10 @@ class QgsPostgresProvider final: public QgsVectorDataProvider
      * \param uri String containing the required parameters to connect to the database
      * and query the table.
      * \param options generic data provider options
+     * \param flags generic data provider flags
      */
-    explicit QgsPostgresProvider( QString const &uri, const QgsDataProvider::ProviderOptions &providerOptions );
+    explicit QgsPostgresProvider( QString const &uri, const QgsDataProvider::ProviderOptions &providerOptions,
+                                  QgsDataProvider::ReadFlags flags = QgsDataProvider::ReadFlags() );
 
 
     ~QgsPostgresProvider() override;
@@ -112,7 +114,7 @@ class QgsPostgresProvider final: public QgsVectorDataProvider
      */
     size_t layerCount() const;
 
-    long featureCount() const override;
+    long long featureCount() const override;
 
     /**
      * Determines if there is at least one feature available on this table.
@@ -241,9 +243,17 @@ class QgsPostgresProvider final: public QgsVectorDataProvider
      */
     void setListening( bool isListening ) override;
 
-
   private:
+
+    /**
+     * \returns relation kind
+     */
     Relkind relkind() const;
+
+    /**
+     * Change internal query with \a query
+     */
+    void setQuery( const QString &query );
 
     bool declareCursor( const QString &cursorName,
                         const QgsAttributeList &fetchAttributes,
@@ -297,9 +307,10 @@ class QgsPostgresProvider final: public QgsVectorDataProvider
 
     /**
      * Parses the enum_range of an attribute and inserts the possible values into a stringlist
-    \param enumValues the stringlist where the values are appended
-    \param attributeName the name of the enum attribute
-    \returns true in case of success and fals in case of error (e.g. if the type is not an enum type)*/
+     * \param enumValues the stringlist where the values are appended
+     * \param attributeName the name of the enum attribute
+     * \returns true in case of success and fals in case of error (e.g. if the type is not an enum type)
+    */
     bool parseEnumRange( QStringList &enumValues, const QString &attributeName ) const;
 
     /**
@@ -376,6 +387,11 @@ class QgsPostgresProvider final: public QgsVectorDataProvider
     QString mSqlWhereClause;
 
     /**
+     * Kind of relation
+     */
+    mutable Relkind mKind = Relkind::NotSet;
+
+    /**
      * Data type for the primary key
      */
     QgsPostgresPrimaryKeyType mPrimaryKeyType = PktUnknown;
@@ -445,7 +461,7 @@ class QgsPostgresProvider final: public QgsVectorDataProvider
     // A function that determines if the given columns contain unique entries
     bool uniqueData( const QString &quotedColNames );
 
-    QgsVectorDataProvider::Capabilities mEnabledCapabilities = nullptr;
+    QgsVectorDataProvider::Capabilities mEnabledCapabilities = QgsVectorDataProvider::Capabilities();
 
     void appendGeomParam( const QgsGeometry &geom, QStringList &param ) const;
     void appendPkParams( QgsFeatureId fid, QStringList &param ) const;
@@ -522,21 +538,28 @@ class QgsPostgresUtils
     {
       return x <= ( ( INT32PK_OFFSET ) / 2.0 ) ? x : -( INT32PK_OFFSET - x );
     }
+
+    //! Replaces invalid XML chars with UTF-8[<char_code>]
+    static void replaceInvalidXmlChars( QString &xml );
+
+    //! Replaces UTF-8[<char_code>] with the actual unicode char
+    static void restoreInvalidXmlChars( QString &xml );
 };
 
 /**
  * Data shared between provider class and its feature sources. Ideally there should
  *  be as few members as possible because there could be simultaneous reads/writes
- *  from different threads and therefore locking has to be involved. */
+ *  from different threads and therefore locking has to be involved.
+*/
 class QgsPostgresSharedData
 {
   public:
     QgsPostgresSharedData() = default;
 
-    long featuresCounted();
-    void setFeaturesCounted( long count );
-    void addFeaturesCounted( long diff );
-    void ensureFeaturesCountedAtLeast( long fetched );
+    long long featuresCounted();
+    void setFeaturesCounted( long long count );
+    void addFeaturesCounted( long long diff );
+    void ensureFeaturesCountedAtLeast( long long fetched );
 
     // FID lookups
     QgsFeatureId lookupFid( const QVariantList &v ); // lookup existing mapping or add a new one
@@ -553,7 +576,7 @@ class QgsPostgresSharedData
   protected:
     QMutex mMutex; //!< Access to all data members is guarded by the mutex
 
-    long mFeaturesCounted = -1 ;    //!< Number of features in the layer
+    long long mFeaturesCounted = -1 ;    //!< Number of features in the layer
 
     QgsFeatureId mFidCounter = 0;                    // next feature id if map is used
     QMap<QVariantList, QgsFeatureId> mKeyToFid;      // map key values to feature id
@@ -565,9 +588,9 @@ class QgsPostgresProviderMetadata final: public QgsProviderMetadata
 {
   public:
     QgsPostgresProviderMetadata();
-    QgsDataProvider *createProvider( const QString &uri, const QgsDataProvider::ProviderOptions &options ) override;
+    QgsDataProvider *createProvider( const QString &uri, const QgsDataProvider::ProviderOptions &options, QgsDataProvider::ReadFlags flags = QgsDataProvider::ReadFlags() ) override;
     QList< QgsDataItemProvider * > dataItemProviders() const override;
-    QgsVectorLayerExporter::ExportError createEmptyLayer( const QString &uri, const QgsFields &fields, QgsWkbTypes::Type wkbType,
+    Qgis::VectorExportResult createEmptyLayer( const QString &uri, const QgsFields &fields, QgsWkbTypes::Type wkbType,
         const QgsCoordinateReferenceSystem &srs,
         bool overwrite,
         QMap<int, int> &oldToNewAttrIdxMap, QString &errorMessage,
@@ -587,8 +610,8 @@ class QgsPostgresProviderMetadata final: public QgsProviderMetadata
     void saveConnection( const QgsAbstractProviderConnection *createConnection, const QString &name ) override;
     void initProvider() override;
     void cleanupProvider() override;
-    QVariantMap decodeUri( const QString &uri ) override;
-    QString encodeUri( const QVariantMap &parts ) override;
+    QVariantMap decodeUri( const QString &uri ) const override;
+    QString encodeUri( const QVariantMap &parts ) const override;
 };
 
 // clazy:excludeall=qstring-allocations

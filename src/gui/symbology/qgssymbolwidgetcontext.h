@@ -27,7 +27,7 @@ class QgsMessageBar;
 /**
  * \ingroup gui
  * \class QgsSymbolWidgetContext
- * Contains settings which reflect the context in which a symbol (or renderer) widget is shown, e.g., the
+ * \brief Contains settings which reflect the context in which a symbol (or renderer) widget is shown, e.g., the
  * map canvas and relevant expression contexts.
  *
  * \since QGIS 3.0
@@ -116,12 +116,31 @@ class GUI_EXPORT QgsSymbolWidgetContext // clazy:exclude=rule-of-three
      */
     QList<QgsExpressionContextScope *> globalProjectAtlasMapLayerScopes( const QgsMapLayer *layer ) const SIP_FACTORY;
 
+    /**
+     * Returns the associated symbol type, if the widget is being shown as a subcomponent
+     * of a parent symbol configuration widget.
+     *
+     * \see setSymbolType()
+     * \since QGIS 3.18
+     */
+    Qgis::SymbolType symbolType() const;
+
+    /**
+     * Sets the associated symbol \a type, if the widget is being shown as a subcomponent
+     * of a parent symbol configuration widget.
+     *
+     * \see symbolType()
+     * \since QGIS 3.18
+     */
+    void setSymbolType( Qgis::SymbolType type );
+
   private:
 
     QgsMapCanvas *mMapCanvas = nullptr;
     QgsMessageBar *mMessageBar = nullptr;
     std::unique_ptr< QgsExpressionContext > mExpressionContext;
     QList< QgsExpressionContextScope > mAdditionalScopes;
+    Qgis::SymbolType mSymbolType = Qgis::SymbolType::Hybrid;
 
 };
 

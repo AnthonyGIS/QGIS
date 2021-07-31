@@ -89,7 +89,7 @@ void QgsFeatureListViewDelegate::paint( QPainter *painter, const QStyleOptionVie
     sDeselectedIcon = QgsApplication::getThemePixmap( QStringLiteral( "/mIconDeselected.svg" ) );
 
   QString text = index.model()->data( index, Qt::EditRole ).toString();
-  QgsFeatureListModel::FeatureInfo featInfo = index.model()->data( index, Qt::UserRole ).value<QgsFeatureListModel::FeatureInfo>();
+  const QgsFeatureListModel::FeatureInfo featInfo = index.model()->data( index, QgsFeatureListModel::Role::FeatureInfoRole ).value<QgsFeatureListModel::FeatureInfo>();
 
   // Icon layout options
   QStyleOptionViewItem iconOption;
@@ -111,11 +111,7 @@ void QgsFeatureListViewDelegate::paint( QPainter *painter, const QStyleOptionVie
   if ( conditionalIcon.isValid() )
   {
     const QPixmap pixmap = conditionalIcon.value< QPixmap >();
-#if QT_VERSION < QT_VERSION_CHECK(5, 11, 0)
-    iconLayoutBounds.moveLeft( iconLayoutBounds.x() + icon.width() + QFontMetrics( textOption.font ).width( 'X' ) );
-#else
     iconLayoutBounds.moveLeft( iconLayoutBounds.x() + icon.width() + QFontMetrics( textOption.font ).horizontalAdvance( 'X' ) );
-#endif
     iconLayoutBounds.setTop( option.rect.y() + ( option.rect.height() - pixmap.height() ) / 2.0 );
     iconLayoutBounds.setHeight( pixmap.height() );
     drawDecoration( painter, iconOption, iconLayoutBounds, pixmap );
@@ -130,7 +126,11 @@ void QgsFeatureListViewDelegate::paint( QPainter *painter, const QStyleOptionVie
   {
     textOption.font = font.value< QFont >();
   }
+#if QT_VERSION < QT_VERSION_CHECK(5, 13, 0)
   const QVariant textColor = index.model()->data( index, Qt::TextColorRole );
+#else
+  const QVariant textColor = index.model()->data( index, Qt::ForegroundRole );
+#endif
   if ( textColor.isValid() )
   {
     textOption.palette.setColor( QPalette::Text, textColor.value< QColor >() );

@@ -35,6 +35,7 @@
 #include <algorithm>
 #include <QDir>
 #include <QTimer>
+#include <QUrlQuery>
 
 QgsWFSFeatureHitsAsyncRequest::QgsWFSFeatureHitsAsyncRequest( QgsWFSDataSourceURI &uri )
   : QgsWfsRequest( uri )
@@ -79,13 +80,14 @@ QString QgsWFSFeatureHitsAsyncRequest::errorMessageWithReason( const QString &re
 
 // -------------------------
 
-QgsWFSFeatureDownloaderImpl::QgsWFSFeatureDownloaderImpl( QgsWFSSharedData *shared, QgsFeatureDownloader *downloader ):
+QgsWFSFeatureDownloaderImpl::QgsWFSFeatureDownloaderImpl( QgsWFSSharedData *shared, QgsFeatureDownloader *downloader, bool requestMadeFromMainThread ):
   QgsWfsRequest( shared->mURI ),
   QgsFeatureDownloaderImpl( shared, downloader ),
   mShared( shared ),
   mPageSize( shared->mPageSize ),
   mFeatureHitsAsyncRequest( shared->mURI )
 {
+  QGS_FEATURE_DOWNLOADER_IMPL_CONNECT_SIGNALS( requestMadeFromMainThread );
 }
 
 QgsWFSFeatureDownloaderImpl::~QgsWFSFeatureDownloaderImpl()
@@ -105,7 +107,7 @@ QString QgsWFSFeatureDownloaderImpl::sanitizeFilter( QString filter )
   return filter;
 }
 
-QUrl QgsWFSFeatureDownloaderImpl::buildURL( qint64 startIndex, int maxFeatures, bool forHits )
+QUrl QgsWFSFeatureDownloaderImpl::buildURL( qint64 startIndex, long long maxFeatures, bool forHits )
 {
   QUrl getFeatureUrl( mShared->mURI.requestUrl( QStringLiteral( "GetFeature" ) ) );
   QUrlQuery query( getFeatureUrl );
@@ -120,16 +122,21 @@ QUrl QgsWFSFeatureDownloaderImpl::buildURL( qint64 startIndex, int maxFeatures, 
   }
   else
   {
-    Q_FOREACH ( const QgsOgcUtils::LayerProperties layerProperties, mShared->mLayerPropertiesList )
+    for ( const QgsOgcUtils::LayerProperties &layerProperties : std::as_const( mShared->mLayerPropertiesList ) )
     {
       if ( !typenames.isEmpty() )
-        typenames += QLatin1String( "," );
+        typenames += QLatin1Char( ',' );
       typenames += layerProperties.mName;
     }
   }
   if ( mShared->mWFSVersion.startsWith( QLatin1String( "2.0" ) ) )
+  {
     query.addQueryItem( QStringLiteral( "TYPENAMES" ),  typenames );
-  query.addQueryItem( QStringLiteral( "TYPENAME" ),  typenames );
+  }
+  else
+  {
+    query.addQueryItem( QStringLiteral( "TYPENAME" ),  typenames );
+  }
 
   if ( forHits )
   {
@@ -342,7 +349,7 @@ void QgsWFSFeatureDownloaderImpl::createProgressDialog()
   CONNECT_PROGRESS_DIALOG( QgsWFSFeatureDownloaderImpl );
 }
 
-void QgsWFSFeatureDownloaderImpl::run( bool serializeFeatures, int maxFeatures )
+void QgsWFSFeatureDownloaderImpl::run( bool serializeFeatures, long long maxFeatures )
 {
   bool success = true;
 
@@ -398,9 +405,7 @@ void QgsWFSFeatureDownloaderImpl::run( bool serializeFeatures, int maxFeatures )
     {
       break;
     }
-    int maxFeaturesThisRequest = static_cast<int>(
-                                   std::min( maxTotalFeatures - mTotalDownloadedFeatureCount,
-                                       static_cast<qint64>( std::numeric_limits<int>::max() ) ) );
+    long long maxFeaturesThisRequest = maxTotalFeatures - mTotalDownloadedFeatureCount;
     if ( mShared->mPageSize > 0 )
     {
       if ( maxFeaturesThisRequest > 0 )
@@ -429,7 +434,7 @@ void QgsWFSFeatureDownloaderImpl::run( bool serializeFeatures, int maxFeatures )
              true, /* forceRefresh */
              false /* cache */ );
 
-    int featureCountForThisResponse = 0;
+    long long featureCountForThisResponse = 0;
     bool bytesStillAvailableInReply = false;
     // Loop until there is no data coming from the current request
     while ( true )

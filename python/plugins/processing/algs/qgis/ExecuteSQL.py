@@ -133,7 +133,7 @@ class ExecuteSQL(QgisAlgorithm):
             # access (thanks the QgsVirtualLayerProvider) to memory layer that
             # belongs to temporary QgsMapLayerStore, not project.
             # So, we write them to disk is this is the case.
-            if not context.project().mapLayer(layer.id()):
+            if context.project() and not context.project().mapLayer(layer.id()):
                 basename = "memorylayer." + QgsVectorFileWriter.supportedFormatExtensions()[0]
                 tmp_path = QgsProcessingUtils.generateTempFilename(basename)
                 QgsVectorFileWriter.writeAsVectorFormat(
@@ -145,10 +145,9 @@ class ExecuteSQL(QgisAlgorithm):
         if query == '':
             raise QgsProcessingException(
                 self.tr('Empty SQL. Please enter valid SQL expression and try again.'))
-        else:
-            localContext = self.createExpressionContext(parameters, context)
-            expandedQuery = QgsExpression.replaceExpressionText(query, localContext)
-            df.setQuery(expandedQuery)
+        localContext = self.createExpressionContext(parameters, context)
+        expandedQuery = QgsExpression.replaceExpressionText(query, localContext)
+        df.setQuery(expandedQuery)
 
         if uid_field:
             df.setUid(uid_field)

@@ -25,13 +25,13 @@ namespace MDAL
     BBox() {}
     BBox( double lx, double ux, double ly, double uy ): minX( lx ), maxX( ux ), minY( ly ), maxY( uy ) {}
 
-    double minX;
-    double maxX;
-    double minY;
-    double maxY;
+    double minX = std::numeric_limits<double>::max();
+    double maxX = -std::numeric_limits<double>::max();
+    double minY = std::numeric_limits<double>::max();
+    double maxY = -std::numeric_limits<double>::max();
   };
 
-  typedef struct
+  typedef struct StatisticsType
   {
     double minimum = std::numeric_limits<double>::quiet_NaN();
     double maximum = std::numeric_limits<double>::quiet_NaN();
@@ -196,7 +196,7 @@ namespace MDAL
       Mesh *mParent = nullptr;
       bool mIsScalar = true;
       bool mIsPolar = false;
-      std::pair<double, double> mReferenceAngles = {-360, 0}; //default full rotation is negative to be consistent with usual geographical clockwise
+      std::pair<double, double> mReferenceAngles = { -360, 0}; //default full rotation is negative to be consistent with usual geographical clockwise
       MDAL_DataLocation mDataLocation = MDAL_DataLocation::DataOnVertices;
       std::string mUri; // file/uri from where it came
       Statistics mStatistics;
@@ -266,6 +266,16 @@ namespace MDAL
       std::string uri() const;
       std::string crs() const;
       size_t faceVerticesMaximumCount() const;
+
+      virtual void closeSource() {};
+
+      virtual bool isEditable() const {return false;}
+
+      virtual void addVertices( size_t vertexCount, double *coordinates );
+      virtual void addFaces( size_t faceCount, size_t driverMaxVerticesPerFace, int *faceSizes, int *vertexIndices );
+
+    protected:
+      void setFaceVerticesMaximumCount( const size_t &faceVerticesMaximumCount );
 
     private:
       const std::string mDriverName;

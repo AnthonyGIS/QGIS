@@ -16,7 +16,7 @@
 
 #include "qgstest.h"
 
-#include <QtTest/QtTest>
+#include <QtTest/QTest>
 #include <QApplication>
 #include <QDateTime>
 #include <QDebug>
@@ -24,12 +24,14 @@
 #include <QString>
 #include <QStringList>
 #include <QTemporaryFile>
+#include <QSignalSpy>
 
 #include "qgsapplication.h"
 #include "qgsauthmanager.h"
 #include "qgsauthoauth2config.h"
+#ifdef WITH_GUI
 #include "qgsauthoauth2edit.h"
-
+#endif
 
 /**
  * \ingroup UnitTests
@@ -120,6 +122,7 @@ QgsAuthOAuth2Config *TestQgsAuthOAuth2Method::baseConfig( bool loaded )
     config->setApiKey( "someapikey" );
     config->setPersistToken( false );
     config->setAccessMethod( QgsAuthOAuth2Config::Header );
+    config->setCustomHeader( QStringLiteral( "x-auth" ) );
     config->setRequestTimeout( 30 ); // in seconds
     QVariantMap queryPairs;
     queryPairs.insert( "pf.username", "myusername" );
@@ -141,6 +144,7 @@ QByteArray TestQgsAuthOAuth2Method::baseConfigTxt( bool pretty )
            "    \"clientId\": \"myclientid\",\n"
            "    \"clientSecret\": \"myclientsecret\",\n"
            "    \"configType\": 1,\n"
+           "    \"customHeader\": \"x-auth\",\n"
            "    \"description\": \"A test config\",\n"
            "    \"grantFlow\": 0,\n"
            "    \"id\": \"abc1234\",\n"
@@ -170,6 +174,7 @@ QByteArray TestQgsAuthOAuth2Method::baseConfigTxt( bool pretty )
            "\"clientId\":\"myclientid\","
            "\"clientSecret\":\"myclientsecret\","
            "\"configType\":1,"
+           "\"customHeader\":\"x-auth\","
            "\"description\":\"A test config\","
            "\"grantFlow\":0,"
            "\"id\":\"abc1234\","
@@ -206,6 +211,7 @@ QVariantMap TestQgsAuthOAuth2Method::baseVariantMap()
   vmap.insert( "objectName", "" );
   vmap.insert( "password", "mypassword" );
   vmap.insert( "persistToken", false );
+  vmap.insert( "customHeader", "x-auth" );
   QVariantMap qpairs;
   qpairs.insert( "pf.password", "mypassword" );
   qpairs.insert( "pf.username", "myusername" );
@@ -411,6 +417,7 @@ void TestQgsAuthOAuth2Method::testOAuth2ConfigUtils()
 
 void TestQgsAuthOAuth2Method::testDynamicRegistrationNoEndpoint()
 {
+#ifdef WITH_GUI
   QgsAuthOAuth2Config *config = baseConfig();
   config->setClientId( QString( ) );
   config->setClientSecret( QString( ) );
@@ -431,10 +438,12 @@ void TestQgsAuthOAuth2Method::testDynamicRegistrationNoEndpoint()
   dlg.leSoftwareStatementJwtPath->setText( QStringLiteral( "%1/auth_code_grant_display_code.jwt" ).arg( sTestDataDir ) );
   QVERIFY( ! dlg.btnRegister->isEnabled() );
   QCOMPARE( dlg.leSoftwareStatementConfigUrl->text(), QString() );
+#endif
 }
 
 void TestQgsAuthOAuth2Method::testDynamicRegistration()
 {
+#ifdef WITH_GUI
   QgsAuthOAuth2Config *config = baseConfig();
   config->setClientId( QString( ) );
   config->setClientSecret( QString( ) );
@@ -467,11 +476,13 @@ void TestQgsAuthOAuth2Method::testDynamicRegistration()
   }
   QCOMPARE( dlg.leClientId->text(), QLatin1String( "___QGIS_ROCKS___@www.qgis.org" ) );
   QCOMPARE( dlg.leClientSecret->text(), QLatin1String( "___QGIS_ROCKS______QGIS_ROCKS______QGIS_ROCKS___" ) );
+#endif
 }
 
 
 void TestQgsAuthOAuth2Method::testDynamicRegistrationJwt()
 {
+#ifdef WITH_GUI
   QgsAuthOAuth2Config *config = baseConfig();
   config->setClientId( QString( ) );
   config->setClientSecret( QString( ) );
@@ -501,6 +512,7 @@ void TestQgsAuthOAuth2Method::testDynamicRegistrationJwt()
   }
   QCOMPARE( dlg.leClientId->text(), QLatin1String( "___QGIS_ROCKS___@www.qgis.org" ) );
   QCOMPARE( dlg.leClientSecret->text(), QLatin1String( "___QGIS_ROCKS______QGIS_ROCKS______QGIS_ROCKS___" ) );
+#endif
 }
 
 

@@ -90,6 +90,27 @@ QgsPanelWidget *QgsPanelWidgetStack::currentPanel()
   return qobject_cast<QgsPanelWidget *>( mStackedWidget->currentWidget() );
 }
 
+QSize QgsPanelWidgetStack::sizeHint() const
+{
+  if ( const QgsPanelWidget *widget = qobject_cast<const QgsPanelWidget *>( mStackedWidget->currentWidget() ) )
+  {
+    if ( widget->applySizeConstraintsToStack() )
+      return widget->sizeHint();
+  }
+  return QWidget::sizeHint();
+}
+
+QSize QgsPanelWidgetStack::minimumSizeHint() const
+{
+  if ( const QgsPanelWidget *widget = qobject_cast<const QgsPanelWidget *>( mStackedWidget->currentWidget() ) )
+  {
+    if ( widget->applySizeConstraintsToStack() )
+      return widget->minimumSizeHint();
+  }
+
+  return QWidget::minimumSizeHint();
+}
+
 void QgsPanelWidgetStack::acceptCurrentPanel()
 {
   // You can't accept the main panel.

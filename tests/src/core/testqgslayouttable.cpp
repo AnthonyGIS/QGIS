@@ -31,6 +31,7 @@
 #include "qgsrelationmanager.h"
 #include "qgsreadwritecontext.h"
 #include "qgsexpressioncontextutils.h"
+#include "qgsexpressionutils.h"
 #include "qgslayoutmanager.h"
 #include "qgsprintlayout.h"
 #include "qgslayoutatlas.h"
@@ -55,6 +56,7 @@ class TestQgsLayoutTable : public QObject
 
     void attributeTableHeadings(); //test retrieving attribute table headers
     void attributeTableRows(); //test retrieving attribute table rows
+    void attributeTableRowsLocalized(); //test retrieving attribute table rows with locale
     void attributeTableFilterFeatures(); //test filtering attribute table rows
     void attributeTableSetAttributes(); //test subset of attributes in table
     void attributeTableVisibleOnly(); //test displaying only visible attributes
@@ -193,7 +195,7 @@ void TestQgsLayoutTable::compareTable( QgsLayoutItemAttributeTable *table, const
     QgsLayoutTableRow::const_iterator cellIt = ( *resultIt ).constBegin();
     for ( ; cellIt != ( *resultIt ).constEnd(); ++cellIt )
     {
-      QCOMPARE( ( *cellIt ).toString(), expectedRows.at( rowNumber ).at( colNumber ) );
+      QCOMPARE( QgsExpressionUtils::toLocalizedString( *cellIt ), expectedRows.at( rowNumber ).at( colNumber ) );
       colNumber++;
     }
     //also check that number of columns matches expected
@@ -227,6 +229,42 @@ void TestQgsLayoutTable::attributeTableRows()
   table->setMaximumNumberOfFeatures( 3 );
   compareTable( table, expectedRows );
 }
+void TestQgsLayoutTable::attributeTableRowsLocalized()
+{
+  //test retrieving attribute table rows
+
+  QgsVectorLayer vl { QStringLiteral( "Point?field=int:int&field=double:double&" ), QStringLiteral( "test" ), QStringLiteral( "memory" ) };
+  QgsFeature f { vl.fields( ) };
+  f.setGeometry( QgsGeometry::fromWkt( QStringLiteral( "point(9 45)" ) ) );
+  f.setAttribute( QStringLiteral( "int" ), 12346 );
+  f.setAttribute( QStringLiteral( "double" ), 123456.801 );
+  vl.dataProvider()->addFeatures( QgsFeatureList() << f );
+
+  QVector<QStringList> expectedRows;
+  QStringList row;
+  row <<  QStringLiteral( "12,346" ) << QStringLiteral( "123,456.801" );
+  expectedRows.append( row );
+
+  QgsLayout l( QgsProject::instance() );
+  l.initializeDefaults();
+  QgsLayoutItemAttributeTable *table = new QgsLayoutItemAttributeTable( &l );
+  table->setVectorLayer( &vl );
+
+  //retrieve rows and check
+  QLocale().setDefault( QLocale::English );
+  compareTable( table, expectedRows );
+
+  expectedRows.clear();
+  row.clear();
+  row <<  QStringLiteral( "12.346" ) << QStringLiteral( "123.456,801" );
+  expectedRows.append( row );
+  QLocale().setDefault( QLocale::Italian );
+  compareTable( table, expectedRows );
+
+  QLocale().setDefault( QLocale::English );
+
+}
+
 
 void TestQgsLayoutTable::attributeTableFilterFeatures()
 {
@@ -388,7 +426,7 @@ void TestQgsLayoutTable::attributeTableInsideAtlasOnly()
   compareTable( table, expectedRows );
 
   //setup atlas
-  std::unique_ptr< QgsVectorLayer > atlasLayer = qgis::make_unique< QgsVectorLayer >( QStringLiteral( "Polygon?crs=EPSG:3857" ), QStringLiteral( "atlas" ), QStringLiteral( "memory" ) );
+  std::unique_ptr< QgsVectorLayer > atlasLayer = std::make_unique< QgsVectorLayer >( QStringLiteral( "Polygon?crs=EPSG:3857" ), QStringLiteral( "atlas" ), QStringLiteral( "memory" ) );
   QVERIFY( atlasLayer->isValid() );
   QgsGeometry atlasGeom( QgsGeometry::fromWkt( QStringLiteral( "Polygon ((-8863916.31126776337623596 4621257.48816855065524578, -9664269.45078738406300545 5097056.938785120844841, -10049249.44194872118532658 3765399.75924854446202517, -8985488.94005555473268032 3458599.17133777122944593, -8863916.31126776337623596 4621257.48816855065524578))" ) ) );
   QgsFeature f;
@@ -1151,7 +1189,7 @@ void TestQgsLayoutTable::wrapChar()
   table->setHeaderTextFormat( QgsTextFormat::fromQFont( QgsFontUtils::getStandardTestFont( QStringLiteral( "Bold" ) ) ) );
   table->setBackgroundColor( Qt::yellow );
 
-  std::unique_ptr< QgsVectorLayer > multiLineLayer = qgis::make_unique< QgsVectorLayer >( QStringLiteral( "Point?field=col1:string&field=col2:string&field=col3:string" ), QStringLiteral( "multiline" ), QStringLiteral( "memory" ) );
+  std::unique_ptr< QgsVectorLayer > multiLineLayer = std::make_unique< QgsVectorLayer >( QStringLiteral( "Point?field=col1:string&field=col2:string&field=col3:string" ), QStringLiteral( "multiline" ), QStringLiteral( "memory" ) );
   QVERIFY( multiLineLayer->isValid() );
   QgsFeature f1( multiLineLayer->dataProvider()->fields(), 1 );
   f1.setAttribute( QStringLiteral( "col1" ), "multiline\nstring" );
@@ -1192,7 +1230,7 @@ void TestQgsLayoutTable::autoWrap()
   table->setHeaderTextFormat( QgsTextFormat::fromQFont( QgsFontUtils::getStandardTestFont( QStringLiteral( "Bold" ) ) ) );
   table->setBackgroundColor( Qt::yellow );
 
-  std::unique_ptr< QgsVectorLayer > multiLineLayer = qgis::make_unique< QgsVectorLayer >( QStringLiteral( "Point?field=col1:string&field=col2:string&field=col3:string" ), QStringLiteral( "multiline" ), QStringLiteral( "memory" ) );
+  std::unique_ptr< QgsVectorLayer > multiLineLayer = std::make_unique< QgsVectorLayer >( QStringLiteral( "Point?field=col1:string&field=col2:string&field=col3:string" ), QStringLiteral( "multiline" ), QStringLiteral( "memory" ) );
   QVERIFY( multiLineLayer->isValid() );
   QgsFeature f1( multiLineLayer->dataProvider()->fields(), 1 );
   f1.setAttribute( QStringLiteral( "col1" ), "long multiline\nstring" );

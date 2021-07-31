@@ -15,13 +15,16 @@
 #ifndef QGSWFSDATAITEMS_H
 #define QGSWFSDATAITEMS_H
 
-#include "qgsdataitem.h"
+#include "qgsconnectionsitem.h"
+#include "qgsdatacollectionitem.h"
 #include "qgsdataitemprovider.h"
 #include "qgsdataprovider.h"
 #include "qgsdatasourceuri.h"
 #include "qgswfscapabilities.h"
+#include "qgslayeritem.h"
+#include "qgsconfig.h"
 
-class QgsWfsRootItem : public QgsDataCollectionItem
+class QgsWfsRootItem : public QgsConnectionsRootItem
 {
     Q_OBJECT
   public:

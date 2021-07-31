@@ -21,7 +21,6 @@
 #include <QStandardItemModel>
 #include <QString>
 #include <QObject>
-#include "qgsdataitem.h"
 #include "qgswkbtypes.h"
 
 //! Layer Property structure
@@ -44,8 +43,10 @@ class QIcon;
 
 /**
  * A model that holds the tables of a database in a hierarchy where the
-schemas are the root elements that contain the individual tables as children.
-The tables have the following columns: Type, Schema, Tablename, Geometry Column, Sql*/
+ * schemas are the root elements that contain the individual tables as children.
+ *
+ * The tables have the following columns: Type, Schema, Tablename, Geometry Column, Sql
+*/
 class QgsDb2TableModel : public QStandardItemModel
 {
     Q_OBJECT
@@ -60,7 +61,8 @@ class QgsDb2TableModel : public QStandardItemModel
 
     /**
      * Sets one or more geometry types to a row. In case of several types, additional rows are inserted.
-       This is for tables where the type is detected later by thread*/
+     * This is for tables where the type is detected later by thread.
+    */
     void setGeometryTypesForTable( QgsDb2LayerProperty layerProperty );
 
     //! Returns the number of tables in the model
@@ -82,8 +84,6 @@ class QgsDb2TableModel : public QStandardItemModel
     bool setData( const QModelIndex &index, const QVariant &value, int role = Qt::EditRole ) override;
 
     QString layerURI( const QModelIndex &index, const QString &connInfo, bool useEstimatedMetadata );
-
-    static QIcon iconForWkbType( QgsWkbTypes::Type type );
 
     static QgsWkbTypes::Type wkbTypeFromDb2( QString dbType, int dim = 2 );
 

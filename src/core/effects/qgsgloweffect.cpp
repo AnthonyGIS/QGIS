@@ -97,9 +97,9 @@ void QgsGlowEffect::draw( QgsRenderContext &context )
   painter->drawImage( imageOffset( context ), im );
 }
 
-QgsStringMap QgsGlowEffect::properties() const
+QVariantMap QgsGlowEffect::properties() const
 {
-  QgsStringMap props;
+  QVariantMap props;
   props.insert( QStringLiteral( "enabled" ), mEnabled ? "1" : "0" );
   props.insert( QStringLiteral( "draw_mode" ), QString::number( int( mDrawMode ) ) );
   props.insert( QStringLiteral( "blend_mode" ), QString::number( int( mBlendMode ) ) );
@@ -115,13 +115,17 @@ QgsStringMap QgsGlowEffect::properties() const
 
   if ( mRamp )
   {
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
     props.unite( mRamp->properties() );
+#else
+    props.insert( mRamp->properties() );
+#endif
   }
 
   return props;
 }
 
-void QgsGlowEffect::readProperties( const QgsStringMap &props )
+void QgsGlowEffect::readProperties( const QVariantMap &props )
 {
   bool ok;
   QPainter::CompositionMode mode = static_cast< QPainter::CompositionMode >( props.value( QStringLiteral( "blend_mode" ) ).toInt( &ok ) );
@@ -157,15 +161,15 @@ void QgsGlowEffect::readProperties( const QgsStringMap &props )
       mBlurLevel *= 0.2645;
     }
   }
-  mBlurUnit = QgsUnitTypes::decodeRenderUnit( props.value( QStringLiteral( "blur_unit" ) ) );
-  mBlurMapUnitScale = QgsSymbolLayerUtils::decodeMapUnitScale( props.value( QStringLiteral( "blur_unit_scale" ) ) );
+  mBlurUnit = QgsUnitTypes::decodeRenderUnit( props.value( QStringLiteral( "blur_unit" ) ).toString() );
+  mBlurMapUnitScale = QgsSymbolLayerUtils::decodeMapUnitScale( props.value( QStringLiteral( "blur_unit_scale" ) ).toString() );
   double spread = props.value( QStringLiteral( "spread" ) ).toDouble( &ok );
   if ( ok )
   {
     mSpread = spread;
   }
-  mSpreadUnit = QgsUnitTypes::decodeRenderUnit( props.value( QStringLiteral( "spread_unit" ) ) );
-  mSpreadMapUnitScale = QgsSymbolLayerUtils::decodeMapUnitScale( props.value( QStringLiteral( "spread_unit_scale" ) ) );
+  mSpreadUnit = QgsUnitTypes::decodeRenderUnit( props.value( QStringLiteral( "spread_unit" ) ).toString() );
+  mSpreadMapUnitScale = QgsSymbolLayerUtils::decodeMapUnitScale( props.value( QStringLiteral( "spread_unit_scale" ) ).toString() );
   QgsGlowEffect::GlowColorType type = static_cast< QgsGlowEffect::GlowColorType >( props.value( QStringLiteral( "color_type" ) ).toInt( &ok ) );
   if ( ok )
   {
@@ -173,12 +177,12 @@ void QgsGlowEffect::readProperties( const QgsStringMap &props )
   }
   if ( props.contains( QStringLiteral( "single_color" ) ) )
   {
-    mColor = QgsSymbolLayerUtils::decodeColor( props.value( QStringLiteral( "single_color" ) ) );
+    mColor = QgsSymbolLayerUtils::decodeColor( props.value( QStringLiteral( "single_color" ) ).toString() );
   }
 
-//attempt to create color ramp from props
+  //attempt to create color ramp from props
   delete mRamp;
-  if ( props.contains( QStringLiteral( "rampType" ) ) && props[QStringLiteral( "rampType" )] == QStringLiteral( "cpt-city" ) )
+  if ( props.contains( QStringLiteral( "rampType" ) ) && props[QStringLiteral( "rampType" )] == QgsCptCityColorRamp::typeString() )
   {
     mRamp = QgsCptCityColorRamp::create( props );
   }
@@ -237,7 +241,7 @@ QgsOuterGlowEffect::QgsOuterGlowEffect()
 
 }
 
-QgsPaintEffect *QgsOuterGlowEffect::create( const QgsStringMap &map )
+QgsPaintEffect *QgsOuterGlowEffect::create( const QVariantMap &map )
 {
   QgsOuterGlowEffect *effect = new QgsOuterGlowEffect();
   effect->readProperties( map );
@@ -261,7 +265,7 @@ QgsInnerGlowEffect::QgsInnerGlowEffect()
 
 }
 
-QgsPaintEffect *QgsInnerGlowEffect::create( const QgsStringMap &map )
+QgsPaintEffect *QgsInnerGlowEffect::create( const QVariantMap &map )
 {
   QgsInnerGlowEffect *effect = new QgsInnerGlowEffect();
   effect->readProperties( map );

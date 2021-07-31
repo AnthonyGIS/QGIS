@@ -80,7 +80,7 @@ class QgsField;
 /**
  * \ingroup gui
  *
- * Shows a search widget on a filter form.
+ * \brief Shows a search widget on a filter form.
  */
 class GUI_EXPORT QgsSearchWidgetWrapper : public QgsWidgetWrapper
 {
@@ -172,6 +172,8 @@ class GUI_EXPORT QgsSearchWidgetWrapper : public QgsWidgetWrapper
      */
     virtual bool applyDirectly() = 0;
 
+    // TODO QGIS 4.0 - make pure virtual
+
     /**
      * Creates a filter expression based on the current state of the search widget
      * and the specified filter flags.
@@ -179,7 +181,6 @@ class GUI_EXPORT QgsSearchWidgetWrapper : public QgsWidgetWrapper
      * \returns filter expression
      * \since QGIS 2.16
      */
-    // TODO QGIS 4.0 - make pure virtual
     virtual QString createExpression( FilterFlags flags ) const { Q_UNUSED( flags ) return QStringLiteral( "TRUE" ); }
 
     /**

@@ -25,8 +25,10 @@ class QIcon;
 
 /**
  * A model that holds the tables of a database in a hierarchy where the
-schemas are the root elements that contain the individual tables as children.
-The tables have the following columns: Type, Schema, Tablename, Geometry Column, Sql*/
+ * schemas are the root elements that contain the individual tables as children.
+ *
+ * The tables have the following columns: Type, Schema, Tablename, Geometry Column, Sql
+*/
 class QgsPgTableModel : public QStandardItemModel
 {
     Q_OBJECT
@@ -61,8 +63,6 @@ class QgsPgTableModel : public QStandardItemModel
     bool setData( const QModelIndex &index, const QVariant &value, int role = Qt::EditRole ) override;
 
     QString layerURI( const QModelIndex &index, const QString &connInfo, bool useEstimatedMetadata );
-
-    static QIcon iconForWkbType( QgsWkbTypes::Type type );
 
     void setConnectionName( const QString &connName ) { mConnName = connName;  }
 

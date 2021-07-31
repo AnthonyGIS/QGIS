@@ -79,7 +79,7 @@ QString QgsValueRelationFieldFormatter::representValue( QgsVectorLayer *layer, i
 
     QStringList valueList;
 
-    for ( const QgsValueRelationFieldFormatter::ValueRelationItem &item : qgis::as_const( vrCache ) )
+    for ( const QgsValueRelationFieldFormatter::ValueRelationItem &item : std::as_const( vrCache ) )
     {
       if ( keyList.contains( item.key.toString() ) )
       {
@@ -87,7 +87,7 @@ QString QgsValueRelationFieldFormatter::representValue( QgsVectorLayer *layer, i
       }
     }
 
-    return valueList.join( QStringLiteral( ", " ) ).prepend( '{' ).append( '}' );
+    return valueList.join( QLatin1String( ", " ) ).prepend( '{' ).append( '}' );
   }
   else
   {
@@ -96,7 +96,7 @@ QString QgsValueRelationFieldFormatter::representValue( QgsVectorLayer *layer, i
       return QgsApplication::nullRepresentation();
     }
 
-    for ( const QgsValueRelationFieldFormatter::ValueRelationItem &item : qgis::as_const( vrCache ) )
+    for ( const QgsValueRelationFieldFormatter::ValueRelationItem &item : std::as_const( vrCache ) )
     {
       if ( item.key == value )
       {
@@ -213,9 +213,9 @@ QVariantList QgsValueRelationFieldFormatter::availableValues( const QVariantMap 
 {
   QVariantList values;
 
-  if ( context.project() )
+  if ( auto *lProject = context.project() )
   {
-    const QgsVectorLayer *referencedLayer = qobject_cast<QgsVectorLayer *>( context.project()->mapLayer( config[QStringLiteral( "Layer" )].toString() ) );
+    const QgsVectorLayer *referencedLayer = qobject_cast<QgsVectorLayer *>( lProject->mapLayer( config[QStringLiteral( "Layer" )].toString() ) );
     if ( referencedLayer )
     {
       int fieldIndex = referencedLayer->fields().indexOf( config.value( QStringLiteral( "Key" ) ).toString() );
@@ -277,7 +277,7 @@ QStringList QgsValueRelationFieldFormatter::valueToStringList( const QVariant &v
     }
 
     checkList.reserve( valuesList.size() );
-    for ( const QVariant &listItem : qgis::as_const( valuesList ) )
+    for ( const QVariant &listItem : std::as_const( valuesList ) )
     {
       QString v( listItem.toString( ) );
       if ( ! v.isEmpty() )

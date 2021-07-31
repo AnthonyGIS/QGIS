@@ -40,6 +40,39 @@ QgsAbstractGeometry &QgsAbstractGeometry::operator=( const QgsAbstractGeometry &
   return *this;
 }
 
+int QgsAbstractGeometry::compareTo( const QgsAbstractGeometry *other ) const
+{
+  // compare to self
+  if ( this == other )
+  {
+    return 0;
+  }
+
+  if ( sortIndex() != other->sortIndex() )
+  {
+    //different geometry types
+    const int diff = sortIndex() - other->sortIndex();
+    return ( diff > 0 ) - ( diff < 0 );
+  }
+
+  // same types
+  if ( isEmpty() && other->isEmpty() )
+  {
+    return 0;
+  }
+
+  if ( isEmpty() )
+  {
+    return -1;
+  }
+  if ( other->isEmpty() )
+  {
+    return 1;
+  }
+
+  return compareToSameClass( other );
+}
+
 void QgsAbstractGeometry::setZMTypeFromSubGeometry( const QgsAbstractGeometry *subgeom, QgsWkbTypes::Type baseGeomType )
 {
   if ( !subgeom )
@@ -166,6 +199,9 @@ json QgsAbstractGeometry::asJsonObject( int precision ) const
 
 QgsPoint QgsAbstractGeometry::centroid() const
 {
+  if ( isEmpty() )
+    return QgsPoint();
+
   // http://en.wikipedia.org/wiki/Centroid#Centroid_of_polygon
   // Pick the first ring of first part for the moment
 
@@ -247,6 +283,11 @@ bool QgsAbstractGeometry::convertTo( QgsWkbTypes::Type type )
   return true;
 }
 
+const QgsAbstractGeometry *QgsAbstractGeometry::simplifiedTypeRef() const
+{
+  return this;
+}
+
 void QgsAbstractGeometry::filterVertices( const std::function<bool ( const QgsPoint & )> & )
 {
   // Ideally this would be pure virtual, but SIP has issues with that
@@ -284,6 +325,44 @@ QgsVertexIterator QgsAbstractGeometry::vertices() const
   return QgsVertexIterator( this );
 }
 
+int QgsAbstractGeometry::sortIndex() const
+{
+  switch ( QgsWkbTypes::flatType( mWkbType ) )
+  {
+    case QgsWkbTypes::Point:
+      return 0;
+    case QgsWkbTypes::MultiPoint:
+      return 1;
+    case QgsWkbTypes::LineString:
+      return 2;
+    case QgsWkbTypes::CircularString:
+      return 3;
+    case QgsWkbTypes::CompoundCurve:
+      return 4;
+    case QgsWkbTypes::MultiLineString:
+      return 5;
+    case QgsWkbTypes::MultiCurve:
+      return 6;
+    case QgsWkbTypes::Polygon:
+    case QgsWkbTypes::Triangle:
+      return 7;
+    case QgsWkbTypes::CurvePolygon:
+      return 8;
+    case QgsWkbTypes::MultiPolygon:
+      return 9;
+    case QgsWkbTypes::MultiSurface:
+      return 10;
+    case QgsWkbTypes::GeometryCollection:
+      return 11;
+    case QgsWkbTypes::Unknown:
+      return 12;
+    case QgsWkbTypes::NoGeometry:
+    default:
+      break;
+  }
+  return 13;
+}
+
 bool QgsAbstractGeometry::hasChildGeometries() const
 {
   return QgsWkbTypes::isMultiType( wkbType() ) || dimension() == 2;
@@ -307,6 +386,11 @@ bool QgsAbstractGeometry::hasCurvedSegments() const
   return false;
 }
 
+bool QgsAbstractGeometry::boundingBoxIntersects( const QgsRectangle &rectangle ) const
+{
+  return boundingBox().intersects( rectangle );
+}
+
 QgsAbstractGeometry *QgsAbstractGeometry::segmentize( double tolerance, SegmentationToleranceType toleranceType ) const
 {
   Q_UNUSED( tolerance )
@@ -318,7 +402,7 @@ QgsAbstractGeometry *QgsAbstractGeometry::segmentize( double tolerance, Segmenta
 QgsAbstractGeometry::vertex_iterator::vertex_iterator( const QgsAbstractGeometry *g, int index )
   : depth( 0 )
 {
-  ::memset( levels, 0, sizeof( Level ) * 3 );  // make sure we clean up also the padding areas (for memcmp test in operator==)
+  levels.fill( Level() );
   levels[0].g = g;
   levels[0].index = index;
 
@@ -399,8 +483,7 @@ bool QgsAbstractGeometry::vertex_iterator::operator==( const QgsAbstractGeometry
 {
   if ( depth != other.depth )
     return false;
-  int res = ::memcmp( levels, other.levels, sizeof( Level ) * ( depth + 1 ) );
-  return res == 0;
+  return std::equal( std::begin( levels ), std::begin( levels ) + depth + 1, std::begin( other.levels ) );
 }
 
 void QgsAbstractGeometry::vertex_iterator::digDown()
@@ -536,4 +619,9 @@ const QgsAbstractGeometry *QgsGeometryConstPartIterator::next()
 {
   n = i++;
   return *n;
+}
+
+bool QgsAbstractGeometry::vertex_iterator::Level::operator==( const QgsAbstractGeometry::vertex_iterator::Level &other ) const
+{
+  return g == other.g && index == other.index;
 }

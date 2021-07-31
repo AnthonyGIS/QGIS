@@ -31,7 +31,7 @@ class QgsVectorLayer;
 
 /**
  * \ingroup gui
- * Class to select destination file, type and CRS for ogr layers
+ * \brief Class to select destination file, type and CRS for ogr layers
  * \note not available in Python bindings
  * \since QGIS 1.0
  */
@@ -42,7 +42,7 @@ class GUI_EXPORT QgsVectorLayerSaveAsDialog : public QDialog, private Ui::QgsVec
   public:
 
     //! Bitmask of options to be shown
-    enum Options
+    enum Option
     {
       Symbology = 1, //!< Show symbology options
       DestinationCrs = 1 << 2, //!< Show destination CRS (reprojection) option
@@ -51,20 +51,22 @@ class GUI_EXPORT QgsVectorLayerSaveAsDialog : public QDialog, private Ui::QgsVec
       SelectedOnly = 1 << 5, //!< Show selected features only option
       GeometryType = 1 << 6, //!< Show geometry group
       Extent = 1 << 7, //!< Show extent group
+      Metadata = 1 << 8, //!< Show metadata options
       AllOptions = ~0 //!< Show all options
     };
+    Q_DECLARE_FLAGS( Options, Option )
 
     /**
      * Construct a new QgsVectorLayerSaveAsDialog
      *
      * \deprecated since QGIS 3.14 - will be removed in QGIS 4.0
      */
-    Q_DECL_DEPRECATED QgsVectorLayerSaveAsDialog( long srsid, QWidget *parent = nullptr, Qt::WindowFlags fl = nullptr );
+    Q_DECL_DEPRECATED QgsVectorLayerSaveAsDialog( long srsid, QWidget *parent = nullptr, Qt::WindowFlags fl = Qt::WindowFlags() );
 
     /**
      * Construct a new QgsVectorLayerSaveAsDialog
      */
-    QgsVectorLayerSaveAsDialog( QgsVectorLayer *layer, int options = AllOptions, QWidget *parent = nullptr, Qt::WindowFlags fl = nullptr );
+    QgsVectorLayerSaveAsDialog( QgsVectorLayer *layer, Options options = AllOptions, QWidget *parent = nullptr, Qt::WindowFlags fl = Qt::WindowFlags() );
 
     /**
      * The format in which the export should be written.
@@ -136,9 +138,10 @@ class GUI_EXPORT QgsVectorLayerSaveAsDialog : public QDialog, private Ui::QgsVec
 
     /**
      * Returns type of symbology export.
-        0: No symbology
-        1: Feature symbology
-        2: Symbol level symbology*/
+     * 0: No symbology
+     * 1: Feature symbology
+     * 2: Symbol level symbology
+     */
     int symbologyExport() const;
 
     /**
@@ -173,6 +176,13 @@ class GUI_EXPORT QgsVectorLayerSaveAsDialog : public QDialog, private Ui::QgsVec
      * Returns whether only selected features will be saved.
      */
     bool onlySelected() const;
+
+    /**
+     * Returns TRUE if the persist metadata (copy source metadata to destination layer) option is checked.
+     *
+     * \since QGIS 3.20
+     */
+    bool persistMetadata() const;
 
     /**
      * Returns the selected flat geometry type for the export.
@@ -241,5 +251,8 @@ class GUI_EXPORT QgsVectorLayerSaveAsDialog : public QDialog, private Ui::QgsVec
     QgsVectorFileWriter::ActionOnExistingFile mActionOnExistingFile;
     Options mOptions = AllOptions;
 };
+
+Q_DECLARE_OPERATORS_FOR_FLAGS( QgsVectorLayerSaveAsDialog::Options )
+
 
 #endif // QGSVECTORLAYERSAVEASDIALOG_H

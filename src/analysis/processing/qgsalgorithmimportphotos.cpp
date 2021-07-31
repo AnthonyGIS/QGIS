@@ -18,6 +18,9 @@
 #include "qgsalgorithmimportphotos.h"
 #include "qgsogrutils.h"
 #include "qgsvectorlayer.h"
+#include <QDirIterator>
+#include <QFileInfo>
+#include <QRegularExpression>
 
 ///@cond PRIVATE
 
@@ -51,11 +54,11 @@ void QgsImportPhotosAlgorithm::initAlgorithm( const QVariantMap & )
   addParameter( new QgsProcessingParameterFile( QStringLiteral( "FOLDER" ), QObject::tr( "Input folder" ), QgsProcessingParameterFile::Folder ) );
   addParameter( new QgsProcessingParameterBoolean( QStringLiteral( "RECURSIVE" ), QObject::tr( "Scan recursively" ), false ) );
 
-  std::unique_ptr< QgsProcessingParameterFeatureSink > output = qgis::make_unique< QgsProcessingParameterFeatureSink >( QStringLiteral( "OUTPUT" ), QObject::tr( "Photos" ), QgsProcessing::TypeVectorPoint, QVariant(), true );
+  std::unique_ptr< QgsProcessingParameterFeatureSink > output = std::make_unique< QgsProcessingParameterFeatureSink >( QStringLiteral( "OUTPUT" ), QObject::tr( "Photos" ), QgsProcessing::TypeVectorPoint, QVariant(), true );
   output->setCreateByDefault( true );
   addParameter( output.release() );
 
-  std::unique_ptr< QgsProcessingParameterFeatureSink > invalid = qgis::make_unique< QgsProcessingParameterFeatureSink >( QStringLiteral( "INVALID" ), QObject::tr( "Invalid photos table" ), QgsProcessing::TypeVector, QVariant(), true );
+  std::unique_ptr< QgsProcessingParameterFeatureSink > invalid = std::make_unique< QgsProcessingParameterFeatureSink >( QStringLiteral( "INVALID" ), QObject::tr( "Invalid photos table" ), QgsProcessing::TypeVector, QVariant(), true );
   invalid->setCreateByDefault( false );
   addParameter( invalid.release() );
 }
@@ -94,9 +97,16 @@ bool QgsImportPhotosAlgorithm::extractGeoTagFromMetadata( const QVariantMap &met
     if ( !ok )
       return false;
 
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     if ( metadata.value( QStringLiteral( "EXIF_GPSLongitudeRef" ) ).toString().rightRef( 1 ).compare( QLatin1String( "W" ), Qt::CaseInsensitive ) == 0
          || metadata.value( QStringLiteral( "EXIF_GPSLongitudeRef" ) ).toDouble() < 0 )
+#else
+    if ( QStringView { metadata.value( QStringLiteral( "EXIF_GPSLongitudeRef" ) ).toString() }.right( 1 ).compare( QLatin1String( "W" ), Qt::CaseInsensitive ) == 0
+         || metadata.value( QStringLiteral( "EXIF_GPSLongitudeRef" ) ).toDouble() < 0 )
+#endif
+    {
       x = -x;
+    }
   }
   else
   {
@@ -111,9 +121,16 @@ bool QgsImportPhotosAlgorithm::extractGeoTagFromMetadata( const QVariantMap &met
     if ( !ok )
       return false;
 
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
     if ( metadata.value( QStringLiteral( "EXIF_GPSLatitudeRef" ) ).toString().rightRef( 1 ).compare( QLatin1String( "S" ), Qt::CaseInsensitive ) == 0
          || metadata.value( QStringLiteral( "EXIF_GPSLatitudeRef" ) ).toDouble() < 0 )
+#else
+    if ( QStringView { metadata.value( QStringLiteral( "EXIF_GPSLatitudeRef" ) ).toString() }.right( 1 ).compare( QLatin1String( "S" ), Qt::CaseInsensitive ) == 0
+         || metadata.value( QStringLiteral( "EXIF_GPSLatitudeRef" ) ).toDouble() < 0 )
+#endif
+    {
       y = -y;
+    }
   }
   else
   {
@@ -147,6 +164,42 @@ QVariant QgsImportPhotosAlgorithm::extractDirectionFromMetadata( const QVariantM
     direction = metadata.value( QStringLiteral( "EXIF_GPSImgDirection" ) ).toDouble();
   }
   return direction;
+}
+
+QVariant QgsImportPhotosAlgorithm::extractOrientationFromMetadata( const QVariantMap &metadata )
+{
+  QVariant orientation;
+  if ( metadata.contains( QStringLiteral( "EXIF_Orientation" ) ) )
+  {
+    switch ( metadata.value( QStringLiteral( "EXIF_Orientation" ) ).toInt() )
+    {
+      case 1:
+        orientation = 0;
+        break;
+      case 2:
+        orientation = 0;
+        break;
+      case 3:
+        orientation = 180;
+        break;
+      case 4:
+        orientation = 180;
+        break;
+      case 5:
+        orientation = 90;
+        break;
+      case 6:
+        orientation = 90;
+        break;
+      case 7:
+        orientation = 270;
+        break;
+      case 8:
+        orientation = 270;
+        break;
+    }
+  }
+  return orientation;
 }
 
 QVariant QgsImportPhotosAlgorithm::extractTimestampFromMetadata( const QVariantMap &metadata )
@@ -236,13 +289,17 @@ class SetEditorWidgetForPhotoAttributePostProcessor : public QgsProcessingLayerP
         // photo field shows picture viewer
         config.insert( QStringLiteral( "DocumentViewer" ), 1 );
         config.insert( QStringLiteral( "FileWidget" ), true );
-        vl->setEditorWidgetSetup( 0, QgsEditorWidgetSetup( QStringLiteral( "ExternalResource" ), config ) );
+        config.insert( QStringLiteral( "UseLink" ), true );
+        config.insert( QStringLiteral( "FullUrl" ), true );
+        vl->setEditorWidgetSetup( vl->fields().lookupField( QStringLiteral( "photo" ) ), QgsEditorWidgetSetup( QStringLiteral( "ExternalResource" ), config ) );
 
         config.clear();
         // path field is a directory link
         config.insert( QStringLiteral( "FileWidgetButton" ), true );
         config.insert( QStringLiteral( "StorageMode" ), 1 );
-        vl->setEditorWidgetSetup( 2, QgsEditorWidgetSetup( QStringLiteral( "ExternalResource" ), config ) );
+        config.insert( QStringLiteral( "UseLink" ), true );
+        config.insert( QStringLiteral( "FullUrl" ), true );
+        vl->setEditorWidgetSetup( vl->fields().lookupField( QStringLiteral( "directory" ) ), QgsEditorWidgetSetup( QStringLiteral( "ExternalResource" ), config ) );
       }
     }
 };
@@ -265,6 +322,7 @@ QVariantMap QgsImportPhotosAlgorithm::processAlgorithm( const QVariantMap &param
   outFields.append( QgsField( QStringLiteral( "directory" ), QVariant::String ) );
   outFields.append( QgsField( QStringLiteral( "altitude" ), QVariant::Double ) );
   outFields.append( QgsField( QStringLiteral( "direction" ), QVariant::Double ) );
+  outFields.append( QgsField( QStringLiteral( "rotation" ), QVariant::Int ) );
   outFields.append( QgsField( QStringLiteral( "longitude" ), QVariant::String ) );
   outFields.append( QgsField( QStringLiteral( "latitude" ), QVariant::String ) );
   outFields.append( QgsField( QStringLiteral( "timestamp" ), QVariant::DateTime ) );
@@ -301,14 +359,15 @@ QVariantMap QgsImportPhotosAlgorithm::processAlgorithm( const QVariantMap &param
     }
   }
 
-  auto saveInvalidFile = [&invalidSink]( QgsAttributes & attributes, bool readable )
+  auto saveInvalidFile = [&invalidSink, &parameters]( QgsAttributes & attributes, bool readable )
   {
     if ( invalidSink )
     {
       QgsFeature f;
       attributes.append( readable );
       f.setAttributes( attributes );
-      invalidSink->addFeature( f, QgsFeatureSink::FastInsert );
+      if ( !invalidSink->addFeature( f, QgsFeatureSink::FastInsert ) )
+        throw QgsProcessingException( writeFeatureError( invalidSink.get(), parameters, QStringLiteral( "INVALID" ) ) );
     }
   };
 
@@ -362,11 +421,13 @@ QVariantMap QgsImportPhotosAlgorithm::processAlgorithm( const QVariantMap &param
       attributes
           << altitude
           << extractDirectionFromMetadata( metadata )
+          << extractOrientationFromMetadata( metadata )
           << tag.x()
           << tag.y()
           << extractTimestampFromMetadata( metadata );
       f.setAttributes( attributes );
-      outputSink->addFeature( f, QgsFeatureSink::FastInsert );
+      if ( !outputSink->addFeature( f, QgsFeatureSink::FastInsert ) )
+        throw QgsProcessingException( writeFeatureError( outputSink.get(), parameters, QStringLiteral( "OUTPUT" ) ) );
     }
     else
     {

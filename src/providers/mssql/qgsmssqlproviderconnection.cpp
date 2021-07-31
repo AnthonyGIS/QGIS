@@ -15,6 +15,7 @@
  ***************************************************************************/
 
 #include <QSqlRecord>
+#include <QSqlField>
 
 #include "qgsmssqlproviderconnection.h"
 #include "qgsmssqlconnection.h"
@@ -23,7 +24,10 @@
 #include "qgsexception.h"
 #include "qgsapplication.h"
 #include "qgsmessagelog.h"
+#include "qgsfeedback.h"
+#include <QIcon>
 
+#include <chrono>
 
 const QStringList QgsMssqlProviderConnection::EXTRA_CONNECTION_PARAMETERS
 {
@@ -65,6 +69,9 @@ QgsMssqlProviderConnection::QgsMssqlProviderConnection( const QString &uri, cons
     }
   }
 
+  if ( inputUri.hasParam( QStringLiteral( "excludedSchemas" ) ) )
+    currentUri.setParam( QStringLiteral( "excludedSchemas" ), inputUri.param( QStringLiteral( "excludedSchemas" ) ) );
+
   setUri( currentUri.uri() );
   setDefaultCapabilities();
 }
@@ -87,6 +94,19 @@ void QgsMssqlProviderConnection::setDefaultCapabilities()
     Capability::DeleteField,
     Capability::DeleteFieldCascade,
     Capability::AddField
+  };
+  mGeometryColumnCapabilities =
+  {
+    GeometryColumnCapability::Z,
+    GeometryColumnCapability::M,
+    GeometryColumnCapability::Curves
+  };
+  mSqlLayerDefinitionCapabilities =
+  {
+    Qgis::SqlLayerDefinitionCapability::SubsetStringFilter,
+    Qgis::SqlLayerDefinitionCapability::PrimaryKeys,
+    Qgis::SqlLayerDefinitionCapability::GeometryColumn,
+    Qgis::SqlLayerDefinitionCapability::UnstableFeatureIds,
   };
 }
 
@@ -149,17 +169,17 @@ void QgsMssqlProviderConnection::createVectorTable( const QString &schema,
   }
   QMap<int, int> map;
   QString errCause;
-  QgsVectorLayerExporter::ExportError errCode = QgsMssqlProvider::createEmptyLayer(
-        newUri.uri(),
-        fields,
-        wkbType,
-        srs,
-        overwrite,
-        &map,
-        &errCause,
-        options
-      );
-  if ( errCode != QgsVectorLayerExporter::ExportError::NoError )
+  Qgis::VectorExportResult res = QgsMssqlProvider::createEmptyLayer(
+                                   newUri.uri(),
+                                   fields,
+                                   wkbType,
+                                   srs,
+                                   overwrite,
+                                   &map,
+                                   &errCause,
+                                   options
+                                 );
+  if ( res != Qgis::VectorExportResult::Success )
   {
     throw QgsProviderConnectionException( QObject::tr( "An error occurred while creating the vector layer: %1" ).arg( errCause ) );
   }
@@ -207,65 +227,121 @@ void QgsMssqlProviderConnection::dropSchema( const QString &schemaName,  bool fo
                      .arg( QgsMssqlProvider::quotedIdentifier( schemaName ) ) );
 }
 
-QList<QVariantList> QgsMssqlProviderConnection::executeSql( const QString &sql ) const
+QgsAbstractDatabaseProviderConnection::QueryResult QgsMssqlProviderConnection::execSql( const QString &sql, QgsFeedback *feedback ) const
 {
   checkCapability( Capability::ExecuteSql );
-  return executeSqlPrivate( sql );
+  return executeSqlPrivate( sql, true, feedback );
 }
 
-QList<QVariantList> QgsMssqlProviderConnection::executeSqlPrivate( const QString &sql, bool resolveTypes ) const
+QgsAbstractDatabaseProviderConnection::QueryResult QgsMssqlProviderConnection::executeSqlPrivate( const QString &sql, bool resolveTypes, QgsFeedback *feedback ) const
 {
+  if ( feedback && feedback->isCanceled() )
+  {
+    return QgsAbstractDatabaseProviderConnection::QueryResult();
+  }
+
   const QgsDataSourceUri dsUri { uri() };
-  QList<QVariantList> results;
+
   // connect to database
   QSqlDatabase db = QgsMssqlConnection::getDatabase( dsUri.service(), dsUri.host(), dsUri.database(), dsUri.username(), dsUri.password() );
 
   if ( !QgsMssqlConnection::openDatabase( db ) )
   {
     throw QgsProviderConnectionException( QObject::tr( "Connection to %1 failed: %2" )
-                                          .arg( uri() )
-                                          .arg( db.lastError().text() ) );
+                                          .arg( uri(), db.lastError().text() ) );
   }
   else
   {
+
+    if ( feedback && feedback->isCanceled() )
+    {
+      return QgsAbstractDatabaseProviderConnection::QueryResult();
+    }
+
     //qDebug() << "MSSQL QUERY:" << sql;
     QSqlQuery q = QSqlQuery( db );
     q.setForwardOnly( true );
+
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
 
     if ( ! q.exec( sql ) )
     {
       const QString errorMessage { q.lastError().text() };
       throw QgsProviderConnectionException( QObject::tr( "SQL error: %1 \n %2" )
-                                            .arg( sql )
-                                            .arg( errorMessage ) );
+                                            .arg( sql, errorMessage ) );
 
     }
 
     if ( q.isActive() )
     {
+      std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
       const QSqlRecord rec { q.record() };
       const int numCols { rec.count() };
-      while ( q.next() )
+      auto iterator = std::make_shared<QgssMssqlProviderResultIterator>( resolveTypes, numCols, q );
+      QgsAbstractDatabaseProviderConnection::QueryResult results( iterator );
+      results.setQueryExecutionTime( std::chrono::duration_cast<std::chrono::milliseconds>( end - begin ).count() );
+      for ( int idx = 0; idx < numCols; ++idx )
       {
-        QVariantList row;
-        for ( int col = 0; col < numCols; ++col )
-        {
-          if ( resolveTypes )
-          {
-            row.push_back( q.value( col ) );
-          }
-          else
-          {
-            row.push_back( q.value( col ).toString() );
-          }
-        }
-        results.push_back( row );
+        results.appendColumn( rec.field( idx ).name() );
       }
+      return results;
     }
 
   }
-  return results;
+  return QgsAbstractDatabaseProviderConnection::QueryResult();
 }
+
+
+QgssMssqlProviderResultIterator::QgssMssqlProviderResultIterator( bool resolveTypes, int columnCount, const QSqlQuery &query )
+  : mResolveTypes( resolveTypes )
+  , mColumnCount( columnCount )
+  , mQuery( query )
+{
+  // Load first row
+  nextRow();
+}
+
+QVariantList QgssMssqlProviderResultIterator::nextRowPrivate()
+{
+  const QVariantList currentRow = mNextRow;
+  mNextRow = nextRowInternal();
+  return currentRow;
+}
+
+bool QgssMssqlProviderResultIterator::hasNextRowPrivate() const
+{
+  return ! mNextRow.isEmpty();
+}
+
+QVariantList QgssMssqlProviderResultIterator::nextRowInternal()
+{
+  QVariantList row;
+  if ( mQuery.next() )
+  {
+    for ( int col = 0; col < mColumnCount; ++col )
+    {
+      if ( mResolveTypes )
+      {
+        row.push_back( mQuery.value( col ) );
+      }
+      else
+      {
+        row.push_back( mQuery.value( col ).toString() );
+      }
+    }
+  }
+  else
+  {
+    mQuery.finish();
+  }
+  return row;
+}
+
+long long QgssMssqlProviderResultIterator::rowCountPrivate() const
+{
+  return mQuery.size();
+}
+
 
 QList<QgsMssqlProviderConnection::TableProperty> QgsMssqlProviderConnection::tables( const QString &schema, const TableFlags &flags ) const
 {
@@ -341,7 +417,7 @@ QList<QgsMssqlProviderConnection::TableProperty> QgsMssqlProviderConnection::tab
              .arg( QgsMssqlProvider::quotedValue( schema ) );
   }
 
-  const QList<QVariantList> results { executeSqlPrivate( query, false ) };
+  const QList<QVariantList> results { executeSqlPrivate( query, false ).rows() };
   for ( const auto &row : results )
   {
     Q_ASSERT( row.count( ) == 6 );
@@ -349,8 +425,8 @@ QList<QgsMssqlProviderConnection::TableProperty> QgsMssqlProviderConnection::tab
     table.setSchema( row[0].toString() );
     table.setTableName( row[1].toString() );
     table.setGeometryColumn( row[2].toString() );
-    //const QVariant srid { row[3] };
-    //const QVariant type { row[4] }; // GEOMETRY|GEOGRAPHY
+    //const QVariant srid = row[3];
+    //const QVariant type = row[4]; // GEOMETRY|GEOGRAPHY
     if ( row[5].toBool() )
       table.setFlag( QgsMssqlProviderConnection::TableFlag::View );
 
@@ -375,7 +451,7 @@ QList<QgsMssqlProviderConnection::TableProperty> QgsMssqlProviderConnection::tab
       // This may fail for invalid geometries
       try
       {
-        const auto geomColResults { executeSqlPrivate( geomColSql ) };
+        const auto geomColResults { executeSqlPrivate( geomColSql ).rows() };
         for ( const auto &row : geomColResults )
         {
           table.addGeometryColumnType( QgsWkbTypes::parseType( row[0].toString() ),
@@ -412,9 +488,14 @@ QStringList QgsMssqlProviderConnection::schemas( ) const
 {
   checkCapability( Capability::Schemas );
   QStringList schemas;
+
+  QgsDataSourceUri connUri( uri() );
+
   const QgsDataSourceUri dsUri { uri() };
-  const QString sql { QStringLiteral(
-                        R"raw(
+  const QString sql
+  {
+    QStringLiteral(
+      R"raw(
     SELECT s.name AS schema_name,
         s.schema_id,
         u.name AS schema_owner
@@ -423,12 +504,22 @@ QStringList QgsMssqlProviderConnection::schemas( ) const
             ON u.uid = s.principal_id
      WHERE u.issqluser = 1
         AND u.name NOT IN ('sys', 'guest', 'INFORMATION_SCHEMA')
-    )raw" )};
-  const QList<QVariantList> result { executeSqlPrivate( sql, false ) };
+    )raw" )
+  };
+
+  const QList<QVariantList> result { executeSqlPrivate( sql, false ).rows() };
+
+  QStringList excludedSchemaList;
+  if ( connUri.hasParam( QStringLiteral( "excludedSchemas" ) ) )
+    excludedSchemaList = QgsDataSourceUri( uri() ).param( QStringLiteral( "excludedSchemas" ) ).split( ',' );
   for ( const auto &row : result )
   {
     if ( row.size() > 0 )
-      schemas.push_back( row.at( 0 ).toString() );
+    {
+      QString schema = row.at( 0 ).toString();
+      if ( !excludedSchemaList.contains( schema ) )
+        schemas.push_back( schema );
+    }
   }
   return schemas;
 }
@@ -454,13 +545,14 @@ void QgsMssqlProviderConnection::store( const QString &name ) const
   settings.setValue( "password", dsUri.password() );
   settings.setValue( "estimatedMetadata", dsUri.useEstimatedMetadata() );
 
+  QgsMssqlConnection::setExcludedSchemasList( name, dsUri.database(), dsUri.param( QStringLiteral( "excludedSchemas" ) ).split( ',' ) );
+
   for ( const auto &param : EXTRA_CONNECTION_PARAMETERS )
   {
     if ( dsUri.hasParam( param ) )
     {
       settings.setValue( param, dsUri.param( param ) == QStringLiteral( "true" )
                          || dsUri.param( param ) == '1' );
-
     }
   }
 
@@ -488,3 +580,8 @@ QIcon QgsMssqlProviderConnection::icon() const
   return QgsApplication::getThemeIcon( QStringLiteral( "mIconMssql.svg" ) );
 }
 
+
+QList<QgsVectorDataProvider::NativeType> QgsMssqlProviderConnection::nativeTypes() const
+{
+  return QgsMssqlConnection::nativeTypes();
+}

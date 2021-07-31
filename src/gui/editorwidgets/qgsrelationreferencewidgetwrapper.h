@@ -26,7 +26,7 @@ class QgsMessageBar;
 
 /**
  * \ingroup gui
- * Wraps a relation reference widget.
+ * \brief Wraps a relation reference widget.
  *
  * Options:
  * <ul>
@@ -73,10 +73,13 @@ class GUI_EXPORT QgsRelationReferenceWidgetWrapper : public QgsEditorWidgetWrapp
   private:
     void updateValues( const QVariant &val, const QVariantList &additionalValues = QVariantList() ) override;
 
+    QString mExpression;
+
     QgsRelationReferenceWidget *mWidget = nullptr;
     QgsMapCanvas *mCanvas = nullptr;
     QgsMessageBar *mMessageBar = nullptr;
     bool mIndeterminateState;
+    int mBlockChanges = 0;
 
 };
 

@@ -147,7 +147,7 @@ void QgsGeometryValidationService::onFeatureDeleted( QgsVectorLayer *layer, QgsF
   emit geometryCheckCompleted( layer, fid, QList<std::shared_ptr<QgsSingleGeometryCheckError>>() );
 }
 
-void QgsGeometryValidationService::onBeforeCommitChanges( QgsVectorLayer *layer )
+void QgsGeometryValidationService::onBeforeCommitChanges( QgsVectorLayer *layer, bool stopEditing )
 {
   if ( mLayerChecks[layer].topologyChecks.empty() && !layer->allowCommit() )
   {
@@ -162,7 +162,7 @@ void QgsGeometryValidationService::onBeforeCommitChanges( QgsVectorLayer *layer 
 
     mLayerChecks[layer].commitPending = true;
 
-    triggerTopologyChecks( layer );
+    triggerTopologyChecks( layer, stopEditing );
   }
 }
 
@@ -208,7 +208,7 @@ void QgsGeometryValidationService::enableLayerChecks( QgsVectorLayer *layer )
 
   if ( layer->geometryOptions()->geometryChecks().empty() )
   {
-    for ( QMetaObject::Connection connection : qgis::as_const( checkInformation.connections ) )
+    for ( QMetaObject::Connection connection : std::as_const( checkInformation.connections ) )
     {
       disconnect( connection );
     }
@@ -227,7 +227,7 @@ void QgsGeometryValidationService::enableLayerChecks( QgsVectorLayer *layer )
       precision = 8;
   }
 
-  checkInformation.context = qgis::make_unique<QgsGeometryCheckContext>( precision, mProject->crs(), mProject->transformContext(), mProject );
+  checkInformation.context = std::make_unique<QgsGeometryCheckContext>( precision, mProject->crs(), mProject->transformContext(), mProject );
 
   QList<QgsGeometryCheck *> layerChecks;
 
@@ -248,7 +248,7 @@ void QgsGeometryValidationService::enableLayerChecks( QgsVectorLayer *layer )
   }
 
   QList<QgsSingleGeometryCheck *> singleGeometryChecks;
-  for ( QgsGeometryCheck *check : qgis::as_const( layerChecks ) )
+  for ( QgsGeometryCheck *check : std::as_const( layerChecks ) )
   {
     Q_ASSERT( dynamic_cast<QgsSingleGeometryCheck *>( check ) );
     singleGeometryChecks.append( dynamic_cast<QgsSingleGeometryCheck *>( check ) );
@@ -281,7 +281,7 @@ void QgsGeometryValidationService::enableLayerChecks( QgsVectorLayer *layer )
         {
           connect( layer, &QgsVectorLayer::editingStarted, gapsLayer, [gapsLayer] { gapsLayer->startEditing(); } );
           connect( layer, &QgsVectorLayer::beforeRollBack, gapsLayer, [gapsLayer] { gapsLayer->rollBack(); } );
-          connect( layer, &QgsVectorLayer::editingStopped, gapsLayer, [gapsLayer] { gapsLayer->commitChanges(); } );
+          connect( layer, &QgsVectorLayer::afterCommitChanges, gapsLayer, [gapsLayer] { gapsLayer->commitChanges(); } );
         }
         else
         {
@@ -315,9 +315,9 @@ void QgsGeometryValidationService::enableLayerChecks( QgsVectorLayer *layer )
       onFeatureDeleted( layer, fid );
     } );
     checkInformation.connections
-        << connect( layer, &QgsVectorLayer::beforeCommitChanges, this, [this, layer]()
+        << connect( layer, &QgsVectorLayer::beforeCommitChanges, this, [this, layer]( bool stopEditing )
     {
-      onBeforeCommitChanges( layer );
+      onBeforeCommitChanges( layer, stopEditing );
     } );
     checkInformation.connections
         << connect( layer, &QgsVectorLayer::editingStopped, this, [this, layer]()
@@ -405,7 +405,7 @@ void QgsGeometryValidationService::setMessageBar( QgsMessageBar *messageBar )
   mMessageBar = messageBar;
 }
 
-void QgsGeometryValidationService::triggerTopologyChecks( QgsVectorLayer *layer )
+void QgsGeometryValidationService::triggerTopologyChecks( QgsVectorLayer *layer, bool stopEditing )
 {
   cancelTopologyCheck( layer );
   clearTopologyChecks( layer );
@@ -504,7 +504,7 @@ void QgsGeometryValidationService::triggerTopologyChecks( QgsVectorLayer *layer 
   QFutureWatcher<void> *futureWatcher = new QFutureWatcher<void>();
   futureWatcher->setFuture( future );
 
-  connect( futureWatcher, &QFutureWatcherBase::finished, this, [&allErrors, layer, feedbacks, futureWatcher, this]()
+  connect( futureWatcher, &QFutureWatcherBase::finished, this, [&allErrors, layer, feedbacks, futureWatcher, stopEditing, this]()
   {
     QgsReadWriteLocker errorLocker( mTopologyCheckLock, QgsReadWriteLocker::Read );
     layer->setAllowCommit( allErrors.empty() && mLayerChecks[layer].singleFeatureCheckErrors.empty() );
@@ -524,7 +524,7 @@ void QgsGeometryValidationService::triggerTopologyChecks( QgsVectorLayer *layer 
     if ( allErrors.empty() && mLayerChecks[layer].singleFeatureCheckErrors.empty() && mLayerChecks[layer].commitPending )
     {
       mBypassChecks = true;
-      layer->commitChanges();
+      layer->commitChanges( stopEditing );
       mBypassChecks = false;
       mMessageBar->popWidget( mMessageBarItem );
       mMessageBarItem = nullptr;

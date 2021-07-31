@@ -27,6 +27,8 @@
 #include <QMouseEvent>
 #include <QMenu>
 #include <QCheckBox>
+#include <QRegularExpressionValidator>
+#include <QRegularExpression>
 
 QgsRasterPyramidsOptionsWidget::QgsRasterPyramidsOptionsWidget( QWidget *parent, const QString &provider )
   : QWidget( parent )
@@ -71,7 +73,7 @@ void QgsRasterPyramidsOptionsWidget::updateUi()
 
   // validate string, only space-separated positive integers are allowed
   lePyramidsLevels->setEnabled( cbxPyramidsLevelsCustom->isChecked() );
-  lePyramidsLevels->setValidator( new QRegExpValidator( QRegExp( "(\\d*)(\\s\\d*)*" ), lePyramidsLevels ) );
+  lePyramidsLevels->setValidator( new QRegularExpressionValidator( QRegularExpression( "(\\d*)(\\s\\d*)*" ), lePyramidsLevels ) );
   connect( lePyramidsLevels, &QLineEdit::textEdited,
            this, &QgsRasterPyramidsOptionsWidget::setOverviewList );
 
@@ -96,7 +98,11 @@ void QgsRasterPyramidsOptionsWidget::updateUi()
       it.value()->setChecked( false );
   }
   tmpStr = mySettings.value( prefix + "overviewList", "" ).toString();
-  const auto constSplit = tmpStr.split( ' ', QString::SkipEmptyParts );
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
+  const QStringList constSplit = tmpStr.split( ' ', QString::SkipEmptyParts );
+#else
+  const QStringList constSplit = tmpStr.split( ' ', Qt::SkipEmptyParts );
+#endif
   for ( const QString &lev : constSplit )
   {
     if ( mOverviewCheckBoxes.contains( lev.toInt() ) )
@@ -195,7 +201,11 @@ void QgsRasterPyramidsOptionsWidget::setOverviewList()
   if ( cbxPyramidsLevelsCustom->isChecked() )
   {
     // should we also validate that numbers are increasing?
-    const auto constSplit = lePyramidsLevels->text().trimmed().split( ' ', QString::SkipEmptyParts );
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
+    const QStringList constSplit = lePyramidsLevels->text().trimmed().split( ' ', QString::SkipEmptyParts );
+#else
+    const QStringList constSplit = lePyramidsLevels->text().trimmed().split( ' ', Qt::SkipEmptyParts );
+#endif
     for ( const QString &lev : constSplit )
     {
       QgsDebugMsg( "lev= " + lev );

@@ -83,7 +83,7 @@ class CORE_EXPORT QgsImageFetcher : public QObject
 
 /**
  * \ingroup core
- * Base class for raster data providers.
+ * \brief Base class for raster data providers.
  */
 class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRasterInterface
 {
@@ -101,7 +101,9 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
       ReadLayerMetadata = 1 << 1, //!< Provider can read layer metadata from data store. Since QGIS 3.0. See QgsDataProvider::layerMetadata()
       WriteLayerMetadata = 1 << 2, //!< Provider can write layer metadata to the data store. Since QGIS 3.0. See QgsDataProvider::writeLayerMetadata()
       ProviderHintBenefitsFromResampling = 1 << 3, //!< Provider benefits from resampling and should apply user default resampling settings (since QGIS 3.10)
-      ProviderHintCanPerformProviderResampling = 1 << 4 //!< Provider can perform resampling (to be opposed to post rendering resampling) (since QGIS 3.16)
+      ProviderHintCanPerformProviderResampling = 1 << 4, //!< Provider can perform resampling (to be opposed to post rendering resampling) (since QGIS 3.16)
+      ReloadData = 1 << 5, //!< Is able to force reload data / clear local caches. Since QGIS 3.18, see QgsDataProvider::reloadProviderData()
+      DpiDependentData = 1 << 6, //! Provider's rendering is dependent on requested pixel size of the viewport (since QGIS 3.20)
     };
 
     //! Provider capabilities
@@ -115,11 +117,13 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
      * The \a uri argument gives a provider-specific uri indicating the underlying data
      * source and it's parameters.
      *
-     * The \a options argument specifies generic provider options.
+     * The \a options argument specifies generic provider options and since QGIS 3.16 creation flags are specified within the \a flags value.
      */
-    QgsRasterDataProvider( const QString &uri, const QgsDataProvider::ProviderOptions &providerOptions = QgsDataProvider::ProviderOptions() );
+    QgsRasterDataProvider( const QString &uri,
+                           const QgsDataProvider::ProviderOptions &providerOptions = QgsDataProvider::ProviderOptions(),
+                           QgsDataProvider::ReadFlags flags = QgsDataProvider::ReadFlags() );
 
-    QgsRasterInterface *clone() const override = 0;
+    QgsRasterDataProvider *clone() const override = 0;
 
     /**
      * Returns flags containing the supported capabilities of the data provider.
@@ -149,11 +153,7 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
     Qgis::DataType sourceDataType( int bandNo ) const override = 0;
 
     //! Returns data type for the band specified by number
-    virtual int colorInterpretation( int bandNo ) const
-    {
-      Q_UNUSED( bandNo )
-      return QgsRaster::UndefinedColorInterpretation;
-    }
+    virtual int colorInterpretation( int bandNo ) const;
 
     QString colorName( int colorInterpretation ) const
     {
@@ -218,10 +218,7 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
     //! Reload data (data could change)
     virtual bool reload() { return true; }
 
-    virtual QString colorInterpretationName( int bandNo ) const
-    {
-      return colorName( colorInterpretation( bandNo ) );
-    }
+    QString colorInterpretationName( int bandNo ) const override;
 
     /**
      * Read band scale for raster value
@@ -313,7 +310,22 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
       return nullptr;
     }
 
-    //! \brief Create pyramid overviews
+    /**
+     * Creates pyramid overviews.
+     *
+     * \param pyramidList a list of QgsRasterPyramids to create overviews for. The QgsRasterPyramid::setBuild() flag
+     * should be set to TRUE for every layer where pyramids are desired.
+     * \param resamplingMethod resampling method to use when creating the pyramids. The pyramidResamplingMethods() method
+     * can be used to retrieve a list of valid resampling methods available for specific raster data providers.
+     * \param format raster pyramid format.
+     * \param configOptions optional configuration options which are passed to the specific data provider
+     * for use during pyramid creation.
+     * \param feedback optional feedback argument for progress reports and cancellation support.
+     *
+     * \see buildPyramidList()
+     * \see hasPyramids()
+     * \see pyramidResamplingMethods()
+     */
     virtual QString buildPyramids( const QList<QgsRasterPyramid> &pyramidList,
                                    const QString &resamplingMethod = "NEAREST",
                                    QgsRaster::RasterPyramidsFormat format = QgsRaster::PyramidsGTiff,
@@ -330,16 +342,34 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
 
     /**
      * Returns the raster layers pyramid list.
-     * \param overviewList used to construct the pyramid list (optional), when empty the list is defined by the provider.
-     * A pyramid list defines the
-     * POTENTIAL pyramids that can be in a raster. To know which of the pyramid layers
-     * ACTUALLY exists you need to look at the existsFlag member in each struct stored in the
+     *
+     * This method returns a list of pyramid layers which are valid for the data provider. The returned list
+     * is a complete list of all possible layers, and includes both pyramids layers which currently exist and
+     * layers which have not yet been constructed. To know which of the pyramid layers
+     * ACTUALLY exists you need to look at the QgsRasterPyramid::getExists() member for each value in the
      * list.
+     *
+     * The returned list is suitable for passing to the buildPyramids() method. First, modify the returned list
+     * by calling `QgsRasterPyramid::setBuild( TRUE )` for every layer you want to create pyramids for, and then
+     * pass the modified list to buildPyramids().
+     *
+     * \param overviewList used to construct the pyramid list (optional), when empty the list is defined by the provider.
+     *
+     * \see buildPyramids()
+     * \see hasPyramids()
      */
-    virtual QList<QgsRasterPyramid> buildPyramidList( QList<int> overviewList = QList<int>() ) // clazy:exclude=function-args-by-ref
+    virtual QList<QgsRasterPyramid> buildPyramidList( const QList<int> &overviewList = QList<int>() )
     { Q_UNUSED( overviewList ) return QList<QgsRasterPyramid>(); }
 
-    //! \brief Returns TRUE if raster has at least one populated histogram.
+    /**
+     * Returns TRUE if raster has at least one existing pyramid.
+     *
+     * The buildPyramidList() method can be used to retrieve additional details about potential and existing
+     * pyramid layers.
+     *
+     * \see buildPyramidList()
+     * \see buildPyramids()
+     */
     bool hasPyramids();
 
     /**
@@ -448,8 +478,9 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
      */
     virtual bool setEditable( bool enabled ) { Q_UNUSED( enabled ) return false; }
 
-    //! Writes into the provider datasource
     // TODO: add data type (may be different from band type)
+
+    //! Writes into the provider datasource
     virtual bool write( void *data, int band, int width, int height, int xOffset, int yOffset )
     {
       Q_UNUSED( data )
@@ -550,7 +581,7 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
     virtual QList< double > nativeResolutions() const;
 
     /**
-     * Returns true if the extents reported by the data provider are not reliable
+     * Returns TRUE if the extents reported by the data provider are not reliable
      * and it's possible that there is renderable content outside of these extents.
      *
      * \since QGIS 3.10.0
@@ -585,7 +616,7 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
     /**
      * Enable or disable provider-level resampling.
      *
-     * \return true if success
+     * \return TRUE if success
      * \since QGIS 3.16
      */
     virtual bool enableProviderResampling( bool enable ) { Q_UNUSED( enable ); return false; }
@@ -610,15 +641,20 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
      */
     enum class ResamplingMethod
     {
-      Nearest,      //!< Nearest-neighbour resamplikng
-      Bilinear,     //!< Bilinear resamplikng
-      Cubic,     //!< Bicubic resamplikng
+      Nearest, //!< Nearest-neighbour resampling
+      Bilinear, //!< Bilinear (2x2 kernel) resampling
+      Cubic,//!< Cubic Convolution Approximation (4x4 kernel) resampling
+      CubicSpline, //!< Cubic B-Spline Approximation (4x4 kernel)
+      Lanczos, //!< Lanczos windowed sinc interpolation (6x6 kernel)
+      Average, //!< Average resampling
+      Mode, //!< Mode (selects the value which appears most often of all the sampled points)
+      Gauss //!< Gauss blurring
     };
 
     /**
      * Set resampling method to apply for zoomed-in operations.
      *
-     * \return true if success
+     * \return TRUE if success
      * \since QGIS 3.16
      */
     virtual bool setZoomedInResamplingMethod( ResamplingMethod method ) { Q_UNUSED( method ); return false; }
@@ -632,7 +668,7 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
     /**
      * Set resampling method to apply for zoomed-out operations.
      *
-     * \return true if success
+     * \return TRUE if success
      * \since QGIS 3.16
      */
     virtual bool setZoomedOutResamplingMethod( ResamplingMethod method ) { Q_UNUSED( method ); return false; }
@@ -646,7 +682,7 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
     /**
      * Sets maximum oversampling factor for zoomed-out operations.
      *
-     * \return true if success
+     * \return TRUE if success
      * \since QGIS 3.16
      */
     virtual bool setMaxOversampling( double factor ) { Q_UNUSED( factor ); return false; }
@@ -695,7 +731,7 @@ class CORE_EXPORT QgsRasterDataProvider : public QgsDataProvider, public QgsRast
 
     /**
      * Dots per inch. Extended WMS (e.g. QGIS mapserver) support DPI dependent output and therefore
-    are suited for printing. A value of -1 means it has not been set
+     * are suited for printing. A value of -1 means it has not been set
     */
     int mDpi = -1;
 

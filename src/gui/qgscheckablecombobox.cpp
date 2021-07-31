@@ -76,9 +76,10 @@ void QgsCheckBoxDelegate::paint( QPainter *painter, const QStyleOptionViewItem &
 
 QgsCheckableComboBox::QgsCheckableComboBox( QWidget *parent )
   : QComboBox( parent )
+  , mModel( new QgsCheckableItemModel( this ) )
   , mSeparator( QStringLiteral( ", " ) )
 {
-  setModel( new QgsCheckableItemModel( this ) );
+  setModel( mModel );
   setItemDelegate( new QgsCheckBoxDelegate( this ) );
 
   QLineEdit *lineEdit = new QLineEdit( this );
@@ -134,14 +135,20 @@ void QgsCheckableComboBox::setDefaultText( const QString &text )
   }
 }
 
+void QgsCheckableComboBox::addItemWithCheckState( const QString &text, Qt::CheckState state, const QVariant &userData )
+{
+  QComboBox::addItem( text, userData );
+  setItemCheckState( count() - 1, state );
+}
+
 QStringList QgsCheckableComboBox::checkedItems() const
 {
   QStringList items;
 
-  if ( model() )
+  if ( auto *lModel = model() )
   {
-    QModelIndex index = model()->index( 0, modelColumn(), rootModelIndex() );
-    QModelIndexList indexes = model()->match( index, Qt::CheckStateRole, Qt::Checked, -1, Qt::MatchExactly );
+    QModelIndex index = lModel->index( 0, modelColumn(), rootModelIndex() );
+    QModelIndexList indexes = lModel->match( index, Qt::CheckStateRole, Qt::Checked, -1, Qt::MatchExactly );
     const auto constIndexes = indexes;
     for ( const QModelIndex &index : constIndexes )
     {
@@ -156,10 +163,10 @@ QVariantList QgsCheckableComboBox::checkedItemsData() const
 {
   QVariantList data;
 
-  if ( model() )
+  if ( auto *lModel = model() )
   {
-    QModelIndex index = model()->index( 0, modelColumn(), rootModelIndex() );
-    QModelIndexList indexes = model()->match( index, Qt::CheckStateRole, Qt::Checked, -1, Qt::MatchExactly );
+    QModelIndex index = lModel->index( 0, modelColumn(), rootModelIndex() );
+    QModelIndexList indexes = lModel->match( index, Qt::CheckStateRole, Qt::Checked, -1, Qt::MatchExactly );
     const auto constIndexes = indexes;
     for ( const QModelIndex &index : constIndexes )
     {
@@ -188,6 +195,7 @@ void QgsCheckableComboBox::toggleItemCheckState( int index )
     Qt::CheckState state = static_cast<Qt::CheckState>( value.toInt() );
     setItemData( index, ( state == Qt::Unchecked ? Qt::Checked : Qt::Unchecked ), Qt::CheckStateRole );
   }
+  updateCheckedItems();
 }
 
 void QgsCheckableComboBox::hidePopup()
@@ -255,7 +263,8 @@ bool QgsCheckableComboBox::eventFilter( QObject *object, QEvent *event )
       {
         QgsCheckableItemModel *myModel = qobject_cast<QgsCheckableItemModel *>( model() );
         QStandardItem *item = myModel->itemFromIndex( index );
-        item->checkState() == Qt::Checked ? item->setCheckState( Qt::Unchecked ) : item->setCheckState( Qt::Checked );
+        item->setCheckState( item->checkState() == Qt::Checked ? Qt::Unchecked : Qt::Checked );
+        updateCheckedItems();
       }
       return true;
     }
@@ -306,3 +315,4 @@ void QgsCheckableComboBox::updateDisplayText()
   text = fontMetrics.elidedText( text, Qt::ElideRight, rect.width() );
   setEditText( text );
 }
+

@@ -19,7 +19,7 @@
 #include "qgsfontutils.h"
 #include "qgsrenderchecker.h"
 #include "qgssymbol.h"
-
+#include "qgsmarkersymbol.h"
 
 static QString _fileNameForTest( const QString &testName )
 {
@@ -106,7 +106,7 @@ void TestQgsDataDefinedSizeLegend::testBasic()
   classes << QgsDataDefinedSizeLegend::SizeClass( 30., QStringLiteral( "30" ) );
   settings.setClasses( classes );
 
-  QgsStringMap props;
+  QVariantMap props;
   props[QStringLiteral( "name" )] = QStringLiteral( "circle" );
   props[QStringLiteral( "color" )] = QStringLiteral( "200,255,200" );
   props[QStringLiteral( "outline_color" )] = QStringLiteral( "0,255,0" );
@@ -141,7 +141,7 @@ void TestQgsDataDefinedSizeLegend::testCrowded()
   classes << QgsDataDefinedSizeLegend::SizeClass( 18., QStringLiteral( "18" ) );
   settings.setClasses( classes );
 
-  QgsStringMap props;
+  QVariantMap props;
   props[QStringLiteral( "name" )] = QStringLiteral( "circle" );
   props[QStringLiteral( "color" )] = QStringLiteral( "200,255,200" );
   props[QStringLiteral( "outline_color" )] = QStringLiteral( "0,255,0" );

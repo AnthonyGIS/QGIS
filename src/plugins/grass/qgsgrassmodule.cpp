@@ -499,7 +499,7 @@ void QgsGrassModule::run()
       if ( outsideRegion.size() > 0 )
       {
         QMessageBox questionBox( QMessageBox::Question, tr( "Warning" ),
-                                 tr( "Input %1 outside current region!" ).arg( outsideRegion.join( QStringLiteral( "," ) ) ),
+                                 tr( "Input %1 outside current region!" ).arg( outsideRegion.join( QLatin1Char( ',' ) ) ),
                                  QMessageBox::Ok | QMessageBox::Cancel );
         QPushButton *resetButton = nullptr;
         if ( QgsGrass::versionMajor() > 6 || ( QgsGrass::versionMajor() == 6 && QgsGrass::versionMinor() >= 1 ) )
@@ -532,7 +532,7 @@ void QgsGrassModule::run()
       if ( outputExists.size() > 0 )
       {
         QMessageBox::StandardButton ret = QMessageBox::question( nullptr, QStringLiteral( "Warning" ),
-                                          tr( "Output %1 exists! Overwrite?" ).arg( outputExists.join( QStringLiteral( "," ) ) ),
+                                          tr( "Output %1 exists! Overwrite?" ).arg( outputExists.join( QLatin1Char( ',' ) ) ),
                                           QMessageBox::Ok | QMessageBox::Cancel );
 
         if ( ret == QMessageBox::Cancel )
@@ -620,13 +620,13 @@ void QgsGrassModule::run()
 
       // Print some important variables
       variables << QStringLiteral( "QGIS_PREFIX_PATH" ) << QStringLiteral( "QGIS_GRASS_CRS" ) << QStringLiteral( "GRASS_REGION" );
-      Q_FOREACH ( const QString &v, variables )
+      for ( const QString &v : variables )
       {
         mOutputTextBrowser->append( v + "=" + environment.value( v ) + "<BR>" );
       }
     }
 
-    QString commandHtml = mXName + " " + argumentsHtml.join( QStringLiteral( " " ) );
+    QString commandHtml = mXName + " " + argumentsHtml.join( QLatin1Char( ' ' ) );
 
     QgsDebugMsg( "command: " + commandHtml );
     commandHtml.replace( QLatin1String( "&" ), QLatin1String( "&amp;" ) );

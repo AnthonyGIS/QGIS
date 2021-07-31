@@ -29,7 +29,11 @@
 #include "qgssinglesymbolrenderer.h"
 #include "qgsvectorlayerlabeling.h"
 #include "qgslinesymbollayer.h"
+#include "qgsfillsymbol.h"
+#include "qgsmarkersymbol.h"
+#include "qgslinesymbol.h"
 #include <QTemporaryFile>
+#include <QRegularExpression>
 
 Q_DECLARE_METATYPE( QgsDxfExport::HAlign )
 Q_DECLARE_METATYPE( QgsDxfExport::VAlign )
@@ -63,6 +67,7 @@ class TestQgsDxfExport : public QObject
     void testCurveExport();
     void testCurveExport_data();
     void testDashedLine();
+    void testTransform();
 
   private:
     QgsVectorLayer *mPointLayer = nullptr;
@@ -110,7 +115,7 @@ void TestQgsDxfExport::init()
   mPointLayerGeometryGenerator = new QgsVectorLayer( filename, QStringLiteral( "points" ), QStringLiteral( "ogr" ) );
   QVERIFY( mPointLayerGeometryGenerator );
 
-  QgsStringMap ggProps;
+  QVariantMap ggProps;
   ggProps.insert( QStringLiteral( "SymbolType" ), QStringLiteral( "Fill" ) );
   ggProps.insert( QStringLiteral( "geometryModifier" ), QStringLiteral( "buffer( $geometry, 0.1 )" ) );
   QgsSymbolLayer *ggSymbolLayer = QgsGeometryGeneratorSymbolLayer::create( ggProps );
@@ -169,7 +174,7 @@ void TestQgsDxfExport::testPoints()
   QVERIFY( !fileContainsText( file, QStringLiteral( "nan.0" ) ) );
 
   // reload and compare
-  std::unique_ptr< QgsVectorLayer > result = qgis::make_unique< QgsVectorLayer >( file, "dxf" );
+  std::unique_ptr< QgsVectorLayer > result = std::make_unique< QgsVectorLayer >( file, "dxf" );
   QVERIFY( result->isValid() );
   QCOMPARE( result->featureCount(), mPointLayer->featureCount() );
   QCOMPARE( result->wkbType(), QgsWkbTypes::Point );
@@ -197,7 +202,7 @@ void TestQgsDxfExport::testLines()
   dxfFile.close();
 
   // reload and compare
-  std::unique_ptr< QgsVectorLayer > result = qgis::make_unique< QgsVectorLayer >( file, "dxf" );
+  std::unique_ptr< QgsVectorLayer > result = std::make_unique< QgsVectorLayer >( file, "dxf" );
   QVERIFY( result->isValid() );
   QCOMPARE( result->featureCount(), mLineLayer->featureCount() );
   QCOMPARE( result->wkbType(), QgsWkbTypes::LineString );
@@ -225,7 +230,7 @@ void TestQgsDxfExport::testPolygons()
   dxfFile.close();
 
   // reload and compare
-  std::unique_ptr< QgsVectorLayer > result = qgis::make_unique< QgsVectorLayer >( file, "dxf" );
+  std::unique_ptr< QgsVectorLayer > result = std::make_unique< QgsVectorLayer >( file, "dxf" );
   QVERIFY( result->isValid() );
   QCOMPARE( result->featureCount(), 12L );
   QCOMPARE( result->wkbType(), QgsWkbTypes::LineString );
@@ -234,7 +239,7 @@ void TestQgsDxfExport::testPolygons()
 void TestQgsDxfExport::testMultiSurface()
 {
   QgsDxfExport d;
-  std::unique_ptr< QgsVectorLayer > vl = qgis::make_unique< QgsVectorLayer >( QStringLiteral( "MultiSurface" ), QString(), QStringLiteral( "memory" ) );
+  std::unique_ptr< QgsVectorLayer > vl = std::make_unique< QgsVectorLayer >( QStringLiteral( "MultiSurface" ), QString(), QStringLiteral( "memory" ) );
   QgsGeometry g = QgsGeometry::fromWkt( "MultiSurface (Polygon ((0 0, 0 1, 1 1, 0 0)))" );
   QgsFeature f;
   f.setGeometry( g );
@@ -258,7 +263,7 @@ void TestQgsDxfExport::testMultiSurface()
   dxfFile.close();
 
   // reload and compare
-  std::unique_ptr< QgsVectorLayer > result = qgis::make_unique< QgsVectorLayer >( file, "dxf" );
+  std::unique_ptr< QgsVectorLayer > result = std::make_unique< QgsVectorLayer >( file, "dxf" );
   QVERIFY( result->isValid() );
   QCOMPARE( result->featureCount(), 1L );
   QCOMPARE( result->wkbType(), QgsWkbTypes::LineString );
@@ -505,7 +510,7 @@ void TestQgsDxfExport::testText()
 
 void TestQgsDxfExport::testTextAngle()
 {
-  std::unique_ptr< QgsVectorLayer > vl = qgis::make_unique< QgsVectorLayer >( QStringLiteral( "Point?crs=epsg:2056&field=ori:int" ), QStringLiteral( "vl" ), QStringLiteral( "memory" ) );
+  std::unique_ptr< QgsVectorLayer > vl = std::make_unique< QgsVectorLayer >( QStringLiteral( "Point?crs=epsg:2056&field=ori:int" ), QStringLiteral( "vl" ), QStringLiteral( "memory" ) );
   QgsGeometry g = QgsGeometry::fromWkt( "Point(2684679.392 1292182.527)" );
   QgsGeometry g2 = QgsGeometry::fromWkt( "Point(2684692.322 1292192.534)" );
   QgsFeature f( vl->fields() );
@@ -614,7 +619,7 @@ void TestQgsDxfExport::testTextAlign()
   format.setColor( QColor( 200, 0, 200 ) );
   settings.setFormat( format );
 
-  std::unique_ptr< QgsVectorLayer > vl = qgis::make_unique< QgsVectorLayer >( QStringLiteral( "Point?crs=epsg:2056&field=text:string" ), QStringLiteral( "vl" ), QStringLiteral( "memory" ) );
+  std::unique_ptr< QgsVectorLayer > vl = std::make_unique< QgsVectorLayer >( QStringLiteral( "Point?crs=epsg:2056&field=text:string" ), QStringLiteral( "vl" ), QStringLiteral( "memory" ) );
   QgsGeometry g = QgsGeometry::fromWkt( "Point(2684679.392 1292182.527)" );
   QgsFeature f( vl->fields() );
   f.setGeometry( g );
@@ -757,7 +762,7 @@ void TestQgsDxfExport::testTextQuadrant()
   format.setColor( QColor( 200, 0, 200 ) );
   settings.setFormat( format );
 
-  std::unique_ptr< QgsVectorLayer > vl = qgis::make_unique< QgsVectorLayer >( QStringLiteral( "Point?crs=epsg:2056&field=text:string" ), QStringLiteral( "vl" ), QStringLiteral( "memory" ) );
+  std::unique_ptr< QgsVectorLayer > vl = std::make_unique< QgsVectorLayer >( QStringLiteral( "Point?crs=epsg:2056&field=text:string" ), QStringLiteral( "vl" ), QStringLiteral( "memory" ) );
   QgsGeometry g = QgsGeometry::fromWkt( "Point(2685025.687 1292145.297)" );
   QgsFeature f( vl->fields() );
   f.setGeometry( g );
@@ -925,7 +930,7 @@ void TestQgsDxfExport::testCurveExport()
   QFETCH( QString, dxfText );
 
   QgsDxfExport d;
-  std::unique_ptr< QgsVectorLayer > vl = qgis::make_unique< QgsVectorLayer >( wktType, QString(), QStringLiteral( "memory" ) );
+  std::unique_ptr< QgsVectorLayer > vl = std::make_unique< QgsVectorLayer >( wktType, QString(), QStringLiteral( "memory" ) );
   QgsGeometry g = QgsGeometry::fromWkt( wkt );
   QgsFeature f;
   f.setGeometry( g );
@@ -1054,7 +1059,7 @@ void TestQgsDxfExport::testCurveExport_data()
 
 void TestQgsDxfExport::testDashedLine()
 {
-  std::unique_ptr<QgsSimpleLineSymbolLayer> symbolLayer = qgis::make_unique<QgsSimpleLineSymbolLayer>( QColor( 0, 0, 0 ) );
+  std::unique_ptr<QgsSimpleLineSymbolLayer> symbolLayer = std::make_unique<QgsSimpleLineSymbolLayer>( QColor( 0, 0, 0 ) );
   symbolLayer->setWidth( 0.11 );
   symbolLayer->setCustomDashVector( { 0.5, 0.35 } );
   symbolLayer->setCustomDashPatternUnit( QgsUnitTypes::RenderUnit::RenderMapUnits );
@@ -1063,7 +1068,7 @@ void TestQgsDxfExport::testDashedLine()
   QgsLineSymbol *symbol = new QgsLineSymbol();
   symbol->changeSymbolLayer( 0, symbolLayer.release() );
 
-  std::unique_ptr< QgsVectorLayer > vl = qgis::make_unique< QgsVectorLayer >( QStringLiteral( "CompoundCurve?crs=epsg:2056" ), QString(), QStringLiteral( "memory" ) );
+  std::unique_ptr< QgsVectorLayer > vl = std::make_unique< QgsVectorLayer >( QStringLiteral( "CompoundCurve?crs=epsg:2056" ), QString(), QStringLiteral( "memory" ) );
   QgsGeometry g = QgsGeometry::fromWkt( "CompoundCurve ((2689563.84200000017881393 1283531.23699999996460974, 2689563.42499999981373549 1283537.55499999993480742, 2689563.19900000002235174 1283540.52399999997578561, 2689562.99800000013783574 1283543.42999999993480742, 2689562.66900000022724271 1283548.56000000005587935, 2689562.43399999989196658 1283555.287999999942258))" );
   QgsFeature f;
   f.setGeometry( g );
@@ -1171,6 +1176,73 @@ void TestQgsDxfExport::testDashedLine()
                               "  0\n"
                               "ENDSEC"
                               , &debugInfo ), debugInfo.toUtf8().constData() );
+}
+
+void TestQgsDxfExport::testTransform()
+{
+  std::unique_ptr<QgsSimpleLineSymbolLayer> symbolLayer = std::make_unique<QgsSimpleLineSymbolLayer>( QColor( 0, 0, 0 ) );
+  symbolLayer->setWidth( 0.11 );
+  symbolLayer->setCustomDashVector( { 0.5, 0.35 } );
+  symbolLayer->setCustomDashPatternUnit( QgsUnitTypes::RenderUnit::RenderMapUnits );
+  symbolLayer->setUseCustomDashPattern( true );
+
+  QgsLineSymbol *symbol = new QgsLineSymbol();
+  symbol->changeSymbolLayer( 0, symbolLayer.release() );
+
+  std::unique_ptr< QgsVectorLayer > vl = std::make_unique< QgsVectorLayer >( QStringLiteral( "Linestring?crs=epsg:2056" ), QString(), QStringLiteral( "memory" ) );
+  QgsGeometry g = QgsGeometry::fromWkt( QStringLiteral( "LineString (2689564.82757076947018504 1283554.68540272791869938, 2689565.52996697928756475 1283531.49185784510336816)" ) );
+  QgsFeature f;
+  f.setGeometry( g );
+  vl->dataProvider()->addFeatures( QgsFeatureList() << f );
+  g = QgsGeometry::fromWkt( QStringLiteral( "LineString( 2689550.41764387069270015 1283518.10608713980764151, 2689586.27526817657053471 1283519.37654714332893491 )" ) );
+  f.setGeometry( g );
+  vl->dataProvider()->addFeatures( QgsFeatureList() << f );
+
+  QgsSingleSymbolRenderer *renderer = new QgsSingleSymbolRenderer( symbol );
+  vl->setRenderer( renderer );
+
+  QgsDxfExport d;
+  d.addLayers( QList< QgsDxfExport::DxfLayer >() << QgsDxfExport::DxfLayer( vl.get() ) );
+  d.setSymbologyExport( QgsDxfExport::SymbologyExport::SymbolLayerSymbology );
+
+  QgsMapSettings mapSettings;
+  QSize size( 640, 480 );
+  mapSettings.setOutputSize( size );
+  mapSettings.setLayers( QList<QgsMapLayer *>() << vl.get() );
+  mapSettings.setOutputDpi( 96 );
+  mapSettings.setDestinationCrs( QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:3857" ) ) );
+
+  d.setMapSettings( mapSettings );
+  d.setSymbologyScale( 1000 );
+
+  QString file = getTempFileName( QStringLiteral( "line_transform" ) );
+  QFile dxfFile( file );
+  QCOMPARE( d.writeToFile( &dxfFile, QStringLiteral( "CP1252" ) ), QgsDxfExport::ExportResult::Success );
+  dxfFile.close();
+
+  std::unique_ptr< QgsVectorLayer > result = std::make_unique< QgsVectorLayer >( file, QStringLiteral( "res" ) );
+  QVERIFY( result->isValid() );
+  QCOMPARE( result->featureCount(), 2L );
+  QgsFeature f2;
+  QgsFeatureIterator it = result->getFeatures();
+  QVERIFY( it.nextFeature( f2 ) );
+  QCOMPARE( f2.geometry().asWkt( 0 ), QStringLiteral( "LineString (960884 6056508, 960884 6056473)" ) );
+  QVERIFY( it.nextFeature( f2 ) );
+  QCOMPARE( f2.geometry().asWkt( 0 ), QStringLiteral( "LineString (960862 6056454, 960915 6056455)" ) );
+
+  // export a subset via extent (this is in EPSG:3857 -- the destination crs
+  d.setExtent( QgsRectangle( 960858.48, 6056426.49, 960918.31, 6056467.93 ) );
+  QString file2 = getTempFileName( QStringLiteral( "line_transform2" ) );
+  QFile dxfFile2( file2 );
+  QCOMPARE( d.writeToFile( &dxfFile2, QStringLiteral( "CP1252" ) ), QgsDxfExport::ExportResult::Success );
+  dxfFile2.close();
+
+  result = std::make_unique< QgsVectorLayer >( file2, QStringLiteral( "res" ) );
+  QVERIFY( result->isValid() );
+  QCOMPARE( result->featureCount(), 1L );
+  it = result->getFeatures();
+  QVERIFY( it.nextFeature( f2 ) );
+  QCOMPARE( f2.geometry().asWkt( 0 ), QStringLiteral( "LineString (960862 6056454, 960915 6056455)" ) );
 }
 
 bool TestQgsDxfExport::fileContainsText( const QString &path, const QString &text, QString *debugInfo ) const

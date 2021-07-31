@@ -29,6 +29,7 @@
 #include "qgslayoutpagecollection.h"
 #include <QObject>
 #include "qgstest.h"
+#include "qgsfillsymbol.h"
 
 class TestQgsLayoutPage : public QObject
 {
@@ -49,6 +50,8 @@ class TestQgsLayoutPage : public QObject
     void markerLinePaper(); //test page with marker line borde
 
     void hiddenPages(); //test hidden page boundaries
+
+    void pageLayout(); //test page layout
 
   private:
     QString mReport;
@@ -214,7 +217,7 @@ void TestQgsLayoutPage::borderedPaper()
   l.pageCollection()->addPage( page.release() );
 
   QgsSimpleFillSymbolLayer *simpleFill = new QgsSimpleFillSymbolLayer();
-  std::unique_ptr< QgsFillSymbol > fillSymbol = qgis::make_unique< QgsFillSymbol >();
+  std::unique_ptr< QgsFillSymbol > fillSymbol = std::make_unique< QgsFillSymbol >();
   fillSymbol->changeSymbolLayer( 0, simpleFill );
   simpleFill->setColor( Qt::white );
   simpleFill->setStrokeColor( Qt::black );
@@ -236,7 +239,7 @@ void TestQgsLayoutPage::markerLinePaper()
 
   QgsMarkerLineSymbolLayer *markerLine = new QgsMarkerLineSymbolLayer();
   static_cast< QgsSimpleMarkerSymbolLayer * >( markerLine->subSymbol()->symbolLayer( 0 ) )->setStrokeColor( Qt::black );
-  std::unique_ptr< QgsFillSymbol > markerLineSymbol = qgis::make_unique< QgsFillSymbol >();
+  std::unique_ptr< QgsFillSymbol > markerLineSymbol = std::make_unique< QgsFillSymbol >();
   markerLineSymbol->changeSymbolLayer( 0, markerLine );
   l.pageCollection()->setPageStyleSymbol( markerLineSymbol.get() );
 
@@ -254,7 +257,7 @@ void TestQgsLayoutPage::hiddenPages()
   l.pageCollection()->addPage( page.release() );
 
   QgsSimpleFillSymbolLayer *simpleFill = new QgsSimpleFillSymbolLayer();
-  std::unique_ptr< QgsFillSymbol > fillSymbol = qgis::make_unique< QgsFillSymbol >();
+  std::unique_ptr< QgsFillSymbol > fillSymbol = std::make_unique< QgsFillSymbol >();
   fillSymbol->changeSymbolLayer( 0, simpleFill );
   simpleFill->setColor( Qt::blue );
   simpleFill->setStrokeColor( Qt::transparent );
@@ -267,6 +270,31 @@ void TestQgsLayoutPage::hiddenPages()
   bool result = checker.testLayout( mReport );
   QVERIFY( result );
 
+}
+
+void TestQgsLayoutPage::pageLayout()
+{
+  QgsProject p;
+  QgsLayout l( &p );
+  std::unique_ptr< QgsLayoutItemPage > page1( new QgsLayoutItemPage( &l ) );
+  page1->setPageSize( QgsLayoutSize( 297, 210, QgsUnitTypes::LayoutMillimeters ) );
+
+  QPageLayout layout1 = page1->pageLayout();
+
+  QCOMPARE( layout1.orientation(), QPageLayout::Landscape );
+  QCOMPARE( layout1.units(), QPageLayout::Millimeter );
+  QCOMPARE( layout1.pageSize().size( QPageSize::Millimeter ).width(), 210 );
+  QCOMPARE( layout1.pageSize().size( QPageSize::Millimeter ).height(), 297 );
+
+  std::unique_ptr< QgsLayoutItemPage > page2( new QgsLayoutItemPage( &l ) );
+  page2->setPageSize( QgsLayoutSize( 210, 297, QgsUnitTypes::LayoutMillimeters ) );
+
+  QPageLayout layout2 = page2->pageLayout();
+
+  QCOMPARE( layout2.orientation(), QPageLayout::Portrait );
+  QCOMPARE( layout2.units(), QPageLayout::Millimeter );
+  QCOMPARE( layout2.pageSize().size( QPageSize::Millimeter ).width(), 210 );
+  QCOMPARE( layout2.pageSize().size( QPageSize::Millimeter ).height(), 297 );
 }
 
 QGSTEST_MAIN( TestQgsLayoutPage )

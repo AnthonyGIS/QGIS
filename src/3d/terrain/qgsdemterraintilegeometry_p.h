@@ -50,7 +50,7 @@ namespace QgsRayCastingUtils
 
 /**
  * \ingroup 3d
- * Stores attributes and vertex/index buffers for one terrain tile based on DEM.
+ * \brief Stores attributes and vertex/index buffers for one terrain tile based on DEM.
  * \since QGIS 3.0
  */
 class DemTerrainTileGeometry : public Qt3DRender::QGeometry
@@ -66,6 +66,11 @@ class DemTerrainTileGeometry : public Qt3DRender::QGeometry
     explicit DemTerrainTileGeometry( int resolution, float side, float vertScale, float skirtHeight, const QByteArray &heightMap, QNode *parent = nullptr );
 
     bool rayIntersection( const QgsRayCastingUtils::Ray3D &ray, const QMatrix4x4 &worldTransform, QVector3D &intersectionPoint );
+
+    Qt3DRender::QAttribute *positionAttribute() { return mPositionAttribute; }
+    Qt3DRender::QAttribute *normalAttribute() { return mNormalAttribute; }
+    Qt3DRender::QAttribute *texCoordsAttribute() { return mTexCoordAttribute; }
+    Qt3DRender::QAttribute *indexAttribute() { return mIndexAttribute; }
 
   private:
     void init();

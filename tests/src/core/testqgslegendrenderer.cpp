@@ -15,6 +15,7 @@
 
 #include "qgstest.h"
 #include <QObject>
+#include <QJsonArray>
 
 #include "qgsapplication.h"
 #include "qgsblureffect.h"
@@ -41,8 +42,13 @@
 #include "qgsvectordataprovider.h"
 #include "qgsgeometry.h"
 #include "qgsdiagramrenderer.h"
+#include "qgspalettedrasterrenderer.h"
 #include "diagram/qgspiediagram.h"
 #include "qgspropertytransformer.h"
+#include "qgsrulebasedlabeling.h"
+#include "qgslinesymbol.h"
+#include "qgsmarkersymbol.h"
+#include "qgsfillsymbol.h"
 
 static QString _fileNameForTest( const QString &testName )
 {
@@ -56,7 +62,7 @@ static void _setStandardTestFont( QgsLegendSettings &settings, const QString &st
          << QgsLegendStyle::Group
          << QgsLegendStyle::Subgroup
          << QgsLegendStyle::SymbolLabel;
-  Q_FOREACH ( QgsLegendStyle::Style st, styles )
+  for ( QgsLegendStyle::Style st : styles )
   {
     QFont font( QgsFontUtils::getStandardTestFont( style ) );
     font.setPointSizeF( settings.style( st ).font().pointSizeF() );
@@ -118,7 +124,30 @@ static bool _verifyImage( const QString &testName, QString &report, int diff = 3
   return equal;
 }
 
+class TestRasterRenderer : public QgsPalettedRasterRenderer
+{
+  public:
 
+    TestRasterRenderer( QgsRasterInterface *input, int bandNumber, const ClassData &classes )
+      : QgsPalettedRasterRenderer( input, bandNumber, classes )
+    {}
+
+    // don't create the default legend nodes for this layer!
+    QList<QgsLayerTreeModelLegendNode *> createLegendNodes( QgsLayerTreeLayer *nodeLayer ) override
+    {
+      QList<QgsLayerTreeModelLegendNode *> res;
+
+      const QList< QPair< QString, QColor > > items = legendSymbologyItems();
+      res.reserve( res.size() + items.size() );
+      for ( const QPair< QString, QColor > &item : items )
+      {
+        res << new QgsRasterSymbolLegendNode( nodeLayer, item.second, item.first );
+      }
+
+      return res;
+    }
+
+};
 
 class TestQgsLegendRenderer : public QObject
 {
@@ -151,6 +180,7 @@ class TestQgsLegendRenderer : public QObject
     void testRightAlignTextRightAlignSymbol();
 
     void testGroupHeadingSpacing();
+    void testGroupIndent();
 
     void testMapUnits();
     void testTallSymbol();
@@ -179,6 +209,8 @@ class TestQgsLegendRenderer : public QObject
     void testBasicJson();
     void testOpacityJson();
     void testBigMarkerJson();
+
+    void testLabelLegend();
 
   private:
     QgsLayerTree *mRoot = nullptr;
@@ -261,6 +293,14 @@ void TestQgsLegendRenderer::init()
   static const char RASTER_ARRAY[] = { 1, 2, 2, 1 };
   QString rasterUri = QStringLiteral( "MEM:::DATAPOINTER=%1,PIXELS=2,LINES=2" ).arg( ( qulonglong ) RASTER_ARRAY );
   mRL = new QgsRasterLayer( rasterUri, QStringLiteral( "Raster Layer" ), QStringLiteral( "gdal" ) );
+
+  std::unique_ptr< TestRasterRenderer > rasterRenderer( new  TestRasterRenderer( mRL->dataProvider(), 1,
+  {
+    QgsPalettedRasterRenderer::Class( 1, QColor( 0, 0, 0 ), QStringLiteral( "1" ) ),
+    QgsPalettedRasterRenderer::Class( 2, QColor( 255, 255, 255 ), QStringLiteral( "2" ) )
+  } ) );
+  mRL->setRenderer( rasterRenderer.release() );
+
   QgsProject::instance()->addMapLayer( mRL );
 
   QgsCategoryList cats;
@@ -523,13 +563,13 @@ void TestQgsLegendRenderer::testOverrideSymbol()
 
   QgsLayerTreeLayer *layer = legendModel.rootGroup()->findLayer( mVL2 );
 
-  std::unique_ptr< QgsFillSymbol > sym2 = qgis::make_unique< QgsFillSymbol >();
+  std::unique_ptr< QgsFillSymbol > sym2 = std::make_unique< QgsFillSymbol >();
   sym2->setColor( Qt::red );
 
   QgsLayerTreeModelLegendNode *embeddedNode = legendModel.legendNodeEmbeddedInParent( layer );
-  dynamic_cast< QgsSymbolLegendNode * >( embeddedNode )->setCustomSymbol( sym2.release() );
+  qgis::down_cast< QgsSymbolLegendNode * >( embeddedNode )->setCustomSymbol( sym2.release() );
 
-  std::unique_ptr< QgsMarkerSymbol > sym3 = qgis::make_unique< QgsMarkerSymbol >();
+  std::unique_ptr< QgsMarkerSymbol > sym3 = std::make_unique< QgsMarkerSymbol >();
   sym3->setColor( QColor( 0, 150, 0 ) );
   sym3->setSize( 6 );
 
@@ -658,6 +698,56 @@ void TestQgsLegendRenderer::testGroupHeadingSpacing()
   _renderLegend( QStringLiteral( "legend_group_heading_spacing" ), &legendModel, settings );
   QVERIFY( _verifyImage( QStringLiteral( "legend_group_heading_spacing" ), mReport ) );
 
+}
+
+void TestQgsLegendRenderer::testGroupIndent()
+{
+  QgsMarkerSymbol *sym = new QgsMarkerSymbol();
+  sym->setColor( Qt::red );
+  sym->setSize( sym->size() * 6 );
+  QgsCategorizedSymbolRenderer *catRenderer = dynamic_cast<QgsCategorizedSymbolRenderer *>( mVL3->renderer() );
+  QVERIFY( catRenderer );
+  catRenderer->updateCategorySymbol( 0, sym );
+
+  QgsLayerTreeModel legendModel( mRoot );
+  QgsLegendSettings settings;
+
+  QgsLayerTreeGroup *grp2 = mRoot->addGroup( QStringLiteral( "Subgroup" ) );
+  sym->setSize( sym->size() / 6 );
+  grp2->setCustomProperty( QStringLiteral( "legend/title-style" ), QLatin1String( "subgroup" ) );
+  for ( int i = 1; i <= 4; ++i )
+  {
+    QgsVectorLayer *vl = new QgsVectorLayer( QStringLiteral( "Polygon" ), QStringLiteral( "Layer %1" ).arg( i ), QStringLiteral( "memory" ) );
+    QgsProject::instance()->addMapLayer( vl );
+    vl->setRenderer( new QgsSingleSymbolRenderer( sym->clone() ) );
+    grp2->addLayer( vl );
+  }
+
+  settings.rstyle( QgsLegendStyle::Group ).setIndent( 10 );
+  settings.rstyle( QgsLegendStyle::Subgroup ).setIndent( 5 );
+  _setStandardTestFont( settings, QStringLiteral( "Bold" ) );
+  _renderLegend( QStringLiteral( "legend_group_indent" ), &legendModel, settings );
+  QVERIFY( _verifyImage( QStringLiteral( "legend_group_indent" ), mReport ) );
+
+  settings.rstyle( QgsLegendStyle::Group ).setAlignment( Qt::AlignRight );
+  settings.rstyle( QgsLegendStyle::Subgroup ).setAlignment( Qt::AlignRight );
+  settings.rstyle( QgsLegendStyle::SymbolLabel ).setAlignment( Qt::AlignRight );
+  _renderLegend( QStringLiteral( "legend_group_indent_right_align_text" ), &legendModel, settings );
+  QVERIFY( _verifyImage( QStringLiteral( "legend_group_indent_right_align_text" ), mReport ) );
+
+  settings.rstyle( QgsLegendStyle::Group ).setAlignment( Qt::AlignLeft );
+  settings.rstyle( QgsLegendStyle::Subgroup ).setAlignment( Qt::AlignLeft );
+  settings.rstyle( QgsLegendStyle::SymbolLabel ).setAlignment( Qt::AlignLeft );
+  settings.setSymbolAlignment( Qt::AlignRight );
+  _renderLegend( QStringLiteral( "legend_group_indent_right_align_symbol" ), &legendModel, settings );
+  QVERIFY( _verifyImage( QStringLiteral( "legend_group_indent_right_align_symbol" ), mReport ) );
+
+  settings.rstyle( QgsLegendStyle::Group ).setAlignment( Qt::AlignRight );
+  settings.rstyle( QgsLegendStyle::Subgroup ).setAlignment( Qt::AlignRight );
+  settings.rstyle( QgsLegendStyle::SymbolLabel ).setAlignment( Qt::AlignRight );
+  settings.setSymbolAlignment( Qt::AlignRight );
+  _renderLegend( QStringLiteral( "legend_group_indent_right_align_symbol_right_align_text" ), &legendModel, settings );
+  QVERIFY( _verifyImage( QStringLiteral( "legend_group_indent_right_align_symbol_right_align_text" ), mReport ) );
 }
 
 void TestQgsLegendRenderer::testRightAlignText()
@@ -912,7 +1002,7 @@ bool TestQgsLegendRenderer::_testLegendColumns( int itemCount, int columnCount, 
   _renderLegend( testName, &legendModel, settings );
   bool result = _verifyImage( testName, mReport );
 
-  Q_FOREACH ( QgsVectorLayer *l, layers )
+  for ( QgsVectorLayer *l : layers )
   {
     QgsProject::instance()->removeMapLayer( l );
   }
@@ -934,6 +1024,8 @@ void TestQgsLegendRenderer::testColumns_data()
   QTest::newRow( "5 items, 3 columns" ) << "legend_5_by_3" << 5 << 3;
   QTest::newRow( "6 items, 3 columns" ) << "legend_6_by_3" << 6 << 3;
   QTest::newRow( "7 items, 3 columns" ) << "legend_7_by_3" << 7 << 3;
+  QTest::newRow( "27 items, 3 columns" ) << "legend_27_by_3" << 27 << 3;
+  QTest::newRow( "27 items, 9 columns" ) << "legend_27_by_9" << 27 << 9;
 }
 
 void TestQgsLegendRenderer::testColumns()
@@ -1289,7 +1381,7 @@ void TestQgsLegendRenderer::testDataDefinedSizeCollapsed()
     vlDataDefinedSize->updateFields();
   }
 
-  QgsStringMap props;
+  QVariantMap props;
   props[QStringLiteral( "name" )] = QStringLiteral( "circle" );
   props[QStringLiteral( "color" )] = QStringLiteral( "200,200,200" );
   props[QStringLiteral( "outline_color" )] = QStringLiteral( "0,0,0" );
@@ -1507,6 +1599,49 @@ void TestQgsLegendRenderer::testBigMarkerJson()
   QString test_name = "point_layer_icon_red_big";
   point_layer_icon_red.save( _fileNameForTest( test_name ) );
   QVERIFY( _verifyImage( test_name, mReport, 50 ) );
+}
+
+void TestQgsLegendRenderer::testLabelLegend()
+{
+  const QString testName( "test_label_legend" );
+  QgsPalLayerSettings *labelSettings = new QgsPalLayerSettings();
+  labelSettings->fieldName = QStringLiteral( "test_attr" );
+  QgsRuleBasedLabeling::Rule *rootRule = new QgsRuleBasedLabeling::Rule( nullptr ); //root rule
+  QgsRuleBasedLabeling::Rule *labelingRule = new QgsRuleBasedLabeling::Rule( labelSettings, 0, 0, QString(), QStringLiteral( "labelingRule" ) );
+  rootRule->appendChild( labelingRule );
+  QgsRuleBasedLabeling *labeling = new QgsRuleBasedLabeling( rootRule );
+  mVL3->setLabeling( labeling );
+  bool bkLabelsEnabled = mVL3->labelsEnabled();
+  mVL3->setLabelsEnabled( true );
+
+  QgsDefaultVectorLayerLegend *vLayerLegend = dynamic_cast<QgsDefaultVectorLayerLegend *>( mVL3->legend() );
+  if ( !vLayerLegend )
+  {
+    QFAIL( "No vector layer legend" );
+  }
+  bool bkLabelLegendEnabled = vLayerLegend->showLabelLegend();
+  vLayerLegend->setShowLabelLegend( true );
+
+  QgsLayerTreeModel legendModel( mRoot );
+  QgsLegendSettings settings;
+
+  //first test if label legend nodes are present in json
+  const QJsonObject json = _renderJsonLegend( &legendModel, settings );
+  const QJsonArray nodes = json["nodes"].toArray();
+  const QJsonObject point_layer = nodes[1].toObject();
+  const QJsonArray point_layer_symbols = point_layer["symbols"].toArray();
+  const QJsonObject point_layer_labeling_symbol = point_layer_symbols[3].toObject();
+  QString labelTitle = point_layer_labeling_symbol["title"].toString();
+
+  QVERIFY( labelTitle == "labelingRule" );
+
+  //test rendered legend against reference image
+  _setStandardTestFont( settings, QStringLiteral( "Bold" ) );
+  _renderLegend( testName, &legendModel, settings );
+  QVERIFY( _verifyImage( testName, mReport ) );
+
+  vLayerLegend->setShowLabelLegend( bkLabelLegendEnabled );
+  mVL3->setLabelsEnabled( bkLabelsEnabled );
 }
 
 

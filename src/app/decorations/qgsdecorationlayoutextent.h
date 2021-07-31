@@ -24,11 +24,11 @@
 #include <QFont>
 #include <QObject>
 #include "qgis_app.h"
-#include "qgssymbol.h"
 #include "qgstextformat.h"
 #include <memory>
 
 class QgsDecorationLayoutExtentDialog;
+class QgsFillSymbol;
 
 class APP_EXPORT QgsDecorationLayoutExtent : public QgsDecorationItem
 {
@@ -39,6 +39,7 @@ class APP_EXPORT QgsDecorationLayoutExtent : public QgsDecorationItem
      * Constructor for QgsDecorationLayoutExtent.
     */
     QgsDecorationLayoutExtent( QObject *parent = nullptr );
+    ~QgsDecorationLayoutExtent() override;
 
     /**
      * Returns the fill symbol used for shading layout extents.
@@ -68,7 +69,7 @@ class APP_EXPORT QgsDecorationLayoutExtent : public QgsDecorationItem
     void setTextFormat( const QgsTextFormat &format ) { mTextFormat = format; }
 
     /**
-     * Returns true if layout extents should be labeled with the name of the associated layout & map.
+     * Returns TRUE if layout extents should be labeled with the name of the associated layout & map.
      * \see setLabelExtents()
      * \see textFormat()
      */

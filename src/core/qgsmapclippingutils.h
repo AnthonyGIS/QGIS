@@ -18,7 +18,7 @@
 
 #include "qgis_core.h"
 #include "qgis_sip.h"
-#include "qgsmaplayer.h"
+#include "qgis.h"
 
 #include <QList>
 #include <QPainterPath>
@@ -32,7 +32,7 @@ class QgsMapClippingRegion;
  * \class QgsMapClippingUtils
  * \ingroup core
  *
- * Utility functions for use when clipping map renders.
+ * \brief Utility functions for use when clipping map renders.
  *
  * \since QGIS 3.16
 */
@@ -82,6 +82,7 @@ class CORE_EXPORT QgsMapClippingUtils
      * \param regions list of clip regions which apply to the layer
      * \param context a render context
      * \param shouldClip will be set to TRUE if the clipping path should be applied
+     * \param layerType the layer type to filter
      *
      * \returns combined painter clipping region for use when rendering maps
      */

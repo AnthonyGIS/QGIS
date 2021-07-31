@@ -49,7 +49,8 @@
 #include "qgsfilewidget.h"
 #include "qgsmessagebar.h"
 #include "qgsgui.h"
-
+#include "qgsfillsymbol.h"
+#include "qgslinesymbol.h"
 
 QgsDwgImportDialog::QgsDwgImportDialog( QWidget *parent, Qt::WindowFlags f )
   : QDialog( parent, f )
@@ -81,6 +82,7 @@ QgsDwgImportDialog::QgsDwgImportDialog( QWidget *parent, Qt::WindowFlags f )
 
   int crsid = s.value( QStringLiteral( "/DwgImport/lastCrs" ), QString::number( QgsProject::instance()->crs().srsid() ) ).toInt();
 
+  mCrsSelector->setShowAccuracyWarnings( true );
   QgsCoordinateReferenceSystem crs;
   crs.createFromSrsId( crsid );
   mCrsSelector->setCrs( crs );
@@ -88,6 +90,11 @@ QgsDwgImportDialog::QgsDwgImportDialog( QWidget *parent, Qt::WindowFlags f )
   mCrsSelector->setMessage( tr( "Select the coordinate reference system for the dxf file. "
                                 "The data points will be transformed from the layer coordinate reference system." ) );
 
+
+  if ( ! QgsVectorFileWriter::supportedFormatExtensions().contains( QStringLiteral( "gpkg" ) ) )
+  {
+    bar->pushMessage( tr( "GDAL/OGR not built with GPKG (sqlite3) support. You will not be able to export the DWG in a GPKG." ), Qgis::MessageLevel::Critical );
+  }
   pbLoadDatabase_clicked();
   updateUI();
 }
@@ -226,7 +233,7 @@ void QgsDwgImportDialog::pbLoadDatabase_clicked()
   }
   else
   {
-    bar->pushMessage( tr( "Could not open layer list" ), Qgis::Critical, 4 );
+    bar->pushMessage( tr( "Could not open layer list" ), Qgis::MessageLevel::Critical );
   }
 }
 
@@ -253,11 +260,11 @@ void QgsDwgImportDialog::pbImportDrawing_clicked()
   QString error;
   if ( importer.import( leDrawing->text(), error, cbExpandInserts->isChecked(), cbUseCurves->isChecked(), lblMessage ) )
   {
-    bar->pushMessage( tr( "Drawing import completed." ), Qgis::Info, 4 );
+    bar->pushMessage( tr( "Drawing import completed." ), Qgis::MessageLevel::Info );
   }
   else
   {
-    bar->pushMessage( tr( "Drawing import failed (%1)" ).arg( error ), Qgis::Critical, 4 );
+    bar->pushMessage( tr( "Drawing import failed (%1)" ).arg( error ), Qgis::MessageLevel::Critical );
   }
 
   pbLoadDatabase_clicked();
@@ -296,7 +303,7 @@ void QgsDwgImportDialog::createGroup( QgsLayerTreeGroup *group, const QString &n
     {
       exprlist.append( QStringLiteral( "'%1'" ).arg( layer.replace( QLatin1String( "'" ), QLatin1String( "''" ) ) ) );
     }
-    layerFilter = QStringLiteral( "layer IN (%1) AND " ).arg( exprlist.join( QStringLiteral( "," ) ) );
+    layerFilter = QStringLiteral( "layer IN (%1) AND " ).arg( exprlist.join( QLatin1Char( ',' ) ) );
   }
 
   QgsVectorLayer *l = nullptr;

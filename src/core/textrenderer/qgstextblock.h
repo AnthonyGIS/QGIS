@@ -19,13 +19,14 @@
 #include "qgis_sip.h"
 #include "qgis_core.h"
 #include "qgstextfragment.h"
+#include "qgsstringutils.h"
 #include <QVector>
 
 /**
  * \class QgsTextBlock
  * \ingroup core
  *
- * Represents a block of text consisting of one or more QgsTextFragment objects.
+ * \brief Represents a block of text consisting of one or more QgsTextFragment objects.
  *
  * \warning This API is not considered stable and may change in future QGIS versions.
  *
@@ -78,6 +79,13 @@ class CORE_EXPORT QgsTextBlock
      */
     int size() const;
 
+    /**
+     * Applies a \a capitalization style to the block's text.
+     *
+     * \since QGIS 3.16
+     */
+    void applyCapitalization( QgsStringUtils::Capitalization capitalization );
+
 #ifdef SIP_RUN
     int __len__() const;
     % MethodCode
@@ -85,11 +93,20 @@ class CORE_EXPORT QgsTextBlock
     % End
 #endif
 
+#ifndef SIP_RUN
+
     /**
      * Returns the fragment at the specified \a index.
      */
     const QgsTextFragment &at( int index ) const SIP_FACTORY;
-#ifdef SIP_RUN
+#else
+
+    /**
+     * Returns the fragment at the specified \a index.
+     *
+     * \throws KeyError if no fragment exists at the specified index.
+     */
+    const QgsTextFragment &at( int index ) const SIP_FACTORY;
     % MethodCode
     if ( a0 < 0 || a0 >= sipCpp->size() )
     {

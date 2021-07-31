@@ -14,6 +14,8 @@
  ***************************************************************************/
 
 #include "qgstest.h"
+#include <QSignalSpy>
+#include <QtMath>
 
 #include "qgsapplication.h"
 #include "qgsmapcanvas.h"
@@ -40,6 +42,20 @@ class QgsMapToolTest : public QgsMapTool // clazy:exclude=missing-qobject-macro
   public:
     QgsMapToolTest( QgsMapCanvas *canvas ) : QgsMapTool( canvas ) {}
 
+    bool canvasToolTipEvent( QHelpEvent *e ) override
+    {
+      Q_UNUSED( e );
+      mGotTooltipEvent = true;
+      return true;
+    }
+    bool gotTooltipEvent() const
+    {
+      return mGotTooltipEvent;
+    }
+
+  private:
+    bool mGotTooltipEvent = false;
+
 };
 
 class TestQgsMapCanvas : public QObject
@@ -62,6 +78,7 @@ class TestQgsMapCanvas : public QObject
     void testShiftZoom();
     void testDragDrop();
     void testZoomResolutions();
+    void testTooltipEvent();
 
   private:
     QgsMapCanvas *mCanvas = nullptr;
@@ -93,7 +110,7 @@ void TestQgsMapCanvas::testPanByKeyboard()
 
   QgsRectangle initialExtent( 100, 100, 110, 110 );
 
-  Q_FOREACH ( double rotation, rotations )
+  for ( double rotation : rotations )
   {
     // Set rotation and initial extent
     mCanvas->setRotation( rotation );
@@ -101,7 +118,7 @@ void TestQgsMapCanvas::testPanByKeyboard()
 
     // Save actual extent, simulate panning by keyboard and verify the extent is unchanged
     QgsRectangle originalExtent = mCanvas->extent();
-    Q_FOREACH ( Qt::Key key, keys )
+    for ( Qt::Key key : keys )
     {
       QgsRectangle tempExtent = mCanvas->extent();
       QKeyEvent keyEvent( QEvent::KeyPress, key, Qt::NoModifier );
@@ -471,8 +488,8 @@ class TestYesDropHandler : public QgsCustomDropHandler
 void TestQgsMapCanvas::testDragDrop()
 {
   // default drag, should not be accepted
-  std::unique_ptr< QMimeData > data = qgis::make_unique< QMimeData >();
-  std::unique_ptr< QDragEnterEvent > event = qgis::make_unique< QDragEnterEvent >( QPoint( 10, 10 ), Qt::CopyAction, data.get(), Qt::LeftButton, Qt::NoModifier );
+  std::unique_ptr< QMimeData > data = std::make_unique< QMimeData >();
+  std::unique_ptr< QDragEnterEvent > event = std::make_unique< QDragEnterEvent >( QPoint( 10, 10 ), Qt::CopyAction, data.get(), Qt::LeftButton, Qt::NoModifier );
   mCanvas->dragEnterEvent( event.get() );
   QVERIFY( !event->isAccepted() );
 
@@ -483,7 +500,7 @@ void TestQgsMapCanvas::testDragDrop()
   uri.providerKey = QStringLiteral( "test" );
   list << uri;
   data.reset( QgsMimeDataUtils::encodeUriList( list ) );
-  event = qgis::make_unique< QDragEnterEvent >( QPoint( 10, 10 ), Qt::CopyAction, data.get(), Qt::LeftButton, Qt::NoModifier );
+  event = std::make_unique< QDragEnterEvent >( QPoint( 10, 10 ), Qt::CopyAction, data.get(), Qt::LeftButton, Qt::NoModifier );
   mCanvas->dragEnterEvent( event.get() );
   // still not accepted by default
   QVERIFY( !event->isAccepted() );
@@ -503,7 +520,7 @@ void TestQgsMapCanvas::testDragDrop()
 
   // check drop event logic
   mCanvas->setCustomDropHandlers( QVector< QPointer< QgsCustomDropHandler > >() );
-  std::unique_ptr< QDropEvent > dropEvent = qgis::make_unique< QDropEvent >( QPoint( 10, 10 ), Qt::CopyAction, data.get(), Qt::LeftButton, Qt::NoModifier );
+  std::unique_ptr< QDropEvent > dropEvent = std::make_unique< QDropEvent >( QPoint( 10, 10 ), Qt::CopyAction, data.get(), Qt::LeftButton, Qt::NoModifier );
   mCanvas->dropEvent( dropEvent.get() );
   QVERIFY( !dropEvent->isAccepted() );
   mCanvas->setCustomDropHandlers( QVector< QPointer< QgsCustomDropHandler > >() << &handler );
@@ -534,6 +551,18 @@ void TestQgsMapCanvas::testZoomResolutions()
   QGSCOMPARENEAR( mCanvas->mapSettings().mapUnitsPerPixel(), resolutions[0], 0.0001 );
 
   QCOMPARE( mCanvas->zoomResolutions(), resolutions );
+}
+
+void TestQgsMapCanvas::testTooltipEvent()
+{
+  QgsMapToolTest mapTool( mCanvas );
+  mCanvas->setMapTool( &mapTool );
+
+  QHelpEvent helpEvent( QEvent::ToolTip, QPoint( 10, 10 ), QPoint( 10, 10 ) );
+
+  QApplication::sendEvent( mCanvas->viewport(), &helpEvent );
+
+  QVERIFY( mapTool.gotTooltipEvent() );
 }
 
 QGSTEST_MAIN( TestQgsMapCanvas )

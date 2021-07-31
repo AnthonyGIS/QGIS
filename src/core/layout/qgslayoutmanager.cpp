@@ -44,7 +44,7 @@ bool QgsLayoutManager::addLayout( QgsMasterLayoutInterface *layout )
     return false;
 
   // check for duplicate name
-  for ( QgsMasterLayoutInterface *l : qgis::as_const( mLayouts ) )
+  for ( QgsMasterLayoutInterface *l : std::as_const( mLayouts ) )
   {
     if ( l->name() == layout->name() )
     {
@@ -136,7 +136,7 @@ bool QgsLayoutManager::readXml( const QDomElement &element, const QDomDocument &
   clear();
 
   QDomElement layoutsElem = element;
-  if ( element.tagName() != QStringLiteral( "Layouts" ) )
+  if ( element.tagName() != QLatin1String( "Layouts" ) )
   {
     layoutsElem = element.firstChildElement( QStringLiteral( "Layouts" ) );
   }
@@ -172,7 +172,7 @@ bool QgsLayoutManager::readXml( const QDomElement &element, const QDomDocument &
         do
         {
           isDuplicateName = false;
-          for ( QgsMasterLayoutInterface *layout : qgis::as_const( mLayouts ) )
+          for ( QgsMasterLayoutInterface *layout : std::as_const( mLayouts ) )
           {
             if ( l->name() == layout->name() )
             {
@@ -203,13 +203,13 @@ bool QgsLayoutManager::readXml( const QDomElement &element, const QDomDocument &
   const QDomNodeList layoutNodes = layoutsElem.childNodes();
   for ( int i = 0; i < layoutNodes.size(); ++i )
   {
-    if ( layoutNodes.at( i ).nodeName() != QStringLiteral( "Layout" ) )
+    if ( layoutNodes.at( i ).nodeName() != QLatin1String( "Layout" ) )
       continue;
 
     const QString layoutName = layoutNodes.at( i ).toElement().attribute( QStringLiteral( "name" ) );
     QgsScopedRuntimeProfile profile( layoutName, QStringLiteral( "projectload" ) );
 
-    std::unique_ptr< QgsPrintLayout > l = qgis::make_unique< QgsPrintLayout >( mProject );
+    std::unique_ptr< QgsPrintLayout > l = std::make_unique< QgsPrintLayout >( mProject );
     l->undoStack()->blockCommands( true );
     if ( !l->readLayoutXml( layoutNodes.at( i ).toElement(), doc, context ) )
     {
@@ -230,7 +230,7 @@ bool QgsLayoutManager::readXml( const QDomElement &element, const QDomDocument &
     const QString layoutName = reportNodes.at( i ).toElement().attribute( QStringLiteral( "name" ) );
     QgsScopedRuntimeProfile profile( layoutName, QStringLiteral( "projectload" ) );
 
-    std::unique_ptr< QgsReport > r = qgis::make_unique< QgsReport >( mProject );
+    std::unique_ptr< QgsReport > r = std::make_unique< QgsReport >( mProject );
     if ( !r->readLayoutXml( reportNodes.at( i ).toElement(), doc, context ) )
     {
       result = false;

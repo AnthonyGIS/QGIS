@@ -13,10 +13,36 @@
  *   (at your option) any later version.                                   *
  *                                                                         *
  ***************************************************************************/
+
 #ifndef QGSMSSQLPROVIDERCONNECTION_H
 #define QGSMSSQLPROVIDERCONNECTION_H
+
 #include "qgsabstractdatabaseproviderconnection.h"
 
+#include <QSqlQuery>
+
+
+struct QgssMssqlProviderResultIterator: public QgsAbstractDatabaseProviderConnection::QueryResult::QueryResultIterator
+{
+
+    QgssMssqlProviderResultIterator( bool resolveTypes, int columnCount, const QSqlQuery &query );
+
+  private:
+
+    bool mResolveTypes = true;
+    int mColumnCount = 0;
+    QSqlQuery mQuery;
+    QVariantList mNextRow;
+
+    QVariantList nextRowPrivate() override;
+    bool hasNextRowPrivate() const override;
+
+    QVariantList nextRowInternal();
+
+
+    // QueryResultIterator interface
+    long long rowCountPrivate() const override;
+};
 
 class QgsMssqlProviderConnection : public QgsAbstractDatabaseProviderConnection
 
@@ -41,22 +67,26 @@ class QgsMssqlProviderConnection : public QgsAbstractDatabaseProviderConnection
     void dropVectorTable( const QString &schema, const QString &name ) const override;
     void createSchema( const QString &name ) const override;
     void dropSchema( const QString &name, bool force = false ) const override;
-    QList<QVariantList> executeSql( const QString &sql ) const override;
+    QgsAbstractDatabaseProviderConnection::QueryResult execSql( const QString &sql, QgsFeedback *feedback ) const override;
     QList<QgsAbstractDatabaseProviderConnection::TableProperty> tables( const QString &schema,
-        const TableFlags &flags = nullptr ) const override;
+        const TableFlags &flags = TableFlags() ) const override;
     QStringList schemas( ) const override;
     void store( const QString &name ) const override;
     void remove( const QString &name ) const override;
     QIcon icon() const override;
+    QList<QgsVectorDataProvider::NativeType> nativeTypes() const override;
 
   private:
 
-    QList<QVariantList> executeSqlPrivate( const QString &sql, bool resolveTypes = true ) const;
+    QgsAbstractDatabaseProviderConnection::QueryResult executeSqlPrivate( const QString &sql, bool resolveTypes = true, QgsFeedback *feedback = nullptr ) const;
     void setDefaultCapabilities();
     void dropTablePrivate( const QString &schema, const QString &name ) const;
     void renameTablePrivate( const QString &schema, const QString &name, const QString &newName ) const;
 
     static const QStringList EXTRA_CONNECTION_PARAMETERS;
+
 };
+
+
 
 #endif // QGSMSSQLPROVIDERCONNECTION_H

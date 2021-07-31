@@ -22,6 +22,7 @@
 #include "qgsgeometryutils.h"
 #include "qgsmaptopixel.h"
 #include "qgswkbptr.h"
+#include "qgsgeometrytransformer.h"
 
 #include <cmath>
 #include <QPainter>
@@ -169,11 +170,35 @@ bool QgsPoint::fromWkt( const QString &wkt )
     return false;
   mWkbType = parts.first;
 
-  if ( parts.second.compare( QLatin1String( "EMPTY" ), Qt::CaseInsensitive ) == 0 )
+  QString secondWithoutParentheses = parts.second;
+  secondWithoutParentheses = secondWithoutParentheses.remove( '(' ).remove( ')' ).simplified().remove( ' ' );
+  parts.second = parts.second.remove( '(' ).remove( ')' );
+  if ( ( parts.second.compare( QLatin1String( "EMPTY" ), Qt::CaseInsensitive ) == 0 ) ||
+       secondWithoutParentheses.isEmpty() )
     return true;
 
   QRegularExpression rx( QStringLiteral( "\\s" ) );
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
   QStringList coordinates = parts.second.split( rx, QString::SkipEmptyParts );
+#else
+  QStringList coordinates = parts.second.split( rx, Qt::SkipEmptyParts );
+#endif
+
+  // So far the parser hasn't looked at the coordinates. We'll avoid having anything but numbers and return NULL instead of 0 as a coordinate.
+  // Without this check, "POINT (a, b)" or "POINT (( 4, 3 ))" returned "POINT (0 ,0)"
+  // And some strange conversion...
+  // .. python:
+  // p = QgsPoint()
+  // p.fromWkt("POINT (-3.12, -4.2")
+  // False
+  // p.fromWkt( "POINT (-5.1234, -1.4321)" )
+  // True
+  // p.asWkt()
+  // 'Point (0 -1.43209999999999993)'
+  QRegularExpression rxIsNumber( QStringLiteral( "^[+-]?(\\d\\.?\\d*[Ee][+\\-]?\\d+|(\\d+\\.\\d*|\\d*\\.\\d+)|\\d+)$" ) );
+  if ( coordinates.filter( rxIsNumber ).size() != coordinates.size() )
+    return false;
+
   if ( coordinates.size() < 2 )
   {
     clear();
@@ -210,13 +235,17 @@ bool QgsPoint::fromWkt( const QString &wkt )
  * See details in QEP #17
  ****************************************************************************/
 
-QByteArray QgsPoint::asWkb( WkbFlags ) const
+int QgsPoint::wkbSize( WkbFlags ) const
 {
   int binarySize = sizeof( char ) + sizeof( quint32 );
   binarySize += ( 2 + is3D() + isMeasure() ) * sizeof( double );
+  return binarySize;
+}
 
+QByteArray QgsPoint::asWkb( WkbFlags flags ) const
+{
   QByteArray wkbArray;
-  wkbArray.resize( binarySize );
+  wkbArray.resize( QgsPoint::wkbSize( flags ) );
   QgsWkbPtr wkb( wkbArray );
   wkb << static_cast<char>( QgsApplication::endian() );
   wkb << static_cast<quint32>( wkbType() );
@@ -237,7 +266,7 @@ QString QgsPoint::asWkt( int precision ) const
   QString wkt = wktTypeStr();
 
   if ( isEmpty() )
-    wkt += QStringLiteral( " EMPTY" );
+    wkt += QLatin1String( " EMPTY" );
   else
   {
     wkt += QLatin1String( " (" );
@@ -508,6 +537,11 @@ double QgsPoint::segmentLength( QgsVertexId ) const
   return 0.0;
 }
 
+bool QgsPoint::boundingBoxIntersects( const QgsRectangle &rectangle ) const
+{
+  return rectangle.contains( mX, mY );
+}
+
 /***************************************************************************
  * This class is considered CRITICAL and any change MUST be accompanied with
  * full unit tests.
@@ -616,6 +650,16 @@ bool QgsPoint::convertTo( QgsWkbTypes::Type type )
   return false;
 }
 
+bool QgsPoint::transform( QgsAbstractGeometryTransformer *transformer, QgsFeedback * )
+{
+  if ( !transformer )
+    return false;
+
+  const bool res = transformer->transformPoint( mX, mY, mZ, mM );
+  clearCache();
+  return res;
+}
+
 void QgsPoint::filterVertices( const std::function<bool ( const QgsPoint & )> & )
 {
   // no meaning for points
@@ -715,6 +759,11 @@ QgsPoint QgsPoint::project( double distance, double azimuth, double inclination 
   return QgsPoint( mX + dx, mY + dy, mZ + dz, mM, pType );
 }
 
+void QgsPoint::normalize()
+{
+  // nothing to do
+}
+
 bool QgsPoint::isEmpty() const
 {
   return std::isnan( mX ) || std::isnan( mY );
@@ -750,4 +799,63 @@ QgsPoint *QgsPoint::createEmptyWithSameType() const
 {
   double nan = std::numeric_limits<double>::quiet_NaN();
   return new QgsPoint( nan, nan, nan, nan, mWkbType );
+}
+
+int QgsPoint::compareToSameClass( const QgsAbstractGeometry *other ) const
+{
+  const QgsPoint *otherPoint = qgsgeometry_cast< const QgsPoint * >( other );
+  if ( !otherPoint )
+    return -1;
+
+  if ( mX < otherPoint->mX )
+  {
+    return -1;
+  }
+  else if ( mX > otherPoint->mX )
+  {
+    return 1;
+  }
+
+  if ( mY < otherPoint->mY )
+  {
+    return -1;
+  }
+  else if ( mY > otherPoint->mY )
+  {
+    return 1;
+  }
+
+  if ( is3D() && !otherPoint->is3D() )
+    return 1;
+  else if ( !is3D() && otherPoint->is3D() )
+    return -1;
+  else if ( is3D() && otherPoint->is3D() )
+  {
+    if ( mZ < otherPoint->mZ )
+    {
+      return -1;
+    }
+    else if ( mZ > otherPoint->mZ )
+    {
+      return 1;
+    }
+  }
+
+  if ( isMeasure() && !otherPoint->isMeasure() )
+    return 1;
+  else if ( !isMeasure() && otherPoint->isMeasure() )
+    return -1;
+  else if ( isMeasure() && otherPoint->isMeasure() )
+  {
+    if ( mM < otherPoint->mM )
+    {
+      return -1;
+    }
+    else if ( mM > otherPoint->mM )
+    {
+      return 1;
+    }
+  }
+
+  return 0;
 }

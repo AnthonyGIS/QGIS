@@ -63,11 +63,11 @@ class QgsWelcomePage : public QWidget
     void showContextMenuForProjects( QPoint point );
     void showContextMenuForTemplates( QPoint point );
     void showContextMenuForNews( QPoint point );
+
+  public slots:
     void updateNewsFeedVisibility();
 
   private:
-    void updateRecentProjectsVisibility();
-
     QgsRecentProjectItemsModel *mRecentProjectsModel = nullptr;
     QTextBrowser *mVersionInformation = nullptr;
     QgsVersionInfo *mVersionInfo = nullptr;

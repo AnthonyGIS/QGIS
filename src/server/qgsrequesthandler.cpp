@@ -121,6 +121,11 @@ QString QgsRequestHandler::url() const
   return mRequest.url().toString();
 }
 
+QString QgsRequestHandler::path() const
+{
+  return mRequest.url().path();
+}
+
 void QgsRequestHandler::setStatusCode( int code )
 {
   mResponse.setStatusCode( code );
@@ -215,10 +220,7 @@ void QgsRequestHandler::parseInput()
         const QList<pair_t> items = query.queryItems();
         for ( const pair_t &pair : items )
         {
-          // QUrl::fromPercentEncoding doesn't replace '+' with space
-          const QString key = QUrl::fromPercentEncoding( QString( pair.first ).replace( '+', ' ' ).toUtf8() );
-          const QString value = QUrl::fromPercentEncoding( QString( pair.second ).replace( '+', ' ' ).toUtf8() );
-          mRequest.setParameter( key.toUpper(), value );
+          mRequest.setParameter( pair.first, pair.second );
         }
         setupParameters();
       }
@@ -250,7 +252,7 @@ void QgsRequestHandler::parseInput()
 
           mRequest.setParameter( attrName.toUpper(), attr.value() );
         }
-        mRequest.setParameter( QStringLiteral( "REQUEST_BODY" ), inputString.replace( '+', QStringLiteral( "%2B" ) ) );
+        mRequest.setParameter( QStringLiteral( "REQUEST_BODY" ), inputString.replace( '+', QLatin1String( "%2B" ) ) );
       }
     }
   }
@@ -269,7 +271,7 @@ void QgsRequestHandler::setParameter( const QString &key, const QString &value )
     if ( key.compare( QLatin1String( "MAP" ), Qt::CaseInsensitive ) == 0 )
     {
       QgsMessageLog::logMessage( QStringLiteral( "Changing the 'MAP' parameter will have no effect on config path: use QgsSerververInterface::setConfigFilePath instead" ),
-                                 "Server", Qgis::Warning );
+                                 "Server", Qgis::MessageLevel::Warning );
     }
     mRequest.setParameter( key, value );
   }

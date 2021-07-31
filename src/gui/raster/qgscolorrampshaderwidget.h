@@ -18,21 +18,24 @@
 #ifndef QGSCOLORRAMPSHADERWIDGET_H
 #define QGSCOLORRAMPSHADERWIDGET_H
 
+#include <QStyledItemDelegate>
+
 #include "qgis_sip.h"
 #include "qgscolorrampshader.h"
 #include "qgsrasterrenderer.h"
-#include "qgscolorschemelist.h"
 #include "ui_qgscolorrampshaderwidgetbase.h"
 #include "qgis_gui.h"
 #include "qgsrasterrendererwidget.h"
+#include "qgscolorramplegendnodesettings.h"
 
 class QgsRasterDataProvider;
+class QgsLocaleAwareNumericLineEditDelegate;
 
 /**
  * \ingroup gui
  * \class QgsColorRampShaderWidget
  *
- * It has 2 ways how to use it. For raster layers, raster data provider and band is assigned and
+ * \brief It has 2 ways how to use it. For raster layers, raster data provider and band is assigned and
  * the Quantile classification mode can be used and the LoadFromBandButton is visible.
  *
  * The other mode is used to style mesh layer contours (scalar datasets)
@@ -100,6 +103,7 @@ class GUI_EXPORT QgsColorRampShaderWidget: public QWidget, protected Ui::QgsColo
     void loadMinimumMaximumFromTree();
 
   protected:
+
     //! Populates color ramp tree from ramp items
     void populateColormapTreeWidget( const QList<QgsColorRampShader::ColorRampItem> &colorRampItems );
 
@@ -119,6 +123,9 @@ class GUI_EXPORT QgsColorRampShaderWidget: public QWidget, protected Ui::QgsColo
      */
     void autoLabel();
 
+    //! Extracts the minimal and maximal value from the colormapTreeWidget
+    bool colormapMinMax( double &min, double &max ) const;
+
     //! Extract the unit out of the current labels and set the unit field.
     void setUnitFromLabels();
 
@@ -127,6 +134,7 @@ class GUI_EXPORT QgsColorRampShaderWidget: public QWidget, protected Ui::QgsColo
   private slots:
 
     void applyColorRamp();
+    void updateColorRamp();
     void mAddEntryButton_clicked();
     void mDeleteEntryButton_clicked();
     void mLoadFromBandButton_clicked();
@@ -139,13 +147,19 @@ class GUI_EXPORT QgsColorRampShaderWidget: public QWidget, protected Ui::QgsColo
     void mClassificationModeComboBox_currentIndexChanged( int index );
     void changeColor();
     void changeOpacity();
+    void showLegendSettings();
 
   private:
     void setLineEditValue( QLineEdit *lineEdit, double value );
     double lineEditValue( const QLineEdit *lineEdit ) const;
     void resetClassifyButton();
 
-    QgsColorSwatchDelegate *mSwatchDelegate = nullptr;
+    QString createLabel( QTreeWidgetItem *item, int row, const QString unit );
+
+#ifdef QGISDEBUG
+    //! Dump all the classes for debugging purposes
+    void dumpClasses();
+#endif
 
     double mMin = std::numeric_limits<double>::quiet_NaN();
     double mMax = std::numeric_limits<double>::quiet_NaN();
@@ -154,6 +168,9 @@ class GUI_EXPORT QgsColorRampShaderWidget: public QWidget, protected Ui::QgsColo
     QgsRasterDataProvider *mRasterDataProvider = nullptr;
     int mBand = -1;
     QgsRectangle mExtent;
+    QgsLocaleAwareNumericLineEditDelegate *mValueDelegate = nullptr;
+    QgsColorRampLegendNodeSettings mLegendSettings;
+
 
 };
 

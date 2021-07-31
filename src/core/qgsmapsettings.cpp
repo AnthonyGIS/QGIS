@@ -194,12 +194,16 @@ void QgsMapSettings::updateDerived()
   mScaleCalculator.setDpi( mDpi * mDevicePixelRatio );
   mScale = mScaleCalculator.calculate( mVisibleExtent, mSize.width() );
 
-  mMapToPixel.setParameters( mapUnitsPerPixel(),
-                             visibleExtent().center().x(),
-                             visibleExtent().center().y(),
-                             outputSize().width(),
-                             outputSize().height(),
-                             mRotation );
+  bool ok = true;
+  mMapToPixel.setParameters(
+    mapUnitsPerPixel(),
+    visibleExtent().center().x(),
+    visibleExtent().center().y(),
+    outputSize().width(),
+    outputSize().height(),
+    mRotation, &ok );
+
+  mValid = ok;
 
 #if 1 // set visible extent taking rotation in consideration
   if ( mRotation )
@@ -226,8 +230,8 @@ void QgsMapSettings::updateDerived()
   QgsDebugMsgLevel( QStringLiteral( "Rotation: %1 degrees" ).arg( mRotation ), 5 );
   QgsDebugMsgLevel( QStringLiteral( "Extent: %1" ).arg( mExtent.asWktCoordinates() ), 5 );
   QgsDebugMsgLevel( QStringLiteral( "Visible Extent: %1" ).arg( mVisibleExtent.asWktCoordinates() ), 5 );
+  QgsDebugMsgLevel( QStringLiteral( "Magnification factor: %1" ).arg( mMagnificationFactor ), 5 );
 
-  mValid = true;
 }
 
 
@@ -271,6 +275,15 @@ void QgsMapSettings::setOutputDpi( double dpi )
   updateDerived();
 }
 
+double QgsMapSettings::dpiTarget() const
+{
+  return mDpiTarget;
+}
+
+void QgsMapSettings::setDpiTarget( double dpi )
+{
+  mDpiTarget = dpi;
+}
 
 QStringList QgsMapSettings::layerIds() const
 {
@@ -423,6 +436,39 @@ QgsCoordinateTransform QgsMapSettings::layerTransform( const QgsMapLayer *layer 
   return QgsCoordinateTransform( layer->crs(), mDestCRS, mTransformContext );
 }
 
+QgsRectangle QgsMapSettings::computeExtentForScale( const QgsPointXY &center, double scale ) const
+{
+  // Output width in inches
+  const double outputWidthInInches = outputSize().width() / outputDpi();
+
+  // Desired visible width (honouring scale)
+  double scaledWidthInInches = outputWidthInInches * scale;
+
+  if ( mapUnits() == QgsUnitTypes::DistanceDegrees )
+  {
+    // Start with some fraction of the current extent around the center
+    double delta = mExtent.width() / 100.;
+    QgsRectangle ext( center.x() - delta, center.y() - delta, center.x() + delta, center.y() + delta );
+    // Get scale at extent, and then scale extent to the desired scale
+    double testScale = mScaleCalculator.calculate( ext, outputSize().width() );
+    ext.scale( scale / testScale );
+    return ext;
+  }
+  else
+  {
+    // Conversion from inches to mapUnits  - this is safe to use, because we know here that the map units AREN'T in degrees
+    double conversionFactor = QgsUnitTypes::fromUnitToUnitFactor( QgsUnitTypes::DistanceFeet, mapUnits() ) / 12;
+
+    double delta = 0.5 * scaledWidthInInches * conversionFactor;
+    return QgsRectangle( center.x() - delta, center.y() - delta, center.x() + delta, center.y() + delta );
+  }
+}
+
+double QgsMapSettings::computeScaleForExtent( const QgsRectangle &extent ) const
+{
+  return mScaleCalculator.calculate( extent, outputSize().width() );
+}
+
 double QgsMapSettings::layerToMapUnits( const QgsMapLayer *layer, const QgsRectangle &referenceExtent ) const
 {
   return layerTransform( layer ).scaleFactor( referenceExtent );
@@ -495,6 +541,26 @@ QgsPointXY QgsMapSettings::layerToMapCoordinates( const QgsMapLayer *layer, QgsP
   return point;
 }
 
+QgsPoint QgsMapSettings::layerToMapCoordinates( const QgsMapLayer *layer, const QgsPoint &point ) const
+{
+  double x = point.x();
+  double y = point.y();
+  double z = point.z();
+
+  try
+  {
+    QgsCoordinateTransform ct = layerTransform( layer );
+    if ( ct.isValid() )
+      ct.transformInPlace( x, y, z, QgsCoordinateTransform::ForwardTransform );
+  }
+  catch ( QgsCsException &cse )
+  {
+    QgsMessageLog::logMessage( QObject::tr( "Transform error caught: %1" ).arg( cse.what() ), QObject::tr( "CRS" ) );
+  }
+
+  return QgsPoint( x, y, z );
+}
+
 
 QgsRectangle QgsMapSettings::layerToMapCoordinates( const QgsMapLayer *layer, QgsRectangle rect ) const
 {
@@ -527,6 +593,26 @@ QgsPointXY QgsMapSettings::mapToLayerCoordinates( const QgsMapLayer *layer, QgsP
   }
 
   return point;
+}
+
+QgsPoint QgsMapSettings::mapToLayerCoordinates( const QgsMapLayer *layer, const QgsPoint &point ) const
+{
+  double x = point.x();
+  double y = point.y();
+  double z = point.z();
+
+  try
+  {
+    QgsCoordinateTransform ct = layerTransform( layer );
+    if ( ct.isValid() )
+      ct.transformInPlace( x, y, z, QgsCoordinateTransform::ReverseTransform );
+  }
+  catch ( QgsCsException &cse )
+  {
+    QgsMessageLog::logMessage( QObject::tr( "Transform error caught: %1" ).arg( cse.what() ), QObject::tr( "CRS" ) );
+  }
+
+  return QgsPoint( x, y, z );
 }
 
 
@@ -705,4 +791,14 @@ void QgsMapSettings::addRenderedFeatureHandler( QgsRenderedFeatureHandlerInterfa
 QList<QgsRenderedFeatureHandlerInterface *> QgsMapSettings::renderedFeatureHandlers() const
 {
   return mRenderedFeatureHandlers;
+}
+
+QgsDoubleRange QgsMapSettings::zRange() const
+{
+  return mZRange;
+}
+
+void QgsMapSettings::setZRange( const QgsDoubleRange &zRange )
+{
+  mZRange = zRange;
 }

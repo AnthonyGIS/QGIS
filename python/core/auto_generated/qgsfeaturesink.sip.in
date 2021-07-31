@@ -11,7 +11,7 @@
 
 class QgsFeatureSink
 {
-%Docstring
+%Docstring(signature="appended")
 An interface for objects which accept features via addFeature(s) methods.
 
 .. versionadded:: 3.0
@@ -72,6 +72,13 @@ Adds all features from the specified ``iterator`` to the sink. Feature addition 
 Flushes any internal buffer which may exist in the sink, causing any buffered features to be added to the sink's destination.
 
 :return: ``False`` if any buffered features could not be added to the sink.
+%End
+
+    virtual QString lastError() const;
+%Docstring
+Returns the most recent error encountered by the sink, e.g. when a call to :py:func:`~QgsFeatureSink.addFeatures` returns ``False``.
+
+.. versionadded:: 3.16
 %End
 };
 

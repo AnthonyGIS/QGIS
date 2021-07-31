@@ -20,15 +20,18 @@
 #include "qgstextformat.h"
 
 #include <QToolButton>
+#include <QPointer>
 
 class QgsExpressionContextGenerator;
 class QgsMapCanvas;
 class QgsMessageBar;
+class QgsTextFormatPanelWidget;
+
 
 /**
  * \ingroup gui
  * \class QgsFontButton
- * A button for customizing QgsTextFormat settings.
+ * \brief A button for customizing QgsTextFormat settings.
  *
  * The button will open a detailed text format settings dialog when clicked. An attached drop-down
  * menu allows for copying and pasting text styles, picking colors for the text, and for dropping
@@ -329,6 +332,7 @@ class GUI_EXPORT QgsFontButton : public QToolButton
     bool mShowNoFormat = false;
     QString mNullFormatString;
     QPointer< QAction > mNullFormatAction;
+    QPointer< QgsTextFormatPanelWidget > mActivePanel;
 
     /**
      * Attempts to parse \a mimeData as a text format.

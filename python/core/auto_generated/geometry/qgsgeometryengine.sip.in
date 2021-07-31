@@ -12,8 +12,43 @@
 
 class QgsGeometryEngine
 {
-%Docstring
-Contains geometry relation and modification algorithms.
+%Docstring(signature="appended")
+A geometry engine is a low-level representation of a :py:class:`QgsAbstractGeometry` object, optimised for use with external
+geometry libraries such as GEOS.
+
+:py:class:`QgsGeometryEngine` objects provide a mechanism for optimized evaluation of geometric algorithms, including spatial relationships
+between geometries and operations such as buffers or clipping.
+
+:py:class:`QgsGeometryEngine` objects are not created directly, but are instead created by calling :py:func:`QgsGeometry.createGeometryEngine()`.
+
+Many methods available in the :py:class:`QgsGeometryEngine` class can benefit from pre-preparing geometries. For instance, whenever
+a large number of spatial relationships will be tested (such as calling :py:func:`~intersects`, :py:func:`~within`, etc) then the
+geometry should first be prepared by calling :py:func:`~prepareGeometry` before performing the tests.
+
+Example
+-------
+
+.. code-block:: python
+
+       # polygon_geometry contains a complex polygon, with many vertices
+       polygon_geometry = QgsGeometry.fromWkt('Polygon((...))')
+
+       # create a QgsGeometryEngine representation of the polygon
+       polygon_geometry_engine = QgsGeometry.createGeometryEngine(polygon_geometry.constGet())
+
+       # since we'll be performing many intersects tests, we can speed up these tests considerably
+       # by first "preparing" the geometry engine
+       polygon_geometry_engine.prepareGeometry()
+
+       # now we are ready to quickly test intersection against many other objects
+       for feature in my_layer.getFeatures():
+           feature_geometry = feature.geometry()
+           # test whether the feature's geometry intersects our original complex polygon
+           if polygon_geometry_engine.intersects(feature_geometry.constGet()):
+               print('feature intersects the polygon!')
+
+:py:class:`QgsGeometryEngine` operations are backed by the GEOS library (https://trac.osgeo.org/geos/).
+
 
 .. versionadded:: 2.10
 %End
@@ -210,7 +245,7 @@ pattern.
 
     virtual bool isValid( QString *errorMsg = 0, bool allowSelfTouchingHoles = false, QgsGeometry *errorLoc = 0 ) const = 0;
 %Docstring
-Returns true if the geometry is valid.
+Returns ``True`` if the geometry is valid.
 
 If the geometry is invalid, ``errorMsg`` will be filled with the reported geometry error.
 
@@ -240,7 +275,7 @@ Determines whether the geometry is simple (according to OGC definition).
     virtual QgsGeometryEngine::EngineOperationResult splitGeometry( const QgsLineString &splitLine,
         QVector<QgsGeometry > &newGeometries /Out/,
         bool topological,
-        QgsPointSequence &topologyTestPoints, QString *errorMsg = 0 ) const;
+        QgsPointSequence &topologyTestPoints, QString *errorMsg = 0, bool skipIntersectionCheck = false ) const;
 %Docstring
 Splits this geometry according to a given line.
 
@@ -249,16 +284,38 @@ Splits this geometry according to a given line.
 :param topological: ``True`` if topological editing is enabled
 \param[out] topologyTestPoints points that need to be tested for topological completeness in the dataset
 \param[out] errorMsg error messages emitted, if any
+:param skipIntersectionCheck: set to ``True`` to skip the potentially expensive initial intersection check. Only set this flag if an intersection
+                              test has already been performed by the caller!
 
 :return: 0 in case of success, 1 if geometry has not been split, error else
 %End
 
     virtual QgsAbstractGeometry *offsetCurve( double distance, int segments, int joinStyle, double miterLimit, QString *errorMsg = 0 ) const = 0 /Factory/;
 
+    void setLogErrors( bool enabled );
+%Docstring
+Sets whether warnings and errors encountered during the geometry operations should be logged.
+
+By default these errors are logged to the console and in the QGIS UI. But for some operations errors are expected and logging
+these just results in noise. In this case setting ``enabled`` to ``False`` will avoid the automatic error reporting.
+
+.. versionadded:: 3.16
+%End
+
   protected:
+
+    void logError( const QString &engineName, const QString &message ) const;
+%Docstring
+Logs an error ``message`` encountered during an operation.
+
+.. seealso:: :py:func:`setLogErrors`
+
+.. versionadded:: 3.16
+%End
 
     QgsGeometryEngine( const QgsAbstractGeometry *geometry );
 };
+
 
 /************************************************************************
  * This file has been generated automatically from                      *

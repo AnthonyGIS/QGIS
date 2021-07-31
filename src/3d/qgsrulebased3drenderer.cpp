@@ -23,11 +23,10 @@
 #include "qgsline3dsymbol.h"
 #include "qgspoint3dsymbol.h"
 #include "qgspolygon3dsymbol.h"
-#include "qgsline3dsymbol_p.h"
-#include "qgspoint3dsymbol_p.h"
-#include "qgspolygon3dsymbol_p.h"
 
 #include "qgsrulebasedchunkloader_p.h"
+#include "qgsapplication.h"
+#include "qgs3dsymbolregistry.h"
 
 QgsRuleBased3DRendererMetadata::QgsRuleBased3DRendererMetadata()
   : Qgs3DRendererAbstractMetadata( QStringLiteral( "rulebased" ) )
@@ -108,7 +107,7 @@ void QgsRuleBased3DRenderer::Rule::initFilter()
 void QgsRuleBased3DRenderer::Rule::updateElseRules()
 {
   mElseRules.clear();
-  for ( Rule *rule : qgis::as_const( mChildren ) )
+  for ( Rule *rule : std::as_const( mChildren ) )
   {
     if ( rule->isElse() )
       mElseRules << rule;
@@ -144,7 +143,7 @@ const QgsRuleBased3DRenderer::Rule *QgsRuleBased3DRenderer::Rule::findRuleByKey(
   if ( key == mRuleKey )
     return this;
 
-  for ( Rule *rule : qgis::as_const( mChildren ) )
+  for ( Rule *rule : std::as_const( mChildren ) )
   {
     const Rule *r = rule->findRuleByKey( key );
     if ( r )
@@ -158,7 +157,7 @@ QgsRuleBased3DRenderer::Rule *QgsRuleBased3DRenderer::Rule::findRuleByKey( const
   if ( key == mRuleKey )
     return this;
 
-  for ( Rule *rule : qgis::as_const( mChildren ) )
+  for ( Rule *rule : std::as_const( mChildren ) )
   {
     Rule *r = rule->findRuleByKey( key );
     if ( r )
@@ -173,7 +172,7 @@ QgsRuleBased3DRenderer::Rule *QgsRuleBased3DRenderer::Rule::clone() const
   Rule *newrule = new Rule( symbol, mFilterExp, mDescription );
   newrule->setActive( mIsActive );
   // clone children
-  for ( Rule *rule : qgis::as_const( mChildren ) )
+  for ( Rule *rule : std::as_const( mChildren ) )
     newrule->appendChild( rule->clone() );
   return newrule;
 }
@@ -185,13 +184,7 @@ QgsRuleBased3DRenderer::Rule *QgsRuleBased3DRenderer::Rule::create( const QDomEl
   if ( !elemSymbol.isNull() )
   {
     QString symbolType = elemSymbol.attribute( QStringLiteral( "type" ) );
-    if ( symbolType == QLatin1String( "polygon" ) )
-      symbol = new QgsPolygon3DSymbol;
-    else if ( symbolType == QLatin1String( "point" ) )
-      symbol = new QgsPoint3DSymbol;
-    else if ( symbolType == QLatin1String( "line" ) )
-      symbol = new QgsLine3DSymbol;
-
+    symbol = QgsApplication::symbol3DRegistry()->createSymbol( symbolType );
     if ( symbol )
       symbol->readXml( elemSymbol, context );
   }
@@ -259,26 +252,13 @@ void QgsRuleBased3DRenderer::Rule::createHandlers( QgsVectorLayer *layer, QgsRul
   {
     // add handler!
     Q_ASSERT( !handlers.value( this ) );
-    QgsFeature3DHandler *handler = nullptr;
-    if ( mSymbol->type() == QLatin1String( "polygon" ) )
-    {
-      handler = Qgs3DSymbolImpl::handlerForPolygon3DSymbol( layer, *static_cast<QgsPolygon3DSymbol *>( mSymbol.get() ) );
-    }
-    else if ( mSymbol->type() == QLatin1String( "point" ) )
-    {
-      handler = Qgs3DSymbolImpl::handlerForPoint3DSymbol( layer, *static_cast<QgsPoint3DSymbol *>( mSymbol.get() ) );
-    }
-    else if ( mSymbol->type() == QLatin1String( "line" ) )
-    {
-      handler = Qgs3DSymbolImpl::handlerForLine3DSymbol( layer, *static_cast<QgsLine3DSymbol *>( mSymbol.get() ) );
-    }
-
+    QgsFeature3DHandler *handler = QgsApplication::symbol3DRegistry()->createHandlerForSymbol( layer, mSymbol.get() );
     if ( handler )
       handlers[this] = handler;
   }
 
   // call recursively
-  for ( Rule *rule : qgis::as_const( mChildren ) )
+  for ( Rule *rule : std::as_const( mChildren ) )
   {
     rule->createHandlers( layer, handlers );
   }
@@ -304,7 +284,7 @@ void QgsRuleBased3DRenderer::Rule::prepare( const Qgs3DRenderContext &context, Q
   }
 
   // call recursively
-  for ( Rule *rule : qgis::as_const( mChildren ) )
+  for ( Rule *rule : std::as_const( mChildren ) )
   {
     rule->prepare( context, attributeNames, handlers );
   }
@@ -327,7 +307,7 @@ QgsRuleBased3DRenderer::Rule::RegisterResult QgsRuleBased3DRenderer::Rule::regis
   bool willRegisterSomething = false;
 
   // call recursively
-  for ( Rule *rule : qgis::as_const( mChildren ) )
+  for ( Rule *rule : std::as_const( mChildren ) )
   {
     // Don't process else rules yet
     if ( !rule->isElse() )
@@ -342,7 +322,7 @@ QgsRuleBased3DRenderer::Rule::RegisterResult QgsRuleBased3DRenderer::Rule::regis
   // If none of the rules passed then we jump into the else rules and process them.
   if ( !willRegisterSomething )
   {
-    for ( Rule *rule : qgis::as_const( mElseRules ) )
+    for ( Rule *rule : std::as_const( mElseRules ) )
     {
       registered |= rule->registerFeature( feature, context, handlers ) != Filtered;
     }
@@ -409,7 +389,7 @@ Qt3DCore::QEntity *QgsRuleBased3DRenderer::createEntity( const Qgs3DMapSettings 
   double zMin, zMax;
   Qgs3DUtils::estimateVectorLayerZRange( vl, zMin, zMax );
 
-  return new QgsRuleBasedChunkedEntity( vl, zMin, zMax, tilingSettings(), mRootRule, map );
+  return new QgsRuleBasedChunkedEntity( vl, zMin + map.terrainElevationOffset(), zMax + map.terrainElevationOffset(), tilingSettings(), mRootRule, map );
 }
 
 void QgsRuleBased3DRenderer::writeXml( QDomElement &elem, const QgsReadWriteContext &context ) const

@@ -92,7 +92,7 @@ bool QgsCalculateVectorOverlapsAlgorithm::prepareAlgorithm( const QVariantMap &p
     if ( QgsVectorLayer *vl = qobject_cast< QgsVectorLayer * >( layer ) )
     {
       mLayerNames << layer->name();
-      mOverlayerSources.emplace_back( qgis::make_unique< QgsVectorLayerFeatureSource >( vl ) );
+      mOverlayerSources.emplace_back( std::make_unique< QgsVectorLayerFeatureSource >( vl ) );
       mOutputFields.append( QgsField( QStringLiteral( "%1_area" ).arg( vl->name() ), QVariant::Double ) );
       mOutputFields.append( QgsField( QStringLiteral( "%1_pc" ).arg( vl->name() ), QVariant::Double ) );
     }
@@ -127,7 +127,7 @@ QVariantMap QgsCalculateVectorOverlapsAlgorithm::processAlgorithm( const QVarian
 
   QgsDistanceArea da;
   da.setSourceCrs( mCrs, context.transformContext() );
-  da.setEllipsoid( context.project()->ellipsoid() );
+  da.setEllipsoid( context.ellipsoid() );
 
   // loop through input
   double step = mInputCount > 0 ? 100.0 / mInputCount : 0;
@@ -198,7 +198,8 @@ QVariantMap QgsCalculateVectorOverlapsAlgorithm::processAlgorithm( const QVarian
     }
 
     feature.setAttributes( outAttributes );
-    sink->addFeature( feature, QgsFeatureSink::FastInsert );
+    if ( !sink->addFeature( feature, QgsFeatureSink::FastInsert ) )
+      throw QgsProcessingException( writeFeatureError( sink.get(), parameters, QStringLiteral( "OUTPUT" ) ) );
 
     i++;
     feedback->setProgress( i * step );

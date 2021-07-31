@@ -24,6 +24,8 @@
 #include "qgslayoutundostack.h"
 #include "qgsstyle.h"
 #include "qgsstyleentityvisitor.h"
+#include "qgsfillsymbol.h"
+
 #include <QPainter>
 #include <QStyleOptionGraphicsItem>
 
@@ -101,6 +103,27 @@ bool QgsLayoutItemPage::setPageSize( const QString &size, Orientation orientatio
   }
 }
 
+QPageLayout QgsLayoutItemPage::pageLayout() const
+{
+  QPageLayout pageLayout;
+  pageLayout.setMargins( {0, 0, 0, 0} );
+  pageLayout.setMode( QPageLayout::FullPageMode );
+  QSizeF size = layout()->renderContext().measurementConverter().convert( pageSize(), QgsUnitTypes::LayoutMillimeters ).toQSizeF();
+
+  if ( pageSize().width() > pageSize().height() )
+  {
+    pageLayout.setOrientation( QPageLayout::Landscape );
+    pageLayout.setPageSize( QPageSize( QSizeF( size.height(), size.width() ), QPageSize::Millimeter ) );
+  }
+  else
+  {
+    pageLayout.setOrientation( QPageLayout::Portrait );
+    pageLayout.setPageSize( QPageSize( size, QPageSize::Millimeter ) );
+  }
+  pageLayout.setUnits( QPageLayout::Millimeter );
+  return pageLayout;
+}
+
 QgsLayoutSize QgsLayoutItemPage::pageSize() const
 {
   return sizeWithUnits();
@@ -163,7 +186,7 @@ void QgsLayoutItemPage::attemptResize( const QgsLayoutSize &size, bool includesF
 
 void QgsLayoutItemPage::createDefaultPageStyleSymbol()
 {
-  QgsStringMap properties;
+  QVariantMap properties;
   properties.insert( QStringLiteral( "color" ), QStringLiteral( "white" ) );
   properties.insert( QStringLiteral( "style" ), QStringLiteral( "solid" ) );
   properties.insert( QStringLiteral( "style_border" ), QStringLiteral( "no" ) );
@@ -211,7 +234,7 @@ QgsLayoutItem::ExportLayerBehavior QgsLayoutItemPage::exportLayerBehavior() cons
 
 bool QgsLayoutItemPage::accept( QgsStyleEntityVisitorInterface *visitor ) const
 {
-  QgsStyleSymbolEntity entity( pageStyleSymbol() );
+  QgsStyleSymbolEntity entity( mPageStyleSymbol.get() );
   if ( !visitor->visit( QgsStyleEntityVisitorInterface::StyleLeaf( &entity, QStringLiteral( "page" ), QObject::tr( "Page" ) ) ) )
     return false;
   return true;
@@ -394,7 +417,7 @@ void QgsLayoutItemPageGrid::paint( QPainter *painter, const QStyleOptionGraphics
       {
         //dots are actually drawn as tiny crosses a few pixels across
         //set halfCrossLength to equivalent of 1 pixel
-        halfCrossLength = 1 / QgsLayoutUtils::scaleFactorFromItemStyle( itemStyle );
+        halfCrossLength = 1 / QgsLayoutUtils::scaleFactorFromItemStyle( itemStyle, painter );
       }
       else
       {

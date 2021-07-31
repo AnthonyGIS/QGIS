@@ -17,8 +17,8 @@
 #include "qgssqlexpressioncompiler.h"
 #include "qgsexpressionnodeimpl.h"
 
-QgsPostgresExpressionCompiler::QgsPostgresExpressionCompiler( QgsPostgresFeatureSource *source )
-  : QgsSqlExpressionCompiler( source->mFields, QgsSqlExpressionCompiler::IntegerDivisionResultsInInteger )
+QgsPostgresExpressionCompiler::QgsPostgresExpressionCompiler( QgsPostgresFeatureSource *source, bool ignoreStaticNodes )
+  : QgsSqlExpressionCompiler( source->mFields, QgsSqlExpressionCompiler::IntegerDivisionResultsInInteger, ignoreStaticNodes )
   , mGeometryColumn( source->mGeometryColumn )
   , mSpatialColType( source->mSpatialColType )
   , mDetectedGeomType( source->mDetectedGeomType )
@@ -36,6 +36,18 @@ QString QgsPostgresExpressionCompiler::quotedIdentifier( const QString &identifi
 QString QgsPostgresExpressionCompiler::quotedValue( const QVariant &value, bool &ok )
 {
   ok = true;
+
+  // don't use the default QgsPostgresConn::quotedValue handling for double values -- for
+  // various reasons it returns them as string values!
+  switch ( value.type() )
+  {
+    case QVariant::Double:
+      return value.toString();
+
+    default:
+      break;
+  }
+
   return QgsPostgresConn::quotedValue( value );
 }
 
@@ -133,6 +145,10 @@ QStringList QgsPostgresExpressionCompiler::sqlArgumentsFromFunctionName( const Q
   {
     args << QStringLiteral( "8" );
   }
+  else if ( fnName == QLatin1String( "round" ) )
+  {
+    args[0] = QStringLiteral( "(%1)::numeric" ).arg( args[0] );
+  }
   // x and y functions have to be adapted
   return args;
 }
@@ -154,6 +170,10 @@ QString QgsPostgresExpressionCompiler::castToText( const QString &value ) const
 
 QgsSqlExpressionCompiler::Result QgsPostgresExpressionCompiler::compileNode( const QgsExpressionNode *node, QString &result )
 {
+  QgsSqlExpressionCompiler::Result staticRes = replaceNodeByStaticCachedValueIfPossible( node, result );
+  if ( staticRes != Fail )
+    return staticRes;
+
   switch ( node->nodeType() )
   {
     case QgsExpressionNode::ntFunction:

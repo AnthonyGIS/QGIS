@@ -138,7 +138,6 @@ QWidget *QgsAbstractProcessingParameterWidgetWrapper::createWrappedWidget( QgsPr
   if ( mParameterDefinition->isDynamic() )
   {
     QHBoxLayout *hLayout = new QHBoxLayout();
-    hLayout->setMargin( 0 );
     hLayout->setContentsMargins( 0, 0, 0, 0 );
     hLayout->addWidget( mWidget, 1 );
     mPropertyButton = new QgsPropertyOverrideButton();
@@ -154,7 +153,7 @@ QWidget *QgsAbstractProcessingParameterWidgetWrapper::createWrappedWidget( QgsPr
   if ( !dynamic_cast<const QgsProcessingDestinationParameter * >( mParameterDefinition ) )
   {
     // an exception -- output widgets handle this themselves
-    setWidgetValue( mParameterDefinition->defaultValue(), context );
+    setWidgetValue( mParameterDefinition->defaultValueForGui(), context );
   }
 
   return wrappedWidget;
@@ -235,7 +234,7 @@ QLabel *QgsAbstractProcessingParameterWidgetWrapper::createLabel()
       QString description = mParameterDefinition->description();
       if ( parameterDefinition()->flags() & QgsProcessingParameterDefinition::FlagOptional )
         description = QObject::tr( "%1 [optional]" ).arg( description );
-      std::unique_ptr< QLabel > label = qgis::make_unique< QLabel >( description );
+      std::unique_ptr< QLabel > label = std::make_unique< QLabel >( description );
       label->setToolTip( mParameterDefinition->toolTip() );
       return label.release();
     }
@@ -287,7 +286,7 @@ QgsExpressionContext QgsAbstractProcessingParameterWidgetWrapper::createExpressi
   QgsExpressionContext context = QgsProcessingGuiUtils::createExpressionContext( mProcessingContextGenerator, mWidgetContext, mParameterDefinition ? mParameterDefinition->algorithm() : nullptr, linkedVectorLayer() );
   if ( mParameterDefinition && !mParameterDefinition->additionalExpressionContextVariables().isEmpty() )
   {
-    std::unique_ptr< QgsExpressionContextScope > paramScope = qgis::make_unique< QgsExpressionContextScope >();
+    std::unique_ptr< QgsExpressionContextScope > paramScope = std::make_unique< QgsExpressionContextScope >();
     const QStringList additional = mParameterDefinition->additionalExpressionContextVariables();
     for ( const QString &var : additional )
     {
@@ -328,11 +327,19 @@ void QgsAbstractProcessingParameterWidgetWrapper::setDynamicParentLayerParameter
 
     if ( !context )
     {
-      tmpContext = qgis::make_unique< QgsProcessingContext >();
+      tmpContext = std::make_unique< QgsProcessingContext >();
       context = tmpContext.get();
     }
 
-    QgsVectorLayer *layer = QgsProcessingParameters::parameterAsVectorLayer( parentWrapper->parameterDefinition(), parentWrapper->parameterValue(), *context );
+    QVariant val = parentWrapper->parameterValue();
+    if ( val.canConvert<QgsProcessingFeatureSourceDefinition>() )
+    {
+      // input is a QgsProcessingFeatureSourceDefinition - get extra properties from it
+      QgsProcessingFeatureSourceDefinition fromVar = qvariant_cast<QgsProcessingFeatureSourceDefinition>( val );
+      val = fromVar.source;
+    }
+
+    QgsVectorLayer *layer = QgsProcessingParameters::parameterAsVectorLayer( parentWrapper->parameterDefinition(), val, *context );
     if ( !layer )
     {
       mPropertyButton->setVectorLayer( nullptr );
@@ -358,7 +365,7 @@ void QgsAbstractProcessingParameterWidgetWrapper::setDynamicParentLayerParameter
 
 QgsProcessingModelerParameterWidget *QgsProcessingParameterWidgetFactoryInterface::createModelerWidgetWrapper( QgsProcessingModelAlgorithm *model, const QString &childId, const QgsProcessingParameterDefinition *parameter, QgsProcessingContext &context )
 {
-  std::unique_ptr< QgsProcessingModelerParameterWidget > widget = qgis::make_unique< QgsProcessingModelerParameterWidget >( model, childId, parameter, context );
+  std::unique_ptr< QgsProcessingModelerParameterWidget > widget = std::make_unique< QgsProcessingModelerParameterWidget >( model, childId, parameter, context );
   widget->populateSources( compatibleParameterTypes(), compatibleOutputTypes(), compatibleDataTypes( parameter ) );
   widget->setExpressionHelpText( modelerExpressionFormatString() );
   return widget.release();
@@ -396,29 +403,29 @@ QgsExpressionContext QgsProcessingGuiUtils::createExpressionContext( QgsProcessi
 
   if ( !context )
   {
-    tmpContext = qgis::make_unique< QgsProcessingContext >();
+    tmpContext = std::make_unique< QgsProcessingContext >();
     context = tmpContext.get();
   }
 
   QgsExpressionContext c = context->expressionContext();
 
-  if ( widgetContext.model() )
+  if ( auto *lModel = widgetContext.model() )
   {
-    c << QgsExpressionContextUtils::processingModelAlgorithmScope( widgetContext.model(), QVariantMap(), *context );
+    c << QgsExpressionContextUtils::processingModelAlgorithmScope( lModel, QVariantMap(), *context );
 
     const QgsProcessingAlgorithm *alg = nullptr;
-    if ( widgetContext.model()->childAlgorithms().contains( widgetContext.modelChildAlgorithmId() ) )
-      alg = widgetContext.model()->childAlgorithm( widgetContext.modelChildAlgorithmId() ).algorithm();
+    if ( lModel->childAlgorithms().contains( widgetContext.modelChildAlgorithmId() ) )
+      alg = lModel->childAlgorithm( widgetContext.modelChildAlgorithmId() ).algorithm();
 
     QgsExpressionContextScope *algorithmScope = QgsExpressionContextUtils::processingAlgorithmScope( alg ? alg : algorithm, QVariantMap(), *context );
     c << algorithmScope;
-    QgsExpressionContextScope *childScope = widgetContext.model()->createExpressionContextScopeForChildAlgorithm( widgetContext.modelChildAlgorithmId(), *context, QVariantMap(), QVariantMap() );
+    QgsExpressionContextScope *childScope = lModel->createExpressionContextScopeForChildAlgorithm( widgetContext.modelChildAlgorithmId(), *context, QVariantMap(), QVariantMap() );
     c << childScope;
 
     QStringList highlightedVariables = childScope->variableNames();
     QStringList highlightedFunctions = childScope->functionNames();
     highlightedVariables += algorithmScope->variableNames();
-    highlightedVariables += widgetContext.model()->variables().keys();
+    highlightedVariables += lModel->variables().keys();
     highlightedFunctions += algorithmScope->functionNames();
     c.setHighlightedVariables( highlightedVariables );
     c.setHighlightedFunctions( highlightedFunctions );

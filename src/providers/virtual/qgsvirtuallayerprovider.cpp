@@ -54,8 +54,10 @@ static QString quotedColumn( QString name )
 #define PROVIDER_ERROR( msg ) do { mError = QgsError( msg, VIRTUAL_LAYER_KEY ); QgsDebugMsg( msg ); } while(0)
 
 
-QgsVirtualLayerProvider::QgsVirtualLayerProvider( QString const &uri, const QgsDataProvider::ProviderOptions &options )
-  : QgsVectorDataProvider( uri, options )
+QgsVirtualLayerProvider::QgsVirtualLayerProvider( QString const &uri,
+    const QgsDataProvider::ProviderOptions &options,
+    QgsDataProvider::ReadFlags flags )
+  : QgsVectorDataProvider( uri, options, flags )
 {
   mError.clear();
 
@@ -75,6 +77,8 @@ QgsVirtualLayerProvider::QgsVirtualLayerProvider( QString const &uri, const QgsD
   try
   {
     mDefinition = QgsVirtualLayerDefinition::fromUrl( url );
+
+    mSubset = mDefinition.subsetString();
 
     if ( !mDefinition.isLazy() )
     {
@@ -205,6 +209,8 @@ bool QgsVirtualLayerProvider::openIt()
     mTableName = VIRTUAL_LAYER_QUERY_VIEW;
   }
 
+  mSubset = mDefinition.subsetString();
+
   return true;
 }
 
@@ -317,10 +323,7 @@ bool QgsVirtualLayerProvider::createIt()
       provider.replace( QLatin1String( "'" ), QLatin1String( "''" ) );
       QString source = mLayers.at( i ).source;
       source.replace( QLatin1String( "'" ), QLatin1String( "''" ) );
-      // the encoding might be an empty string, which breaks the SQL query below
-      QString encoding = mLayers.at( i ).encoding.isEmpty()
-                         ? QStringLiteral( "System" )
-                         : mLayers.at( i ).encoding;
+      QString encoding = mLayers.at( i ).encoding;
       QString createStr = QStringLiteral( "DROP TABLE IF EXISTS \"%1\"; CREATE VIRTUAL TABLE \"%1\" USING QgsVLayer('%2','%4',%3)" )
                           .arg( vname,
                                 provider,
@@ -526,6 +529,10 @@ bool QgsVirtualLayerProvider::setSubsetString( const QString &subset, bool updat
   if ( updateFeatureCount )
     updateStatistics();
 
+  mDefinition.setSubsetString( subset );
+
+  setDataSourceUri( mDefinition.toString() );
+
   emit dataChanged();
 
   return true;
@@ -537,7 +544,7 @@ QgsWkbTypes::Type QgsVirtualLayerProvider::wkbType() const
   return static_cast<QgsWkbTypes::Type>( mDefinition.geometryWkbType() );
 }
 
-long QgsVirtualLayerProvider::featureCount() const
+long long QgsVirtualLayerProvider::featureCount() const
 {
   if ( !mCachedStatistics )
   {
@@ -558,31 +565,35 @@ QgsRectangle QgsVirtualLayerProvider::extent() const
 void QgsVirtualLayerProvider::updateStatistics() const
 {
   bool hasGeometry = mDefinition.geometryWkbType() != QgsWkbTypes::NoGeometry;
-  QString subset = mSubset.isEmpty() ? QString() : QStringLiteral( " WHERE %1" ).arg( mSubset );
-
-  // `mTableName` might be a null string if the layer creation failed. Assert such situations at least during development.
-  Q_ASSERT( ! mTableName.isNull() );
-
+  QString subset = mSubset.isEmpty() ? QString() : " WHERE " + mSubset;
   QString sql = QStringLiteral( "SELECT Count(*)%1 FROM %2%3" )
-                .arg(
-                  hasGeometry ? QStringLiteral( ",Min(MbrMinX(%1)),Min(MbrMinY(%1)),Max(MbrMaxX(%1)),Max(MbrMaxY(%1))" ).arg( quotedColumn( mDefinition.geometryField() ) ) : QString(),
-                  mTableName,
-                  subset
-                );
-  Sqlite::Query q( mSqlite.get(), sql );
-  if ( q.step() == SQLITE_ROW )
+                .arg( hasGeometry ? QStringLiteral( ",Min(MbrMinX(%1)),Min(MbrMinY(%1)),Max(MbrMaxX(%1)),Max(MbrMaxY(%1))" ).arg( quotedColumn( mDefinition.geometryField() ) ) : QString(),
+                      mTableName,
+                      subset );
+
+  try
   {
-    mFeatureCount = q.columnInt64( 0 );
-    if ( hasGeometry )
+    Sqlite::Query q( mSqlite.get(), sql );
+    if ( q.step() == SQLITE_ROW )
     {
-      double x1, y1, x2, y2;
-      x1 = q.columnDouble( 1 );
-      y1 = q.columnDouble( 2 );
-      x2 = q.columnDouble( 3 );
-      y2 = q.columnDouble( 4 );
-      mExtent = QgsRectangle( x1, y1, x2, y2 );
+      mFeatureCount = q.columnInt64( 0 );
+      if ( hasGeometry )
+      {
+        double x1, y1, x2, y2;
+        x1 = q.columnDouble( 1 );
+        y1 = q.columnDouble( 2 );
+        x2 = q.columnDouble( 3 );
+        y2 = q.columnDouble( 4 );
+        mExtent = QgsRectangle( x1, y1, x2, y2 );
+      }
+      mCachedStatistics = true;
     }
-    mCachedStatistics = true;
+  }
+  catch ( std::runtime_error &e )
+  {
+    pushError( tr( "Error while executing feature count request : %1" ).arg( e.what() ) );
+    mFeatureCount = 0;
+    return;
   }
 }
 
@@ -603,7 +614,7 @@ bool QgsVirtualLayerProvider::isValid() const
 
 QgsVectorDataProvider::Capabilities QgsVirtualLayerProvider::capabilities() const
 {
-  QgsVectorDataProvider::Capabilities capabilities = CancelSupport;
+  QgsVectorDataProvider::Capabilities capabilities = CancelSupport | QgsVectorDataProvider::Capability::ReloadData;
 
   if ( !mDefinition.uid().isNull() )
   {
@@ -655,9 +666,10 @@ QSet<QgsMapLayerDependency> QgsVirtualLayerProvider::dependencies() const
 
 QgsVirtualLayerProvider *QgsVirtualLayerProviderMetadata::createProvider(
   const QString &uri,
-  const QgsDataProvider::ProviderOptions &options )
+  const QgsDataProvider::ProviderOptions &options,
+  QgsDataProvider::ReadFlags flags )
 {
-  return new QgsVirtualLayerProvider( uri, options );
+  return new QgsVirtualLayerProvider( uri, options, flags );
 }
 
 
@@ -710,4 +722,3 @@ QGISEXTERN QgsProviderGuiMetadata *providerGuiMetadataFactory()
   return new QgsVirtualLayerProviderGuiMetadata();
 }
 #endif
-

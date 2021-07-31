@@ -23,6 +23,7 @@ __copyright__ = '(C) 2013, Alexander Bruy'
 
 import os
 
+from qgis.PyQt.QtCore import QVariant
 from qgis.PyQt.QtGui import QIcon
 
 from qgis.core import (QgsRasterFileWriter,
@@ -46,6 +47,7 @@ class rasterize(GdalAlgorithm):
     INPUT = 'INPUT'
     FIELD = 'FIELD'
     BURN = 'BURN'
+    USE_Z = 'USE_Z'
     WIDTH = 'WIDTH'
     HEIGHT = 'HEIGHT'
     UNITS = 'UNITS'
@@ -81,6 +83,10 @@ class rasterize(GdalAlgorithm):
                                                        type=QgsProcessingParameterNumber.Double,
                                                        defaultValue=0.0,
                                                        optional=True))
+        self.addParameter(QgsProcessingParameterBoolean(self.USE_Z,
+                                                        self.tr('Burn value extracted from the "Z" values of the feature'),
+                                                        defaultValue=False,
+                                                        optional=True))
         self.addParameter(QgsProcessingParameterEnum(self.UNITS,
                                                      self.tr('Output raster size units'),
                                                      self.units))
@@ -96,11 +102,12 @@ class rasterize(GdalAlgorithm):
                                                        defaultValue=0.0))
         self.addParameter(QgsProcessingParameterExtent(self.EXTENT,
                                                        self.tr('Output extent')))
-        self.addParameter(QgsProcessingParameterNumber(self.NODATA,
-                                                       self.tr('Assign a specified nodata value to output bands'),
-                                                       type=QgsProcessingParameterNumber.Double,
-                                                       defaultValue=0.0,
-                                                       optional=True))
+        nodataParam = QgsProcessingParameterNumber(self.NODATA,
+                                                   self.tr('Assign a specified nodata value to output bands'),
+                                                   type=QgsProcessingParameterNumber.Double,
+                                                   optional=True)
+        nodataParam.setGuiDefaultValueOverride(QVariant(QVariant.Double))
+        self.addParameter(nodataParam)
 
         options_param = QgsProcessingParameterString(self.OPTIONS,
                                                      self.tr('Additional creation options'),
@@ -164,11 +171,15 @@ class rasterize(GdalAlgorithm):
     def getConsoleCommands(self, parameters, context, feedback, executing=True):
         ogrLayer, layerName = self.getOgrCompatibleSource(self.INPUT, parameters, context, feedback, executing)
 
-        arguments = ['-l']
-        arguments.append(layerName)
-
+        arguments = [
+            '-l',
+            layerName
+        ]
         fieldName = self.parameterAsString(parameters, self.FIELD, context)
-        if fieldName:
+        use_z = self.parameterAsBoolean(parameters, self.USE_Z, context)
+        if use_z:
+            arguments.append('-3d')
+        elif fieldName:
             arguments.append('-a')
             arguments.append(fieldName)
         else:

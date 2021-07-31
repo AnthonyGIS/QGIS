@@ -38,7 +38,7 @@ QgsProfilerPanelWidget::QgsProfilerPanelWidget( QgsRuntimeProfiler *profiler, QW
   //mTreeView->resizeColumnToContents( 0 );
   //mTreeView->resizeColumnToContents( 1 );
 
-  mTreeView->setItemDelegateForColumn( 1, new CostDelegate( QgsRuntimeProfilerNode::Elapsed, QgsRuntimeProfilerNode::ParentElapsed ) );
+  mTreeView->setItemDelegateForColumn( 1, new CostDelegate( QgsRuntimeProfilerNode::Elapsed, QgsRuntimeProfilerNode::ParentElapsed, mTreeView ) );
 
   connect( mProfiler, &QgsRuntimeProfiler::groupAdded, this, [ = ]( const QString & group )
   {
@@ -50,7 +50,7 @@ QgsProfilerPanelWidget::QgsProfilerPanelWidget( QgsRuntimeProfiler *profiler, QW
     }
   } );
 
-  connect( mCategoryComboBox, qgis::overload< int >::of( &QComboBox::currentIndexChanged ), this, [ = ]( int )
+  connect( mCategoryComboBox, qOverload< int >( &QComboBox::currentIndexChanged ), this, [ = ]( int )
   {
     mProxyModel->setGroup( mCategoryComboBox->currentData().toString() );
   } );

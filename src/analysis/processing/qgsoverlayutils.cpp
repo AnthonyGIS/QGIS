@@ -54,13 +54,21 @@ bool QgsOverlayUtils::sanitizeIntersectionResult( QgsGeometry &geom, QgsWkbTypes
 
 
 //! Makes sure that what came out from difference of two geometries is good to be used in the output
-static bool sanitizeDifferenceResult( QgsGeometry &geom )
+static bool sanitizeDifferenceResult( QgsGeometry &geom, QgsWkbTypes::GeometryType geometryType )
 {
   if ( geom.isNull() )
   {
     // TODO: not sure if this ever happens - if it does, that means GEOS failed badly - would be good to have a test for such situation
     throw QgsProcessingException( QStringLiteral( "%1\n\n%2" ).arg( QObject::tr( "GEOS geoprocessing error: difference failed." ), geom.lastError() ) );
   }
+
+  //fix geometry collections
+  if ( QgsWkbTypes::flatType( geom.wkbType() ) == QgsWkbTypes::GeometryCollection )
+  {
+    // try to filter out irrelevant parts with different geometry type than what we want
+    geom.convertGeometryCollectionToSubclass( geometryType );
+  }
+
 
   // if geomB covers the whole source geometry, we get an empty geometry collection
   if ( geom.isEmpty() )
@@ -74,13 +82,21 @@ static bool sanitizeDifferenceResult( QgsGeometry &geom )
 }
 
 
-void QgsOverlayUtils::difference( const QgsFeatureSource &sourceA, const QgsFeatureSource &sourceB, QgsFeatureSink &sink, QgsProcessingContext &context, QgsProcessingFeedback *feedback, int &count, int totalCount, QgsOverlayUtils::DifferenceOutput outputAttrs )
+static QString writeFeatureError()
 {
+  return QObject::tr( "Could not write feature" );
+}
+
+void QgsOverlayUtils::difference( const QgsFeatureSource &sourceA, const QgsFeatureSource &sourceB, QgsFeatureSink &sink, QgsProcessingContext &context, QgsProcessingFeedback *feedback, long &count, long totalCount, QgsOverlayUtils::DifferenceOutput outputAttrs )
+{
+  QgsWkbTypes::GeometryType geometryType = QgsWkbTypes::geometryType( QgsWkbTypes::multiType( sourceA.wkbType() ) );
   QgsFeatureRequest requestB;
   requestB.setNoAttributes();
   if ( outputAttrs != OutputBA )
     requestB.setDestinationCrs( sourceA.sourceCrs(), context.transformContext() );
   QgsSpatialIndex indexB( sourceB.getFeatures( requestB ), feedback );
+  if ( feedback->isCanceled() )
+    return;
 
   int fieldsCountA = sourceA.fields().count();
   int fieldsCountB = sourceB.fields().count();
@@ -147,7 +163,7 @@ void QgsOverlayUtils::difference( const QgsFeatureSource &sourceA, const QgsFeat
         geom = geom.difference( geomB );
       }
 
-      if ( !sanitizeDifferenceResult( geom ) )
+      if ( !sanitizeDifferenceResult( geom, geometryType ) )
         continue;
 
       const QgsAttributes attrsA( featA.attributes() );
@@ -169,21 +185,23 @@ void QgsOverlayUtils::difference( const QgsFeatureSource &sourceA, const QgsFeat
       QgsFeature outFeat;
       outFeat.setGeometry( geom );
       outFeat.setAttributes( attrs );
-      sink.addFeature( outFeat, QgsFeatureSink::FastInsert );
+      if ( !sink.addFeature( outFeat, QgsFeatureSink::FastInsert ) )
+        throw QgsProcessingException( writeFeatureError() );
     }
     else
     {
       // TODO: should we write out features that do not have geometry?
-      sink.addFeature( featA, QgsFeatureSink::FastInsert );
+      if ( !sink.addFeature( featA, QgsFeatureSink::FastInsert ) )
+        throw QgsProcessingException( writeFeatureError() );
     }
 
     ++count;
-    feedback->setProgress( count / ( double ) totalCount * 100. );
+    feedback->setProgress( count / static_cast< double >( totalCount ) * 100. );
   }
 }
 
 
-void QgsOverlayUtils::intersection( const QgsFeatureSource &sourceA, const QgsFeatureSource &sourceB, QgsFeatureSink &sink, QgsProcessingContext &context, QgsProcessingFeedback *feedback, int &count, int totalCount, const QList<int> &fieldIndicesA, const QList<int> &fieldIndicesB )
+void QgsOverlayUtils::intersection( const QgsFeatureSource &sourceA, const QgsFeatureSource &sourceB, QgsFeatureSink &sink, QgsProcessingContext &context, QgsProcessingFeedback *feedback, long &count, long totalCount, const QList<int> &fieldIndicesA, const QList<int> &fieldIndicesB )
 {
   QgsWkbTypes::GeometryType geometryType = QgsWkbTypes::geometryType( QgsWkbTypes::multiType( sourceA.wkbType() ) );
   int attrCount = fieldIndicesA.count() + fieldIndicesB.count();
@@ -194,6 +212,8 @@ void QgsOverlayUtils::intersection( const QgsFeatureSource &sourceA, const QgsFe
 
   QgsFeature outFeat;
   QgsSpatialIndex indexB( sourceB.getFeatures( request ), feedback );
+  if ( feedback->isCanceled() )
+    return;
 
   if ( totalCount == 0 )
     totalCount = 1;  // avoid division by zero
@@ -250,18 +270,19 @@ void QgsOverlayUtils::intersection( const QgsFeatureSource &sourceA, const QgsFe
 
       outFeat.setGeometry( intGeom );
       outFeat.setAttributes( outAttributes );
-      sink.addFeature( outFeat, QgsFeatureSink::FastInsert );
+      if ( !sink.addFeature( outFeat, QgsFeatureSink::FastInsert ) )
+        throw QgsProcessingException( writeFeatureError() );
     }
 
     ++count;
-    feedback->setProgress( count / ( double ) totalCount * 100. );
+    feedback->setProgress( count / static_cast<double >( totalCount ) * 100. );
   }
 }
 
 void QgsOverlayUtils::resolveOverlaps( const QgsFeatureSource &source, QgsFeatureSink &sink, QgsProcessingFeedback *feedback )
 {
-  int count = 0;
-  int totalCount = source.featureCount();
+  long count = 0;
+  const long totalCount = source.featureCount();
   if ( totalCount == 0 )
     return;  // nothing to do here
 
@@ -369,7 +390,7 @@ void QgsOverlayUtils::resolveOverlaps( const QgsFeatureSource &source, QgsFeatur
       index.deleteFeature( f );
       geometries.remove( fid1 );
 
-      if ( sanitizeDifferenceResult( g12 ) )
+      if ( sanitizeDifferenceResult( g12, geometryType ) )
       {
         geometries.insert( fid1, g12 );
 
@@ -390,7 +411,7 @@ void QgsOverlayUtils::resolveOverlaps( const QgsFeatureSource &source, QgsFeatur
 
       geometries.remove( fid2 );
 
-      if ( sanitizeDifferenceResult( g21 ) )
+      if ( sanitizeDifferenceResult( g21, geometryType ) )
       {
         geometries.insert( fid2, g21 );
 
@@ -405,8 +426,10 @@ void QgsOverlayUtils::resolveOverlaps( const QgsFeatureSource &source, QgsFeatur
     }
 
     ++count;
-    feedback->setProgress( count / ( double ) totalCount * 100. );
+    feedback->setProgress( count / static_cast< double >( totalCount ) * 100. );
   }
+  if ( feedback->isCanceled() )
+    return;
 
   // release some memory of structures we don't need anymore
 
@@ -441,13 +464,15 @@ void QgsOverlayUtils::resolveOverlaps( const QgsFeatureSource &source, QgsFeatur
       for ( QgsFeatureId id : ids )
       {
         outFeature.setAttributes( attributesHash.value( id ) );
-        sink.addFeature( outFeature, QgsFeatureSink::FastInsert );
+        if ( !sink.addFeature( outFeature, QgsFeatureSink::FastInsert ) )
+          throw QgsProcessingException( writeFeatureError() );
       }
     }
     else
     {
       outFeature.setAttributes( attributesHash.value( i.key() ) );
-      sink.addFeature( outFeature, QgsFeatureSink::FastInsert );
+      if ( !sink.addFeature( outFeature, QgsFeatureSink::FastInsert ) )
+        throw QgsProcessingException( writeFeatureError() );
     }
   }
 }

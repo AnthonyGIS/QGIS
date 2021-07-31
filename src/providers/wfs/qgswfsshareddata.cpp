@@ -27,6 +27,7 @@ QgsWFSSharedData::QgsWFSSharedData( const QString &uri )
   , mURI( uri )
 {
   mHideProgressDialog = mURI.hideDownloadProgressDialog();
+  mServerPrefersCoordinatesForTransactions_1_1 = mURI.preferCoordinatesForWfst11();
 }
 
 QgsWFSSharedData::~QgsWFSSharedData()
@@ -36,9 +37,9 @@ QgsWFSSharedData::~QgsWFSSharedData()
   cleanup();
 }
 
-std::unique_ptr<QgsFeatureDownloaderImpl> QgsWFSSharedData::newFeatureDownloaderImpl( QgsFeatureDownloader *downloader )
+std::unique_ptr<QgsFeatureDownloaderImpl> QgsWFSSharedData::newFeatureDownloaderImpl( QgsFeatureDownloader *downloader, bool requestMadeFromMainThread )
 {
-  return std::unique_ptr<QgsFeatureDownloaderImpl>( new QgsWFSFeatureDownloaderImpl( this, downloader ) );
+  return std::unique_ptr<QgsFeatureDownloaderImpl>( new QgsWFSFeatureDownloaderImpl( this, downloader, requestMadeFromMainThread ) );
 }
 
 bool QgsWFSSharedData::isRestrictedToRequestBBOX() const
@@ -115,7 +116,7 @@ bool QgsWFSSharedData::computeFilter( QString &errorMsg )
     for ( QgsSQLStatement::NodeColumnSorted *columnSorted : constOrderBy )
     {
       if ( !mSortBy.isEmpty() )
-        mSortBy += QLatin1String( "," );
+        mSortBy += QLatin1Char( ',' );
       mSortBy += columnSorted->column()->name();
       if ( !columnSorted->ascending() )
       {
@@ -230,7 +231,7 @@ QgsRectangle QgsWFSSharedData::getExtentFromSingleFeatureRequest() const
   return request.getExtent();
 }
 
-int QgsWFSSharedData::getFeatureCountFromServer() const
+long long QgsWFSSharedData::getFeatureCountFromServer() const
 {
   QgsWFSFeatureHitsRequest request( mURI );
   return request.getFeatureCount( mWFSVersion, mWFSFilter, mCaps );
@@ -244,7 +245,7 @@ QgsWFSFeatureHitsRequest::QgsWFSFeatureHitsRequest( const QgsWFSDataSourceURI &u
 {
 }
 
-int QgsWFSFeatureHitsRequest::getFeatureCount( const QString &WFSVersion,
+long long QgsWFSFeatureHitsRequest::getFeatureCount( const QString &WFSVersion,
     const QString &filter, const QgsWfsCapabilities::Capabilities &caps )
 {
   QString typeName = mUri.typeName();
@@ -256,14 +257,22 @@ int QgsWFSFeatureHitsRequest::getFeatureCount( const QString &WFSVersion,
   {
     query.addQueryItem( QStringLiteral( "TYPENAMES" ), typeName );
   }
-  query.addQueryItem( QStringLiteral( "TYPENAME" ), typeName );
+  else
+  {
+    query.addQueryItem( QStringLiteral( "TYPENAME" ), typeName );
+  }
 
   QString namespaceValue( caps.getNamespaceParameterValue( WFSVersion, typeName ) );
   if ( !namespaceValue.isEmpty() )
   {
     if ( WFSVersion.startsWith( QLatin1String( "2.0" ) ) )
+    {
       query.addQueryItem( QStringLiteral( "NAMESPACES" ), namespaceValue );
-    query.addQueryItem( QStringLiteral( "NAMESPACE" ), namespaceValue );
+    }
+    else
+    {
+      query.addQueryItem( QStringLiteral( "NAMESPACE" ), namespaceValue );
+    }
   }
 
   if ( !filter.isEmpty() )
@@ -296,7 +305,7 @@ int QgsWFSFeatureHitsRequest::getFeatureCount( const QString &WFSVersion,
   if ( !numberOfFeatures.isEmpty() )
   {
     bool isValid;
-    int ret = numberOfFeatures.toInt( &isValid );
+    long long ret = numberOfFeatures.toLongLong( &isValid );
     if ( !isValid )
       return -1;
     return ret;
@@ -326,14 +335,16 @@ QgsRectangle QgsWFSSingleFeatureRequest::getExtent()
   query.addQueryItem( QStringLiteral( "VERSION" ),  mShared->mWFSVersion );
   if ( mShared->mWFSVersion .startsWith( QLatin1String( "2.0" ) ) )
     query.addQueryItem( QStringLiteral( "TYPENAMES" ), mUri.typeName() );
-  query.addQueryItem( QStringLiteral( "TYPENAME" ), mUri.typeName() );
+  else
+    query.addQueryItem( QStringLiteral( "TYPENAME" ), mUri.typeName() );
 
   QString namespaceValue( mShared->mCaps.getNamespaceParameterValue( mShared->mWFSVersion, mUri.typeName() ) );
   if ( !namespaceValue.isEmpty() )
   {
     if ( mShared->mWFSVersion.startsWith( QLatin1String( "2.0" ) ) )
       query.addQueryItem( QStringLiteral( "NAMESPACES" ), namespaceValue );
-    query.addQueryItem( QStringLiteral( "NAMESPACE" ), namespaceValue );
+    else
+      query.addQueryItem( QStringLiteral( "NAMESPACE" ), namespaceValue );
   }
 
   if ( mShared->mWFSVersion .startsWith( QLatin1String( "2.0" ) ) )

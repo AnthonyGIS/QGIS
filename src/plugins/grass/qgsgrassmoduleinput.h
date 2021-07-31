@@ -247,7 +247,7 @@ class QgsGrassModuleInput : public QgsGrassModuleGroupBoxItem
     //! Returns list of options which will be passed to module
     QStringList options() override;
 
-    // ! Return vector of attribute fields of current vector
+    //! Return vector of attribute fields of current vector
     QgsFields currentFields();
 
     //! Returns pointer to currently selected layer or null
@@ -349,9 +349,6 @@ class QgsGrassModuleInput : public QgsGrassModuleGroupBoxItem
 
     //! Uses region
     bool mUsesRegion;
-
-    //! Required field
-    bool mRequired;
 
     QgsGrassModuleInput( const QgsGrassModuleInput & ) = delete;
     QgsGrassModuleInput &operator = ( const QgsGrassModuleInput & ) = delete;

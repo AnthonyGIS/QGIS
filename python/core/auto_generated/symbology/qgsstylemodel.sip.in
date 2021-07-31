@@ -9,12 +9,13 @@
 
 
 
+
 class QgsStyleModel: QAbstractItemModel
 {
-%Docstring
+%Docstring(signature="appended")
 
 A QAbstractItemModel subclass for showing symbol and color ramp entities contained
-within a QgsStyle database.
+within a :py:class:`QgsStyle` database.
 
 If you are creating a style model for the default application style (see :py:func:`QgsStyle.defaultStyle()`),
 consider using the shared style model available at :py:func:`QgsApplication.defaultStyleModel()` for performance
@@ -43,6 +44,7 @@ instead.
       SymbolTypeRole,
       IsFavoriteRole,
       LayerTypeRole,
+      CompatibleGeometryTypesRole,
     };
 
     explicit QgsStyleModel( QgsStyle *style, QObject *parent /TransferThis/ = 0 );
@@ -84,13 +86,14 @@ This allows style icons to be generated at an icon size which
 corresponds exactly to the view's icon size in which this model is used.
 %End
 
+
 };
 
 class QgsStyleProxyModel: QSortFilterProxyModel
 {
-%Docstring
+%Docstring(signature="appended")
 
-A QSortFilterProxyModel subclass for showing filtered symbol and color ramps entries from a QgsStyle database.
+A QSortFilterProxyModel subclass for showing filtered symbol and color ramps entries from a :py:class:`QgsStyle` database.
 
 .. seealso:: :py:class:`QgsStyleModel`
 
@@ -167,27 +170,27 @@ effect on the model filtering.
 .. seealso:: :py:func:`setEntityFilter`
 %End
 
-    QgsSymbol::SymbolType symbolType() const;
+    Qgis::SymbolType symbolType() const;
 %Docstring
 Returns the symbol type filter.
 
 .. note::
 
-   This filter is only active if :py:func:`~QgsStyleProxyModel.symbolTypeFilterEnabled` is ``True``, and has
+   This filter is only active if Qgis.SymbolTypeFilterEnabled() is ``True``, and has
    no effect on non-symbol entities (i.e. color ramps).
 
 .. seealso:: :py:func:`setSymbolType`
 %End
 
-    void setSymbolType( QgsSymbol::SymbolType type );
+    void setSymbolType( Qgis::SymbolType type );
 %Docstring
 Sets the symbol ``type`` filter.
 
 .. note::
 
-   This filter is only active if :py:func:`~QgsStyleProxyModel.symbolTypeFilterEnabled` is ``True``.
+   This filter is only active if Qgis.SymbolTypeFilterEnabled() is ``True``.
 
-.. seealso:: :py:func:`symbolType`
+.. seealso:: Qgis.SymbolType
 %End
 
     bool symbolTypeFilterEnabled() const;
@@ -196,35 +199,35 @@ Returns ``True`` if filtering by symbol type is enabled.
 
 .. seealso:: :py:func:`setSymbolTypeFilterEnabled`
 
-.. seealso:: :py:func:`symbolType`
+.. seealso:: Qgis.SymbolType
 %End
 
     void setSymbolTypeFilterEnabled( bool enabled );
 %Docstring
 Sets whether filtering by symbol type is ``enabled``.
 
-If ``enabled`` is ``False``, then the value of :py:func:`~QgsStyleProxyModel.symbolType` will have no
+If ``enabled`` is ``False``, then the value of Qgis.SymbolType() will have no
 effect on the model filtering. This has
 no effect on non-symbol entities (i.e. color ramps).
 
-.. seealso:: :py:func:`symbolTypeFilterEnabled`
+.. seealso:: Qgis.SymbolTypeFilterEnabled
 
 .. seealso:: :py:func:`setSymbolType`
 %End
 
     QgsWkbTypes::GeometryType layerType() const;
 %Docstring
-Returns the layer type filter, or QgsWkbTypes.UnknownGeometry if no
+Returns the layer type filter, or :py:class:`QgsWkbTypes`.UnknownGeometry if no
 layer type filter is present.
 
-This setting has no effect on non-label settings entities (i.e. color ramps).
+This setting has an effect on label settings entities and 3d symbols only.
 
 .. seealso:: :py:func:`setLayerType`
 %End
 
     void setLayerType( QgsWkbTypes::GeometryType type );
 %Docstring
-Sets the layer ``type`` filter. Set ``type`` to QgsWkbTypes.UnknownGeometry if no
+Sets the layer ``type`` filter. Set ``type`` to :py:class:`QgsWkbTypes`.UnknownGeometry if no
 layer type filter is desired.
 
 .. seealso:: :py:func:`layerType`

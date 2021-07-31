@@ -39,7 +39,7 @@ class QgsVectorLayer;
 
 /**
  * \ingroup gui
- * Manages an editor widget
+ * \brief Manages an editor widget
  * Widget and wrapper share the same parent
  *
  * A wrapper controls one attribute editor widget and is able to create a default
@@ -247,7 +247,7 @@ class GUI_EXPORT QgsWidgetWrapper : public QObject
   public slots:
 
     /**
-     * Is called, when the value of the widget needs to be changed. Update the widget representation
+     * Is called when the value of the widget needs to be changed. Updates the widget representation
      * to reflect the new value.
      *
      * \param feature The new feature

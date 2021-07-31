@@ -41,31 +41,40 @@
 #include "qgsproviderregistry.h"
 #include "qgsprovidermetadata.h"
 #include "qgsmaplayerstylemanager.h"
+#include "qgsjsonutils.h"
 
 #include <QDir>
 #include <QDomDocument>
 #include <QDomNode>
 #include <QFile>
-#include <QMessageBox>
+#include <QRegularExpression>
 
 #include <ogr_srs_api.h>
 
 extern "C"
 {
 #include <sqlite3.h>
+}
+
+#ifdef HAVE_SPATIALITE
+extern "C"
+{
 #include <spatialite.h>
 }
+#endif
 
 #define CUSTOM_PROPERTY_IS_OFFLINE_EDITABLE "isOfflineEditable"
 #define CUSTOM_PROPERTY_REMOTE_SOURCE "remoteSource"
 #define CUSTOM_PROPERTY_REMOTE_PROVIDER "remoteProvider"
 #define CUSTOM_SHOW_FEATURE_COUNT "showFeatureCount"
+#define CUSTOM_PROPERTY_ORIGINAL_LAYERID "remoteLayerId"
+#define CUSTOM_PROPERTY_LAYERNAME_SUFFIX "layerNameSuffix"
 #define PROJECT_ENTRY_SCOPE_OFFLINE "OfflineEditingPlugin"
 #define PROJECT_ENTRY_KEY_OFFLINE_DB_PATH "/OfflineDbPath"
 
 QgsOfflineEditing::QgsOfflineEditing()
 {
-  connect( QgsProject::instance(), &QgsProject::layerWasAdded, this, &QgsOfflineEditing::layerAdded );
+  connect( QgsProject::instance(), &QgsProject::layerWasAdded, this, &QgsOfflineEditing::setupLayer );
 }
 
 /**
@@ -74,17 +83,13 @@ QgsOfflineEditing::QgsOfflineEditing()
  *
  * Workflow:
  *
- * - copy layers to SpatiaLite
- * - create SpatiaLite db at offlineDataPath
- * - create table for each layer
- * - add new SpatiaLite layer
- * - copy features
- * - save as offline project
- * - mark offline layers
- * - remove remote layers
- * - mark as offline project
+ * - create a sqlite database at offlineDataPath
+ * - copy layers to Geopackage or SpatiaLite offline layers in the above-created database
+ * - replace remote layers' data source with offline layers from the database
+ * - mark those layers as offline
+ * - mark project as offline
  */
-bool QgsOfflineEditing::convertToOfflineProject( const QString &offlineDataPath, const QString &offlineDbFile, const QStringList &layerIds, bool onlySelected, ContainerType containerType )
+bool QgsOfflineEditing::convertToOfflineProject( const QString &offlineDataPath, const QString &offlineDbFile, const QStringList &layerIds, bool onlySelected, ContainerType containerType, const QString &layerNameSuffix )
 {
   if ( layerIds.isEmpty() )
   {
@@ -107,38 +112,6 @@ bool QgsOfflineEditing::convertToOfflineProject( const QString &offlineDataPath,
 
       emit progressStarted();
 
-      QMap<QString, QgsVectorJoinList > joinInfoBuffer;
-      QMap<QString, QgsVectorLayer *> layerIdMapping;
-
-      for ( const QString &layerId : layerIds )
-      {
-        QgsMapLayer *layer = QgsProject::instance()->mapLayer( layerId );
-        QgsVectorLayer *vl = qobject_cast<QgsVectorLayer *>( layer );
-        if ( !vl )
-          continue;
-        QgsVectorJoinList joins = vl->vectorJoins();
-
-        // Layer names will be appended an _offline suffix
-        // Join fields are prefixed with the layer name and we do not want the
-        // field name to change so we stabilize the field name by defining a
-        // custom prefix with the layername without _offline suffix.
-        QgsVectorJoinList::iterator joinIt = joins.begin();
-        while ( joinIt != joins.end() )
-        {
-          if ( joinIt->prefix().isNull() )
-          {
-            QgsVectorLayer *vl = joinIt->joinLayer();
-
-            if ( vl )
-              joinIt->setPrefix( vl->name() + '_' );
-          }
-          ++joinIt;
-        }
-        joinInfoBuffer.insert( vl->id(), joins );
-      }
-
-      QgsSnappingConfig snappingConfig = QgsProject::instance()->snappingConfig();
-
       // copy selected vector layers to offline layer
       for ( int i = 0; i < layerIds.count(); i++ )
       {
@@ -146,45 +119,10 @@ bool QgsOfflineEditing::convertToOfflineProject( const QString &offlineDataPath,
 
         QgsMapLayer *layer = QgsProject::instance()->mapLayer( layerIds.at( i ) );
         QgsVectorLayer *vl = qobject_cast<QgsVectorLayer *>( layer );
-        if ( vl )
+        if ( vl && vl->isValid() )
         {
           QString origLayerId = vl->id();
-          QgsVectorLayer *newLayer = copyVectorLayer( vl, database.get(), dbPath, onlySelected, containerType );
-          if ( newLayer )
-          {
-            layerIdMapping.insert( origLayerId, newLayer );
-            //append individual layer setting on snapping settings
-            snappingConfig.setIndividualLayerSettings( newLayer, snappingConfig.individualLayerSettings( vl ) );
-            snappingConfig.removeLayers( QList<QgsMapLayer *>() << vl );
-
-            // remove remote layer
-            QgsProject::instance()->removeMapLayers(
-              QStringList() << origLayerId );
-          }
-        }
-      }
-
-      QgsProject::instance()->setSnappingConfig( snappingConfig );
-
-      // restore join info on new offline layer
-      QMap<QString, QgsVectorJoinList >::ConstIterator it;
-      for ( it = joinInfoBuffer.constBegin(); it != joinInfoBuffer.constEnd(); ++it )
-      {
-        QgsVectorLayer *newLayer = layerIdMapping.value( it.key() );
-
-        if ( newLayer )
-        {
-          const QList<QgsVectorLayerJoinInfo> joins = it.value();
-          for ( QgsVectorLayerJoinInfo join : joins )
-          {
-            QgsVectorLayer *newJoinedLayer = layerIdMapping.value( join.joinLayerId() );
-            if ( newJoinedLayer )
-            {
-              // If the layer has been offline'd, update join information
-              join.setJoinLayer( newJoinedLayer );
-            }
-            newLayer->addJoin( join );
-          }
+          convertToOfflineLayer( vl, database.get(), dbPath, onlySelected, containerType, layerNameSuffix );
         }
       }
 
@@ -198,7 +136,6 @@ bool QgsOfflineEditing::convertToOfflineProject( const QString &offlineDataPath,
       }
       projectTitle += QLatin1String( " (offline)" );
       QgsProject::instance()->setTitle( projectTitle );
-
       QgsProject::instance()->writeEntry( PROJECT_ENTRY_SCOPE_OFFLINE, PROJECT_ENTRY_KEY_OFFLINE_DB_PATH, QgsProject::instance()->writePath( dbPath ) );
 
       return true;
@@ -232,8 +169,15 @@ void QgsOfflineEditing::synchronize()
   for ( QMap<QString, QgsMapLayer *>::iterator layer_it = mapLayers.begin() ; layer_it != mapLayers.end(); ++layer_it )
   {
     QgsMapLayer *layer = layer_it.value();
+
     if ( layer->customProperty( CUSTOM_PROPERTY_IS_OFFLINE_EDITABLE, false ).toBool() )
     {
+      if ( !layer->isValid() )
+      {
+        QgsDebugMsgLevel( QStringLiteral( "Skipping offline layer %1 because it is an invalid layer" ).arg( layer->id() ), 4 );
+        continue;
+      }
+
       offlineLayers << layer;
     }
   }
@@ -248,9 +192,12 @@ void QgsOfflineEditing::synchronize()
     QString remoteSource = layer->customProperty( CUSTOM_PROPERTY_REMOTE_SOURCE, "" ).toString();
     QString remoteProvider = layer->customProperty( CUSTOM_PROPERTY_REMOTE_PROVIDER, "" ).toString();
     QString remoteName = layer->name();
-    remoteName.remove( QRegExp( " \\(offline\\)$" ) );
+    QString remoteNameSuffix = layer->customProperty( CUSTOM_PROPERTY_LAYERNAME_SUFFIX, " (offline)" ).toString();
+    if ( remoteName.endsWith( remoteNameSuffix ) )
+      remoteName.chop( remoteNameSuffix.size() );
     const QgsVectorLayer::LayerOptions options { QgsProject::instance()->transformContext() };
-    QgsVectorLayer *remoteLayer = new QgsVectorLayer( remoteSource, remoteName, remoteProvider, options );
+
+    std::unique_ptr<QgsVectorLayer> remoteLayer = std::make_unique<QgsVectorLayer>( remoteSource, remoteName, remoteProvider, options );
     if ( remoteLayer->isValid() )
     {
       // Rebuild WFS cache to get feature id<->GML fid mapping
@@ -265,105 +212,115 @@ void QgsOfflineEditing::synchronize()
       // TODO: only add remote layer if there are log entries?
 
       QgsVectorLayer *offlineLayer = qobject_cast<QgsVectorLayer *>( layer );
-
-      // register this layer with the central layers registry
-      QgsProject::instance()->addMapLayers( QList<QgsMapLayer *>() << remoteLayer, true );
-
-      // copy style
-      copySymbology( offlineLayer, remoteLayer );
-      updateRelations( offlineLayer, remoteLayer );
-      updateMapThemes( offlineLayer, remoteLayer );
-      updateLayerOrder( offlineLayer, remoteLayer );
-
-      //append individual layer setting on snapping settings
-      snappingConfig.setIndividualLayerSettings( remoteLayer, snappingConfig.individualLayerSettings( offlineLayer ) );
-      snappingConfig.removeLayers( QList<QgsMapLayer *>() << offlineLayer );
-
-      //set QgsLayerTreeNode properties back
-      QgsLayerTreeLayer *layerTreeLayer = QgsProject::instance()->layerTreeRoot()->findLayer( offlineLayer->id() );
-      QgsLayerTreeLayer *newLayerTreeLayer = QgsProject::instance()->layerTreeRoot()->findLayer( remoteLayer->id() );
-      newLayerTreeLayer->setCustomProperty( CUSTOM_SHOW_FEATURE_COUNT, layerTreeLayer->customProperty( CUSTOM_SHOW_FEATURE_COUNT ) );
-
-      // apply layer edit log
-      QString qgisLayerId = layer->id();
-      QString sql = QStringLiteral( "SELECT \"id\" FROM 'log_layer_ids' WHERE \"qgis_id\" = '%1'" ).arg( qgisLayerId );
-      int layerId = sqlQueryInt( database.get(), sql, -1 );
-      if ( layerId != -1 )
+      if ( offlineLayer->isValid() )
       {
-        remoteLayer->startEditing();
-
-        // TODO: only get commitNos of this layer?
-        int commitNo = getCommitNo( database.get() );
-        QgsDebugMsgLevel( QStringLiteral( "Found %1 commits" ).arg( commitNo ), 4 );
-        for ( int i = 0; i < commitNo; i++ )
+        // apply layer edit log
+        QString qgisLayerId = layer->id();
+        QString sql = QStringLiteral( "SELECT \"id\" FROM 'log_layer_ids' WHERE \"qgis_id\" = '%1'" ).arg( qgisLayerId );
+        int layerId = sqlQueryInt( database.get(), sql, -1 );
+        if ( layerId != -1 )
         {
-          QgsDebugMsgLevel( QStringLiteral( "Apply commits chronologically" ), 4 );
-          // apply commits chronologically
-          applyAttributesAdded( remoteLayer, database.get(), layerId, i );
-          applyAttributeValueChanges( offlineLayer, remoteLayer, database.get(), layerId, i );
-          applyGeometryChanges( remoteLayer, database.get(), layerId, i );
-        }
+          remoteLayer->startEditing();
 
-        applyFeaturesAdded( offlineLayer, remoteLayer, database.get(), layerId );
-        applyFeaturesRemoved( remoteLayer, database.get(), layerId );
+          // TODO: only get commitNos of this layer?
+          int commitNo = getCommitNo( database.get() );
+          QgsDebugMsgLevel( QStringLiteral( "Found %1 commits" ).arg( commitNo ), 4 );
+          for ( int i = 0; i < commitNo; i++ )
+          {
+            QgsDebugMsgLevel( QStringLiteral( "Apply commits chronologically" ), 4 );
+            // apply commits chronologically
+            applyAttributesAdded( remoteLayer.get(), database.get(), layerId, i );
+            applyAttributeValueChanges( offlineLayer, remoteLayer.get(), database.get(), layerId, i );
+            applyGeometryChanges( remoteLayer.get(), database.get(), layerId, i );
+          }
 
-        if ( remoteLayer->commitChanges() )
-        {
-          // update fid lookup
-          updateFidLookup( remoteLayer, database.get(), layerId );
+          applyFeaturesAdded( offlineLayer, remoteLayer.get(), database.get(), layerId );
+          applyFeaturesRemoved( remoteLayer.get(), database.get(), layerId );
 
-          // clear edit log for this layer
-          sql = QStringLiteral( "DELETE FROM 'log_added_attrs' WHERE \"layer_id\" = %1" ).arg( layerId );
-          sqlExec( database.get(), sql );
-          sql = QStringLiteral( "DELETE FROM 'log_added_features' WHERE \"layer_id\" = %1" ).arg( layerId );
-          sqlExec( database.get(), sql );
-          sql = QStringLiteral( "DELETE FROM 'log_removed_features' WHERE \"layer_id\" = %1" ).arg( layerId );
-          sqlExec( database.get(), sql );
-          sql = QStringLiteral( "DELETE FROM 'log_feature_updates' WHERE \"layer_id\" = %1" ).arg( layerId );
-          sqlExec( database.get(), sql );
-          sql = QStringLiteral( "DELETE FROM 'log_geometry_updates' WHERE \"layer_id\" = %1" ).arg( layerId );
-          sqlExec( database.get(), sql );
+          if ( remoteLayer->commitChanges() )
+          {
+            // update fid lookup
+            updateFidLookup( remoteLayer.get(), database.get(), layerId );
+
+            // clear edit log for this layer
+            sql = QStringLiteral( "DELETE FROM 'log_added_attrs' WHERE \"layer_id\" = %1" ).arg( layerId );
+            sqlExec( database.get(), sql );
+            sql = QStringLiteral( "DELETE FROM 'log_added_features' WHERE \"layer_id\" = %1" ).arg( layerId );
+            sqlExec( database.get(), sql );
+            sql = QStringLiteral( "DELETE FROM 'log_removed_features' WHERE \"layer_id\" = %1" ).arg( layerId );
+            sqlExec( database.get(), sql );
+            sql = QStringLiteral( "DELETE FROM 'log_feature_updates' WHERE \"layer_id\" = %1" ).arg( layerId );
+            sqlExec( database.get(), sql );
+            sql = QStringLiteral( "DELETE FROM 'log_geometry_updates' WHERE \"layer_id\" = %1" ).arg( layerId );
+            sqlExec( database.get(), sql );
+          }
+          else
+          {
+            showWarning( remoteLayer->commitErrors().join( QLatin1Char( '\n' ) ) );
+          }
         }
         else
         {
-          showWarning( remoteLayer->commitErrors().join( QStringLiteral( "\n" ) ) );
+          QgsDebugMsg( QStringLiteral( "Could not find the layer id in the edit logs!" ) );
+        }
+        // Invalidate the connection to force a reload if the project is put offline
+        // again with the same path
+        offlineLayer->dataProvider()->invalidateConnections( QgsDataSourceUri( offlineLayer->source() ).database() );
+
+        remoteLayer->reload(); //update with other changes
+        offlineLayer->setDataSource( remoteLayer->source(), remoteLayer->name(), remoteLayer->dataProvider()->name() );
+
+
+        // remove offline layer properties
+        layer->removeCustomProperty( CUSTOM_PROPERTY_IS_OFFLINE_EDITABLE );
+
+        // remove original layer source and information
+        layer->removeCustomProperty( CUSTOM_PROPERTY_REMOTE_SOURCE );
+        layer->removeCustomProperty( CUSTOM_PROPERTY_REMOTE_PROVIDER );
+        layer->removeCustomProperty( CUSTOM_PROPERTY_ORIGINAL_LAYERID );
+        layer->removeCustomProperty( CUSTOM_PROPERTY_LAYERNAME_SUFFIX );
+
+        // remove connected signals
+        disconnect( layer, &QgsVectorLayer::editingStarted, this, &QgsOfflineEditing::startListenFeatureChanges );
+        disconnect( layer, &QgsVectorLayer::editingStopped, this, &QgsOfflineEditing::stopListenFeatureChanges );
+
+        //add constrainst of fields that use defaultValueClauses from provider on original
+        const auto fields = remoteLayer->fields();
+        for ( const QgsField &field : fields )
+        {
+          if ( !remoteLayer->dataProvider()->defaultValueClause( remoteLayer->fields().fieldOriginIndex( remoteLayer->fields().indexOf( field.name() ) ) ).isEmpty() )
+          {
+            offlineLayer->setFieldConstraint( offlineLayer->fields().indexOf( field.name() ), QgsFieldConstraints::ConstraintNotNull );
+          }
         }
       }
       else
       {
-        QgsDebugMsg( QStringLiteral( "Could not find the layer id in the edit logs!" ) );
+        QgsDebugMsg( QStringLiteral( "Offline layer %1 is not valid!" ).arg( offlineLayer->id() ) );
       }
-      // Invalidate the connection to force a reload if the project is put offline
-      // again with the same path
-      offlineLayer->dataProvider()->invalidateConnections( QgsDataSourceUri( offlineLayer->source() ).database() );
-      // remove offline layer
-      QgsProject::instance()->removeMapLayers( QStringList() << qgisLayerId );
-
-
-      // disable offline project
-      QString projectTitle = QgsProject::instance()->title();
-      projectTitle.remove( QRegExp( " \\(offline\\)$" ) );
-      QgsProject::instance()->setTitle( projectTitle );
-      QgsProject::instance()->removeEntry( PROJECT_ENTRY_SCOPE_OFFLINE, PROJECT_ENTRY_KEY_OFFLINE_DB_PATH );
-      remoteLayer->reload(); //update with other changes
     }
     else
     {
-      QgsDebugMsg( QStringLiteral( "Remote layer is not valid!" ) );
+      QgsDebugMsg( QStringLiteral( "Remote layer %1 is not valid!" ).arg( remoteLayer->id() ) );
     }
   }
+
+  // disable offline project
+  QString projectTitle = QgsProject::instance()->title();
+  projectTitle.remove( QRegularExpression( " \\(offline\\)$" ) );
+  QgsProject::instance()->setTitle( projectTitle );
+  QgsProject::instance()->removeEntry( PROJECT_ENTRY_SCOPE_OFFLINE, PROJECT_ENTRY_KEY_OFFLINE_DB_PATH );
 
   // reset commitNo
   QString sql = QStringLiteral( "UPDATE 'log_indices' SET 'last_index' = 0 WHERE \"name\" = 'commit_no'" );
   sqlExec( database.get(), sql );
-
-  QgsProject::instance()->setSnappingConfig( snappingConfig );
 
   emit progressStopped();
 }
 
 void QgsOfflineEditing::initializeSpatialMetadata( sqlite3 *sqlite_handle )
 {
+#ifdef HAVE_SPATIALITE
   // attempting to perform self-initialization for a newly created DB
   if ( !sqlite_handle )
     return;
@@ -390,10 +347,18 @@ void QgsOfflineEditing::initializeSpatialMetadata( sqlite3 *sqlite_handle )
   if ( ret == SQLITE_OK && rows == 1 && columns == 1 )
   {
     QString version = QString::fromUtf8( results[1] );
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
     QStringList parts = version.split( ' ', QString::SkipEmptyParts );
+#else
+    QStringList parts = version.split( ' ', Qt::SkipEmptyParts );
+#endif
     if ( !parts.empty() )
     {
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 0)
       QStringList verparts = parts.at( 0 ).split( '.', QString::SkipEmptyParts );
+#else
+      QStringList verparts = parts.at( 0 ).split( '.', Qt::SkipEmptyParts );
+#endif
       above41 = verparts.size() >= 2 && ( verparts.at( 0 ).toInt() > 4 || ( verparts.at( 0 ).toInt() == 4 && verparts.at( 1 ).toInt() >= 1 ) );
     }
   }
@@ -413,6 +378,9 @@ void QgsOfflineEditing::initializeSpatialMetadata( sqlite3 *sqlite_handle )
     return;
   }
   spatial_ref_sys_init( sqlite_handle, 0 );
+#else
+  ( void )sqlite_handle;
+#endif
 }
 
 bool QgsOfflineEditing::createOfflineDb( const QString &offlineDbPath, ContainerType containerType )
@@ -530,21 +498,25 @@ void QgsOfflineEditing::createLoggingTables( sqlite3 *db )
   */
 }
 
-QgsVectorLayer *QgsOfflineEditing::copyVectorLayer( QgsVectorLayer *layer, sqlite3 *db, const QString &offlineDbPath, bool onlySelected, ContainerType containerType )
+void QgsOfflineEditing::convertToOfflineLayer( QgsVectorLayer *layer, sqlite3 *db, const QString &offlineDbPath, bool onlySelected, ContainerType containerType, const QString &layerNameSuffix )
 {
-  if ( !layer )
-    return nullptr;
+  if ( !layer || !layer->isValid() )
+  {
+    QgsDebugMsgLevel( QStringLiteral( "Layer %1 is invalid and cannot be copied" ).arg( layer ? layer->id() : QStringLiteral( "<UNKNOWN>" ) ), 4 );
+    return;
+  }
 
   QString tableName = layer->id();
   QgsDebugMsgLevel( QStringLiteral( "Creating offline table %1 ..." ).arg( tableName ), 4 );
 
   // new layer
-  QgsVectorLayer *newLayer = nullptr;
+  std::unique_ptr<QgsVectorLayer> newLayer;
 
   switch ( containerType )
   {
     case SpatiaLite:
     {
+#ifdef HAVE_SPATIALITE
       // create table
       QString sql = QStringLiteral( "CREATE TABLE '%1' (" ).arg( tableName );
       QString delim;
@@ -564,6 +536,11 @@ QgsVectorLayer *QgsOfflineEditing::copyVectorLayer( QgsVectorLayer *layer, sqlit
         else if ( type == QVariant::String )
         {
           dataType = QStringLiteral( "TEXT" );
+        }
+        else if ( type == QVariant::StringList  || type == QVariant::List )
+        {
+          dataType = QStringLiteral( "TEXT" );
+          showWarning( tr( "Field '%1' from layer %2 has been converted from a list to a string of comma-separated values." ).arg( field.name(), layer->name() ) );
         }
         else
         {
@@ -646,7 +623,7 @@ QgsVectorLayer *QgsOfflineEditing::copyVectorLayer( QgsVectorLayer *layer, sqlit
       if ( rc != SQLITE_OK )
       {
         showWarning( tr( "Filling SpatiaLite for layer %1 failed" ).arg( layer->name() ) );
-        return nullptr;
+        return;
       }
 
       // add new layer
@@ -654,10 +631,16 @@ QgsVectorLayer *QgsOfflineEditing::copyVectorLayer( QgsVectorLayer *layer, sqlit
                                  .arg( offlineDbPath,
                                        tableName, layer->isSpatial() ? "(Geometry)" : "" );
       QgsVectorLayer::LayerOptions options { QgsProject::instance()->transformContext() };
-      newLayer = new QgsVectorLayer( connectionString,
-                                     layer->name() + " (offline)", QStringLiteral( "spatialite" ), options );
+      newLayer = std::make_unique<QgsVectorLayer>( connectionString,
+                 layer->name() + layerNameSuffix, QStringLiteral( "spatialite" ), options );
       break;
+
+#else
+      showWarning( tr( "No Spatialite support available" ) );
+      return;
+#endif
     }
+
     case GPKG:
     {
       // Set options
@@ -679,7 +662,7 @@ QgsVectorLayer *QgsOfflineEditing::copyVectorLayer( QgsVectorLayer *layer, sqlit
       if ( counter == 10000 )
       {
         showWarning( tr( "Cannot make FID-name for GPKG " ) );
-        return nullptr;
+        return;
       }
 
       options = CSLSetNameValue( options, "FID", fid.toUtf8().constData() );
@@ -700,7 +683,7 @@ QgsVectorLayer *QgsOfflineEditing::copyVectorLayer( QgsVectorLayer *layer, sqlit
       if ( !hLayer )
       {
         showWarning( tr( "Creation of layer failed (OGR error: %1)" ).arg( QString::fromUtf8( CPLGetLastErrorMsg() ) ) );
-        return nullptr;
+        return;
       }
 
       const QgsFields providerFields = layer->dataProvider()->fields();
@@ -727,6 +710,12 @@ QgsVectorLayer *QgsOfflineEditing::copyVectorLayer( QgsVectorLayer *layer, sqlit
           ogrType = OFTInteger;
           ogrSubType = OFSTBoolean;
         }
+        else if ( type == QVariant::StringList || type == QVariant::List )
+        {
+          ogrType = OFTString;
+          ogrSubType = OFSTJSON;
+          showWarning( tr( "Field '%1' from layer %2 has been converted from a list to a JSON-formatted string value." ).arg( fieldName, layer->name() ) );
+        }
         else
           ogrType = OFTString;
 
@@ -741,7 +730,7 @@ QgsVectorLayer *QgsOfflineEditing::copyVectorLayer( QgsVectorLayer *layer, sqlit
         {
           showWarning( tr( "Creation of field %1 failed (OGR error: %2)" )
                        .arg( fieldName, QString::fromUtf8( CPLGetLastErrorMsg() ) ) );
-          return nullptr;
+          return;
         }
       }
 
@@ -753,18 +742,18 @@ QgsVectorLayer *QgsOfflineEditing::copyVectorLayer( QgsVectorLayer *layer, sqlit
       {
         QString msg( tr( "Creation of layer failed (OGR error: %1)" ).arg( QString::fromUtf8( CPLGetLastErrorMsg() ) ) );
         showWarning( msg );
-        return nullptr;
+        return;
       }
       hDS.reset();
 
       QString uri = QStringLiteral( "%1|layername=%2" ).arg( offlineDbPath,  tableName );
       QgsVectorLayer::LayerOptions layerOptions { QgsProject::instance()->transformContext() };
-      newLayer = new QgsVectorLayer( uri, layer->name() + " (offline)", QStringLiteral( "ogr" ), layerOptions );
+      newLayer = std::make_unique<QgsVectorLayer>( uri, layer->name() + layerNameSuffix, QStringLiteral( "ogr" ), layerOptions );
       break;
     }
   }
 
-  if ( newLayer->isValid() )
+  if ( newLayer && newLayer->isValid() )
   {
 
     // copy features
@@ -790,7 +779,7 @@ QgsVectorLayer *QgsOfflineEditing::copyVectorLayer( QgsVectorLayer *layer, sqlit
     {
       emit progressModeSet( QgsOfflineEditing::CopyFeatures, layer->dataProvider()->featureCount() );
     }
-    int featureCount = 1;
+    long long featureCount = 1;
 
     QList<QgsFeatureId> remoteFeatureIds;
     while ( fit.nextFeature( f ) )
@@ -805,7 +794,12 @@ QgsVectorLayer *QgsOfflineEditing::copyVectorLayer( QgsVectorLayer *layer, sqlit
       QgsAttributes newAttrs( containerType == GPKG ? attrs.count() + 1 : attrs.count() );
       for ( int it = 0; it < attrs.count(); ++it )
       {
-        newAttrs[column++] = attrs.at( it );
+        QVariant attr = attrs.at( it );
+        if ( layer->fields().at( it ).type() == QVariant::StringList || layer->fields().at( it ).type() == QVariant::List )
+        {
+          attr = QgsJsonUtils::encodeValue( attr );
+        }
+        newAttrs[column++] = attr;
       }
       f.setAttributes( newAttrs );
 
@@ -819,7 +813,7 @@ QgsVectorLayer *QgsOfflineEditing::copyVectorLayer( QgsVectorLayer *layer, sqlit
       featureCount = 1;
 
       // update feature id lookup
-      int layerId = getOrCreateLayerId( db, newLayer->id() );
+      int layerId = getOrCreateLayerId( db, layer->id() );
       QList<QgsFeatureId> offlineFeatureIds;
 
       QgsFeatureIterator fit = newLayer->getFeatures( QgsFeatureRequest().setFlags( QgsFeatureRequest::NoGeometry ).setNoAttributes() );
@@ -841,7 +835,7 @@ QgsVectorLayer *QgsOfflineEditing::copyVectorLayer( QgsVectorLayer *layer, sqlit
         else
         {
           showWarning( tr( "Feature cannot be copied to the offline layer, please check if the online layer '%1' is still accessible." ).arg( layer->name() ) );
-          return nullptr;
+          return;
         }
         emit progressUpdated( featureCount++ );
       }
@@ -849,73 +843,58 @@ QgsVectorLayer *QgsOfflineEditing::copyVectorLayer( QgsVectorLayer *layer, sqlit
     }
     else
     {
-      showWarning( newLayer->commitErrors().join( QStringLiteral( "\n" ) ) );
+      showWarning( newLayer->commitErrors().join( QLatin1Char( '\n' ) ) );
     }
 
-    // copy the custom properties from original layer
-    newLayer->setCustomProperties( layer->customProperties() );
-
     // mark as offline layer
-    newLayer->setCustomProperty( CUSTOM_PROPERTY_IS_OFFLINE_EDITABLE, true );
+    layer->setCustomProperty( CUSTOM_PROPERTY_IS_OFFLINE_EDITABLE, true );
 
-    // store original layer source
-    newLayer->setCustomProperty( CUSTOM_PROPERTY_REMOTE_SOURCE, layer->source() );
-    newLayer->setCustomProperty( CUSTOM_PROPERTY_REMOTE_PROVIDER, layer->providerType() );
-
-    // register this layer with the central layers registry
-    QgsProject::instance()->addMapLayers(
-      QList<QgsMapLayer *>() << newLayer );
-
-    // copy style
-    copySymbology( layer, newLayer );
+    // store original layer source and information
+    layer->setCustomProperty( CUSTOM_PROPERTY_REMOTE_SOURCE, layer->source() );
+    layer->setCustomProperty( CUSTOM_PROPERTY_REMOTE_PROVIDER, layer->providerType() );
+    layer->setCustomProperty( CUSTOM_PROPERTY_ORIGINAL_LAYERID, layer->id() );
+    layer->setCustomProperty( CUSTOM_PROPERTY_LAYERNAME_SUFFIX, layerNameSuffix );
 
     //remove constrainst of fields that use defaultValueClauses from provider on original
-    const auto fields = layer->fields();
+    const QgsFields fields = layer->fields();
+    QStringList notNullFieldNames;
     for ( const QgsField &field : fields )
     {
       if ( !layer->dataProvider()->defaultValueClause( layer->fields().fieldOriginIndex( layer->fields().indexOf( field.name() ) ) ).isEmpty() )
       {
-        newLayer->removeFieldConstraint( newLayer->fields().indexOf( field.name() ), QgsFieldConstraints::ConstraintNotNull );
+        notNullFieldNames << field.name();
       }
     }
 
-    QgsLayerTreeGroup *layerTreeRoot = QgsProject::instance()->layerTreeRoot();
-    // Find the parent group of the original layer
-    QgsLayerTreeLayer *layerTreeLayer = layerTreeRoot->findLayer( layer->id() );
-    if ( layerTreeLayer )
+    layer->setDataSource( newLayer->source(), newLayer->name(), newLayer->dataProvider()->name() );
+
+    for ( const QgsField &field : fields ) //QString &fieldName : fieldsToRemoveConstraint )
     {
-      QgsLayerTreeGroup *parentTreeGroup = qobject_cast<QgsLayerTreeGroup *>( layerTreeLayer->parent() );
-      if ( parentTreeGroup )
+      const int index = layer->fields().indexOf( field.name() );
+      if ( index > -1 )
       {
-        int index = parentTreeGroup->children().indexOf( layerTreeLayer );
-        // Move the new layer from the root group to the new group
-        QgsLayerTreeLayer *newLayerTreeLayer = layerTreeRoot->findLayer( newLayer->id() );
-        if ( newLayerTreeLayer )
+        // restore unique value constraints coming from original data provider
+        if ( field.constraints().constraints() & QgsFieldConstraints::ConstraintUnique )
+          layer->setFieldConstraint( index, QgsFieldConstraints::ConstraintUnique );
+
+        // remove any undesired not null constraints coming from original data provider
+        if ( notNullFieldNames.contains( field.name() ) )
         {
-          QgsLayerTreeNode *newLayerTreeLayerClone = newLayerTreeLayer->clone();
-          //copy the showFeatureCount property to the new node
-          newLayerTreeLayerClone->setCustomProperty( CUSTOM_SHOW_FEATURE_COUNT, layerTreeLayer->customProperty( CUSTOM_SHOW_FEATURE_COUNT ) );
-          newLayerTreeLayerClone->setItemVisibilityChecked( layerTreeLayer->isVisible() );
-          QgsLayerTreeGroup *grp = qobject_cast<QgsLayerTreeGroup *>( newLayerTreeLayer->parent() );
-          parentTreeGroup->insertChildNode( index, newLayerTreeLayerClone );
-          if ( grp )
-            grp->removeChildNode( newLayerTreeLayer );
+          notNullFieldNames.removeAll( field.name() );
+          layer->removeFieldConstraint( index, QgsFieldConstraints::ConstraintNotNull );
         }
       }
     }
 
-    updateRelations( layer, newLayer );
-    updateMapThemes( layer, newLayer );
-    updateLayerOrder( layer, newLayer );
-
-
-
+    setupLayer( layer );
   }
-  return newLayer;
+  return;
 }
 
 void QgsOfflineEditing::applyAttributesAdded( QgsVectorLayer *remoteLayer, sqlite3 *db, int layerId, int commitNo )
 {
+  Q_ASSERT( remoteLayer );
+
   QString sql = QStringLiteral( "SELECT \"name\", \"type\", \"length\", \"precision\", \"comment\" FROM 'log_added_attrs' WHERE \"layer_id\" = %1 AND \"commit_no\" = %2" ).arg( layerId ).arg( commitNo );
   QList<QgsField> fields = sqlQueryAttributesAdded( db, sql );
 
@@ -953,6 +932,9 @@ void QgsOfflineEditing::applyAttributesAdded( QgsVectorLayer *remoteLayer, sqlit
 
 void QgsOfflineEditing::applyFeaturesAdded( QgsVectorLayer *offlineLayer, QgsVectorLayer *remoteLayer, sqlite3 *db, int layerId )
 {
+  Q_ASSERT( offlineLayer );
+  Q_ASSERT( remoteLayer );
+
   QString sql = QStringLiteral( "SELECT \"fid\" FROM 'log_added_features' WHERE \"layer_id\" = %1" ).arg( layerId );
   const QList<int> featureIdInts = sqlQueryInts( db, sql );
   QgsFeatureIds newFeatureIds;
@@ -986,7 +968,31 @@ void QgsOfflineEditing::applyFeaturesAdded( QgsVectorLayer *offlineLayer, QgsVec
     QgsAttributes attrs = it->attributes();
     for ( int it = 0; it < attrs.count(); ++it )
     {
-      newAttrs[ attrLookup[ it ] ] = attrs.at( it );
+      int remoteAttributeIndex = attrLookup[ it ];
+      QVariant attr = attrs.at( it );
+      if ( remoteLayer->fields().at( remoteAttributeIndex ).type() == QVariant::StringList )
+      {
+        if ( attr.type() == QVariant::StringList || attr.type() == QVariant::List )
+        {
+          attr = attr.toStringList();
+        }
+        else
+        {
+          attr = QgsJsonUtils::parseArray( attr.toString(), QVariant::String );
+        }
+      }
+      else if ( remoteLayer->fields().at( remoteAttributeIndex ).type() == QVariant::List )
+      {
+        if ( attr.type() == QVariant::StringList || attr.type() == QVariant::List )
+        {
+          attr = attr.toList();
+        }
+        else
+        {
+          attr = QgsJsonUtils::parseArray( attr.toString(), remoteLayer->fields().at( remoteAttributeIndex ).subType() );
+        }
+      }
+      newAttrs[ remoteAttributeIndex ] = attr;
     }
 
     // respect constraints and provider default values
@@ -999,6 +1005,8 @@ void QgsOfflineEditing::applyFeaturesAdded( QgsVectorLayer *offlineLayer, QgsVec
 
 void QgsOfflineEditing::applyFeaturesRemoved( QgsVectorLayer *remoteLayer, sqlite3 *db, int layerId )
 {
+  Q_ASSERT( remoteLayer );
+
   QString sql = QStringLiteral( "SELECT \"fid\" FROM 'log_removed_features' WHERE \"layer_id\" = %1" ).arg( layerId );
   QgsFeatureIds values = sqlQueryFeaturesRemoved( db, sql );
 
@@ -1016,6 +1024,9 @@ void QgsOfflineEditing::applyFeaturesRemoved( QgsVectorLayer *remoteLayer, sqlit
 
 void QgsOfflineEditing::applyAttributeValueChanges( QgsVectorLayer *offlineLayer, QgsVectorLayer *remoteLayer, sqlite3 *db, int layerId, int commitNo )
 {
+  Q_ASSERT( offlineLayer );
+  Q_ASSERT( remoteLayer );
+
   QString sql = QStringLiteral( "SELECT \"fid\", \"attr\", \"value\" FROM 'log_feature_updates' WHERE \"layer_id\" = %1 AND \"commit_no\" = %2 " ).arg( layerId ).arg( commitNo );
   AttributeValueChanges values = sqlQueryAttributeValueChanges( db, sql );
 
@@ -1026,8 +1037,20 @@ void QgsOfflineEditing::applyAttributeValueChanges( QgsVectorLayer *offlineLayer
   for ( int i = 0; i < values.size(); i++ )
   {
     QgsFeatureId fid = remoteFid( db, layerId, values.at( i ).fid );
-    QgsDebugMsgLevel( QStringLiteral( "Offline changeAttributeValue %1 = %2" ).arg( QString( attrLookup[ values.at( i ).attr ] ), values.at( i ).value ), 4 );
-    remoteLayer->changeAttributeValue( fid, attrLookup[ values.at( i ).attr ], values.at( i ).value );
+    QgsDebugMsgLevel( QStringLiteral( "Offline changeAttributeValue %1 = %2" ).arg( attrLookup[ values.at( i ).attr ] ).arg( values.at( i ).value ), 4 );
+
+    int remoteAttributeIndex = attrLookup[ values.at( i ).attr ];
+    QVariant attr = values.at( i ).value;
+    if ( remoteLayer->fields().at( remoteAttributeIndex ).type() == QVariant::StringList )
+    {
+      attr = QgsJsonUtils::parseArray( attr.toString(), QVariant::String );
+    }
+    else if ( remoteLayer->fields().at( remoteAttributeIndex ).type() == QVariant::List )
+    {
+      attr = QgsJsonUtils::parseArray( attr.toString(), remoteLayer->fields().at( remoteAttributeIndex ).subType() );
+    }
+
+    remoteLayer->changeAttributeValue( fid, remoteAttributeIndex, attr );
 
     emit progressUpdated( i + 1 );
   }
@@ -1035,6 +1058,8 @@ void QgsOfflineEditing::applyAttributeValueChanges( QgsVectorLayer *offlineLayer
 
 void QgsOfflineEditing::applyGeometryChanges( QgsVectorLayer *remoteLayer, sqlite3 *db, int layerId, int commitNo )
 {
+  Q_ASSERT( remoteLayer );
+
   QString sql = QStringLiteral( "SELECT \"fid\", \"geom_wkt\" FROM 'log_geometry_updates' WHERE \"layer_id\" = %1 AND \"commit_no\" = %2" ).arg( layerId ).arg( commitNo );
   GeometryChanges values = sqlQueryGeometryChanges( db, sql );
 
@@ -1052,6 +1077,8 @@ void QgsOfflineEditing::applyGeometryChanges( QgsVectorLayer *remoteLayer, sqlit
 
 void QgsOfflineEditing::updateFidLookup( QgsVectorLayer *remoteLayer, sqlite3 *db, int layerId )
 {
+  Q_ASSERT( remoteLayer );
+
   // update fid lookup for added features
 
   // get remote added fids
@@ -1096,102 +1123,12 @@ void QgsOfflineEditing::updateFidLookup( QgsVectorLayer *remoteLayer, sqlite3 *d
   }
 }
 
-void QgsOfflineEditing::copySymbology( QgsVectorLayer *sourceLayer, QgsVectorLayer *targetLayer )
-{
-  targetLayer->styleManager()->copyStylesFrom( sourceLayer->styleManager() );
-
-  QString error;
-  QDomDocument doc;
-  QgsReadWriteContext context;
-  QgsMapLayer::StyleCategories categories = static_cast<QgsMapLayer::StyleCategories>( QgsMapLayer::AllStyleCategories ) & ~QgsMapLayer::CustomProperties;
-  sourceLayer->exportNamedStyle( doc, error, context, categories );
-
-  if ( error.isEmpty() )
-  {
-    targetLayer->importNamedStyle( doc, error, categories );
-  }
-  if ( !error.isEmpty() )
-  {
-    showWarning( error );
-  }
-}
-
-void QgsOfflineEditing::updateRelations( QgsVectorLayer *sourceLayer, QgsVectorLayer *targetLayer )
-{
-  QgsRelationManager *relationManager = QgsProject::instance()->relationManager();
-  const QList<QgsRelation> referencedRelations = relationManager->referencedRelations( sourceLayer );
-
-  for ( QgsRelation relation : referencedRelations )
-  {
-    relationManager->removeRelation( relation );
-    relation.setReferencedLayer( targetLayer->id() );
-    relationManager->addRelation( relation );
-  }
-
-  const QList<QgsRelation> referencingRelations = relationManager->referencingRelations( sourceLayer );
-
-  for ( QgsRelation relation : referencingRelations )
-  {
-    relationManager->removeRelation( relation );
-    relation.setReferencingLayer( targetLayer->id() );
-    relationManager->addRelation( relation );
-  }
-}
-
-void QgsOfflineEditing::updateMapThemes( QgsVectorLayer *sourceLayer, QgsVectorLayer *targetLayer )
-{
-  QgsMapThemeCollection *mapThemeCollection = QgsProject::instance()->mapThemeCollection();
-  const QStringList mapThemeNames = mapThemeCollection->mapThemes();
-
-  for ( const QString &mapThemeName : mapThemeNames )
-  {
-    QgsMapThemeCollection::MapThemeRecord record = mapThemeCollection->mapThemeState( mapThemeName );
-
-    const auto layerRecords = record.layerRecords();
-
-    for ( QgsMapThemeCollection::MapThemeLayerRecord layerRecord : layerRecords )
-    {
-      if ( layerRecord.layer() == sourceLayer )
-      {
-        layerRecord.setLayer( targetLayer );
-        record.removeLayerRecord( sourceLayer );
-        record.addLayerRecord( layerRecord );
-      }
-    }
-
-    QgsProject::instance()->mapThemeCollection()->update( mapThemeName, record );
-  }
-}
-
-void QgsOfflineEditing::updateLayerOrder( QgsVectorLayer *sourceLayer, QgsVectorLayer *targetLayer )
-{
-  QList<QgsMapLayer *>  layerOrder = QgsProject::instance()->layerTreeRoot()->customLayerOrder();
-
-  auto iterator = layerOrder.begin();
-
-  while ( iterator != layerOrder.end() )
-  {
-    if ( *iterator == targetLayer )
-    {
-      iterator = layerOrder.erase( iterator );
-      if ( iterator == layerOrder.end() )
-        break;
-    }
-
-    if ( *iterator == sourceLayer )
-    {
-      *iterator = targetLayer;
-    }
-
-    ++iterator;
-  }
-
-  QgsProject::instance()->layerTreeRoot()->setCustomLayerOrder( layerOrder );
-}
-
 // NOTE: use this to map column indices in case the remote geometry column is not last
 QMap<int, int> QgsOfflineEditing::attributeLookup( QgsVectorLayer *offlineLayer, QgsVectorLayer *remoteLayer )
 {
+  Q_ASSERT( offlineLayer );
+  Q_ASSERT( remoteLayer );
+
   const QgsAttributeList &offlineAttrs = offlineLayer->attributeList();
 
   QMap < int /*offline attr*/, int /*remote attr*/ > attrLookup;
@@ -1570,12 +1507,14 @@ void QgsOfflineEditing::committedAttributeValuesChanges( const QString &qgisLaye
     QgsAttributeMap attrMap = cit.value();
     for ( QgsAttributeMap::const_iterator it = attrMap.constBegin(); it != attrMap.constEnd(); ++it )
     {
+      QString value = it.value().type() == QVariant::StringList || it.value().type() == QVariant::List ? QgsJsonUtils::encodeValue( it.value() ) : it.value().toString();
+      value.replace( QLatin1String( "'" ), QLatin1String( "''" ) ); // escape quote
       QString sql = QStringLiteral( "INSERT INTO 'log_feature_updates' VALUES ( %1, %2, %3, %4, '%5' )" )
                     .arg( layerId )
                     .arg( commitNo )
                     .arg( fid )
-                    .arg( it.key() ) // attr
-                    .arg( it.value().toString() ); // value
+                    .arg( it.key() ) // attribute
+                    .arg( value );
       sqlExec( database.get(), sql );
     }
   }
@@ -1618,6 +1557,9 @@ void QgsOfflineEditing::committedGeometriesChanges( const QString &qgisLayerId, 
 void QgsOfflineEditing::startListenFeatureChanges()
 {
   QgsVectorLayer *vLayer = qobject_cast<QgsVectorLayer *>( sender() );
+
+  Q_ASSERT( vLayer );
+
   // enable logging, check if editBuffer is not null
   if ( vLayer->editBuffer() )
   {
@@ -1638,6 +1580,9 @@ void QgsOfflineEditing::startListenFeatureChanges()
 void QgsOfflineEditing::stopListenFeatureChanges()
 {
   QgsVectorLayer *vLayer = qobject_cast<QgsVectorLayer *>( sender() );
+
+  Q_ASSERT( vLayer );
+
   // disable logging, check if editBuffer is not null
   if ( vLayer->editBuffer() )
   {
@@ -1655,15 +1600,18 @@ void QgsOfflineEditing::stopListenFeatureChanges()
               this, &QgsOfflineEditing::committedFeaturesRemoved );
 }
 
-void QgsOfflineEditing::layerAdded( QgsMapLayer *layer )
+void QgsOfflineEditing::setupLayer( QgsMapLayer *layer )
 {
-  // detect offline layer
-  if ( layer->customProperty( CUSTOM_PROPERTY_IS_OFFLINE_EDITABLE, false ).toBool() )
+  Q_ASSERT( layer );
+
+  if ( QgsVectorLayer *vLayer = qobject_cast<QgsVectorLayer *>( layer ) )
   {
-    QgsVectorLayer *vLayer = qobject_cast<QgsVectorLayer *>( layer );
-    connect( vLayer, &QgsVectorLayer::editingStarted, this, &QgsOfflineEditing::startListenFeatureChanges );
-    connect( vLayer, &QgsVectorLayer::editingStopped, this, &QgsOfflineEditing::stopListenFeatureChanges );
+    // detect offline layer
+    if ( vLayer->customProperty( CUSTOM_PROPERTY_IS_OFFLINE_EDITABLE, false ).toBool() )
+    {
+      connect( vLayer, &QgsVectorLayer::editingStarted, this, &QgsOfflineEditing::startListenFeatureChanges );
+      connect( vLayer, &QgsVectorLayer::editingStopped, this, &QgsOfflineEditing::stopListenFeatureChanges );
+    }
   }
 }
-
 

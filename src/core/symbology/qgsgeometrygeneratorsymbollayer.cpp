@@ -15,12 +15,15 @@
 
 #include "qgsgeometrygeneratorsymbollayer.h"
 #include "qgsgeometry.h"
+#include "qgsmarkersymbol.h"
+#include "qgslinesymbol.h"
+#include "qgsfillsymbol.h"
 
 QgsGeometryGeneratorSymbolLayer::~QgsGeometryGeneratorSymbolLayer() = default;
 
-QgsSymbolLayer *QgsGeometryGeneratorSymbolLayer::create( const QgsStringMap &properties )
+QgsSymbolLayer *QgsGeometryGeneratorSymbolLayer::create( const QVariantMap &properties )
 {
-  QString expression = properties.value( QStringLiteral( "geometryModifier" ) );
+  QString expression = properties.value( QStringLiteral( "geometryModifier" ) ).toString();
   if ( expression.isEmpty() )
   {
     expression = QStringLiteral( "$geometry" );
@@ -45,9 +48,9 @@ QgsSymbolLayer *QgsGeometryGeneratorSymbolLayer::create( const QgsStringMap &pro
 }
 
 QgsGeometryGeneratorSymbolLayer::QgsGeometryGeneratorSymbolLayer( const QString &expression )
-  : QgsSymbolLayer( QgsSymbol::Hybrid )
+  : QgsSymbolLayer( Qgis::SymbolType::Hybrid )
   , mExpression( new QgsExpression( expression ) )
-  , mSymbolType( QgsSymbol::Marker )
+  , mSymbolType( Qgis::SymbolType::Marker )
 {
 
 }
@@ -57,24 +60,24 @@ QString QgsGeometryGeneratorSymbolLayer::layerType() const
   return QStringLiteral( "GeometryGenerator" );
 }
 
-void QgsGeometryGeneratorSymbolLayer::setSymbolType( QgsSymbol::SymbolType symbolType )
+void QgsGeometryGeneratorSymbolLayer::setSymbolType( Qgis::SymbolType symbolType )
 {
-  if ( symbolType == QgsSymbol::Fill )
+  if ( symbolType == Qgis::SymbolType::Fill )
   {
     if ( !mFillSymbol )
-      mFillSymbol.reset( QgsFillSymbol::createSimple( QgsStringMap() ) );
+      mFillSymbol.reset( QgsFillSymbol::createSimple( QVariantMap() ) );
     mSymbol = mFillSymbol.get();
   }
-  else if ( symbolType == QgsSymbol::Line )
+  else if ( symbolType == Qgis::SymbolType::Line )
   {
     if ( !mLineSymbol )
-      mLineSymbol.reset( QgsLineSymbol::createSimple( QgsStringMap() ) );
+      mLineSymbol.reset( QgsLineSymbol::createSimple( QVariantMap() ) );
     mSymbol = mLineSymbol.get();
   }
-  else if ( symbolType == QgsSymbol::Marker )
+  else if ( symbolType == Qgis::SymbolType::Marker )
   {
     if ( !mMarkerSymbol )
-      mMarkerSymbol.reset( QgsMarkerSymbol::createSimple( QgsStringMap() ) );
+      mMarkerSymbol.reset( QgsMarkerSymbol::createSimple( QVariantMap() ) );
     mSymbol = mMarkerSymbol.get();
   }
   else
@@ -107,6 +110,17 @@ void QgsGeometryGeneratorSymbolLayer::stopFeatureRender( const QgsFeature &, Qgs
   mRenderingFeature = false;
 }
 
+bool QgsGeometryGeneratorSymbolLayer::usesMapUnits() const
+{
+  if ( mFillSymbol )
+    return mFillSymbol->usesMapUnits();
+  else if ( mLineSymbol )
+    return mLineSymbol->usesMapUnits();
+  else if ( mMarkerSymbol )
+    return mMarkerSymbol->usesMapUnits();
+  return false;
+}
+
 QgsSymbolLayer *QgsGeometryGeneratorSymbolLayer::clone() const
 {
   QgsGeometryGeneratorSymbolLayer *clone = new QgsGeometryGeneratorSymbolLayer( mExpression->expression() );
@@ -126,16 +140,16 @@ QgsSymbolLayer *QgsGeometryGeneratorSymbolLayer::clone() const
   return clone;
 }
 
-QgsStringMap QgsGeometryGeneratorSymbolLayer::properties() const
+QVariantMap QgsGeometryGeneratorSymbolLayer::properties() const
 {
-  QgsStringMap props;
+  QVariantMap props;
   props.insert( QStringLiteral( "geometryModifier" ), mExpression->expression() );
   switch ( mSymbolType )
   {
-    case QgsSymbol::Marker:
+    case Qgis::SymbolType::Marker:
       props.insert( QStringLiteral( "SymbolType" ), QStringLiteral( "Marker" ) );
       break;
-    case QgsSymbol::Line:
+    case Qgis::SymbolType::Line:
       props.insert( QStringLiteral( "SymbolType" ), QStringLiteral( "Line" ) );
       break;
     default:
@@ -160,15 +174,15 @@ bool QgsGeometryGeneratorSymbolLayer::setSubSymbol( QgsSymbol *symbol )
 {
   switch ( symbol->type() )
   {
-    case QgsSymbol::Marker:
+    case Qgis::SymbolType::Marker:
       mMarkerSymbol.reset( static_cast<QgsMarkerSymbol *>( symbol ) );
       break;
 
-    case QgsSymbol::Line:
+    case Qgis::SymbolType::Line:
       mLineSymbol.reset( static_cast<QgsLineSymbol *>( symbol ) );
       break;
 
-    case QgsSymbol::Fill:
+    case Qgis::SymbolType::Fill:
       mFillSymbol.reset( static_cast<QgsFillSymbol *>( symbol ) );
       break;
 

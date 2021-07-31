@@ -10,7 +10,7 @@
 
 class QgsColorRamp
 {
-%Docstring
+%Docstring(signature="appended")
 Abstract base class for color ramps
 
 .. versionadded:: 3.0
@@ -20,17 +20,17 @@ Abstract base class for color ramps
 #include "qgscolorramp.h"
 %End
 %ConvertToSubClassCode
-    if ( sipCpp->type() == "gradient" )
+    if ( sipCpp->type() == QgsGradientColorRamp::typeString() )
       sipType = sipType_QgsGradientColorRamp;
-    else if ( sipCpp->type() == "random" )
+    else if ( sipCpp->type() == QgsLimitedRandomColorRamp::typeString() )
       sipType = sipType_QgsLimitedRandomColorRamp;
-    else if ( sipCpp->type() == "randomcolors" )
+    else if ( sipCpp->type() == QgsRandomColorRamp::typeString() )
       sipType = sipType_QgsRandomColorRamp;
-    else if ( sipCpp->type() == "preset" )
+    else if ( sipCpp->type() == QgsPresetSchemeColorRamp::typeString() )
       sipType = sipType_QgsPresetSchemeColorRamp;
-    else if ( sipCpp->type() == "colorbrewer" )
+    else if ( sipCpp->type() == QgsColorBrewerColorRamp::typeString() )
       sipType = sipType_QgsColorBrewerColorRamp;
-    else if ( sipCpp->type() == "cpt-city" )
+    else if ( sipCpp->type() == QgsCptCityColorRamp::typeString() )
       sipType = sipType_QgsCptCityColorRamp;
     else
       sipType = 0;
@@ -74,16 +74,27 @@ Inverts the ordering of the color ramp.
 Creates a clone of the color ramp.
 %End
 
-    virtual QgsStringMap properties() const = 0;
+    virtual QVariantMap properties() const = 0;
 %Docstring
 Returns a string map containing all the color ramp's properties.
+%End
+
+    static QList< QPair< QString, QString > > rampTypes();
+%Docstring
+Returns a list of available ramp types, where the first value in each item is the :py:func:`QgsColorRamp.type()` string
+and the second is a user friendly, translated name for the color ramp type.
+
+The ramp types are returned in a order of precedence for exposing in UI, with more commonly used types
+listed first.
+
+.. versionadded:: 3.16
 %End
 };
 
 class QgsGradientStop
 {
-%Docstring
-Represents a color stop within a QgsGradientColorRamp color ramp.
+%Docstring(signature="appended")
+Represents a color stop within a :py:class:`QgsGradientColorRamp` color ramp.
 
 .. versionadded:: 3.0
 %End
@@ -112,7 +123,7 @@ typedef QList<QgsGradientStop> QgsGradientStopsList;
 
 class QgsGradientColorRamp : QgsColorRamp
 {
-%Docstring
+%Docstring(signature="appended")
 Gradient color ramp, which smoothly interpolates between two colors and also
 supports optional extra color stops.
 
@@ -138,9 +149,9 @@ Constructor for QgsGradientColorRamp
 :param stops: optional list of additional color stops
 %End
 
-    static QgsColorRamp *create( const QgsStringMap &properties = QgsStringMap() ) /Factory/;
+    static QgsColorRamp *create( const QVariantMap &properties = QVariantMap() ) /Factory/;
 %Docstring
-Creates a new QgsColorRamp from a map of properties
+Creates a new :py:class:`QgsColorRamp` from a map of properties
 %End
 
     virtual int count() const;
@@ -148,12 +159,21 @@ Creates a new QgsColorRamp from a map of properties
 
     virtual QColor color( double value ) const;
 
+
+    static QString typeString();
+%Docstring
+Returns the string identifier for QgsGradientColorRamp.
+
+.. versionadded:: 3.16
+%End
+
     virtual QString type() const;
+
     virtual void invert();
 
     virtual QgsGradientColorRamp *clone() const /Factory/;
 
-    virtual QgsStringMap properties() const;
+    virtual QVariantMap properties() const;
 
 
     QColor color1() const;
@@ -279,7 +299,7 @@ Copy color ramp stops to a QGradient
 
 class QgsLimitedRandomColorRamp : QgsColorRamp
 {
-%Docstring
+%Docstring(signature="appended")
 Constrained random color ramp, which returns random colors based on preset parameters.
 
 .. versionadded:: 3.0
@@ -306,7 +326,7 @@ Constructor for QgsLimitedRandomColorRamp
 :param valMax: maximum color value
 %End
 
-    static QgsColorRamp *create( const QgsStringMap &properties = QgsStringMap() ) /Factory/;
+    static QgsColorRamp *create( const QVariantMap &properties = QVariantMap() ) /Factory/;
 %Docstring
 Returns a new QgsLimitedRandomColorRamp color ramp created using the properties encoded in a string
 map.
@@ -320,10 +340,19 @@ map.
 
     virtual QColor color( double value ) const;
 
+
+    static QString typeString();
+%Docstring
+Returns the string identifier for QgsLimitedRandomColorRamp.
+
+.. versionadded:: 3.16
+%End
+
     virtual QString type() const;
+
     virtual QgsLimitedRandomColorRamp *clone() const /Factory/;
 
-    virtual QgsStringMap properties() const;
+    virtual QVariantMap properties() const;
 
     virtual int count() const;
 
@@ -437,7 +466,7 @@ Sets the maximum value for generated colors
 
 class QgsRandomColorRamp: QgsColorRamp
 {
-%Docstring
+%Docstring(signature="appended")
 Totally random color ramp. Returns colors generated at random, but constrained
 to some hardcoded saturation and value ranges to prevent ugly color generation.
 
@@ -474,13 +503,20 @@ by subsequent calls to :py:func:`~QgsRandomColorRamp.color`.
 .. versionadded:: 2.5
 %End
 
+    static QString typeString();
+%Docstring
+Returns the string identifier for QgsRandomColorRamp.
+
+.. versionadded:: 3.16
+%End
+
     virtual QString type() const;
 
 
     virtual QgsRandomColorRamp *clone() const /Factory/;
 
 
-    virtual QgsStringMap properties() const;
+    virtual QVariantMap properties() const;
 
 
   protected:
@@ -491,7 +527,7 @@ by subsequent calls to :py:func:`~QgsRandomColorRamp.color`.
 
 class QgsPresetSchemeColorRamp : QgsColorRamp, QgsColorScheme
 {
-%Docstring
+%Docstring(signature="appended")
 A scheme based color ramp consisting of a list of predefined colors.
 
 .. versionadded:: 3.0
@@ -516,7 +552,7 @@ Constructor for :py:class:`QgsPresetColorRamp`.
 :param colors: list of named colors in ramp
 %End
 
-    static QgsColorRamp *create( const QgsStringMap &properties = QgsStringMap() ) /Factory/;
+    static QgsColorRamp *create( const QVariantMap &properties = QVariantMap() ) /Factory/;
 %Docstring
 Returns a new QgsPresetSchemeColorRamp color ramp created using the properties encoded in a string
 map.
@@ -546,12 +582,21 @@ Returns the list of colors used by the ramp.
 
     virtual QColor color( double value ) const;
 
+
+    static QString typeString();
+%Docstring
+Returns the string identifier for QgsPresetSchemeColorRamp.
+
+.. versionadded:: 3.16
+%End
+
     virtual QString type() const;
+
     virtual void invert();
 
     virtual QgsPresetSchemeColorRamp *clone() const /Factory/;
 
-    virtual QgsStringMap properties() const;
+    virtual QVariantMap properties() const;
 
     virtual int count() const;
 
@@ -567,7 +612,7 @@ Returns the list of colors used by the ramp.
 
 class QgsColorBrewerColorRamp : QgsColorRamp
 {
-%Docstring
+%Docstring(signature="appended")
 Color ramp utilising "Color Brewer" preset color schemes.
 
 .. versionadded:: 3.0
@@ -589,7 +634,7 @@ Constructor for QgsColorBrewerColorRamp
 :param inverted: invert ramp ordering
 %End
 
-    static QgsColorRamp *create( const QgsStringMap &properties = QgsStringMap() ) /Factory/;
+    static QgsColorRamp *create( const QVariantMap &properties = QVariantMap() ) /Factory/;
 %Docstring
 Returns a new QgsColorBrewerColorRamp color ramp created using the properties encoded in a string
 map.
@@ -603,12 +648,20 @@ map.
 
     virtual QColor color( double value ) const;
 
+
+    static QString typeString();
+%Docstring
+Returns the string identifier for QgsColorBrewerColorRamp.
+
+.. versionadded:: 3.16
+%End
+
     virtual QString type() const;
     virtual void invert();
 
     virtual QgsColorBrewerColorRamp *clone() const /Factory/;
 
-    virtual QgsStringMap properties() const;
+    virtual QVariantMap properties() const;
 
     virtual int count() const;
 
@@ -709,9 +762,20 @@ Constructor for QgsCptCityColorRamp
 :param doLoadFile: load cpt-city ramp from file
 %End
 
-    static QgsColorRamp *create( const QgsStringMap &properties = QgsStringMap() ) /Factory/;
+    static QgsColorRamp *create( const QVariantMap &properties = QVariantMap() ) /Factory/;
+%Docstring
+Creates the symbol layer
+%End
+
+    static QString typeString();
+%Docstring
+Returns the string identifier for QgsCptCityColorRamp.
+
+.. versionadded:: 3.16
+%End
 
     virtual QString type() const;
+
 
     virtual void invert();
 
@@ -721,7 +785,7 @@ Constructor for QgsCptCityColorRamp
     void copy( const QgsCptCityColorRamp *other );
     QgsGradientColorRamp *cloneGradientRamp() const /Factory/;
 
-    virtual QgsStringMap properties() const;
+    virtual QVariantMap properties() const;
 
 
     QString schemeName() const;

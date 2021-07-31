@@ -1,3 +1,5 @@
+SET LANGUAGE us_english;  -- avoid month day swap in datetime
+
 DROP TABLE IF EXISTS qgis_test.[someData];
 GO
 
@@ -26,6 +28,18 @@ DROP TABLE IF EXISTS qgis_test.[multiGeomColumns];
 GO
 
 DROP TABLE IF EXISTS qgis_test.[sacrificialLamb];
+GO
+
+DROP TABLE IF EXISTS qgis_test.[someDataCompound];
+GO
+
+DROP TABLE IF EXISTS qgis_test.[tb_test_compound_pk];
+GO
+
+DROP TABLE IF EXISTS qgis_test.[tb_test_composite_float_pk];
+GO
+
+DROP TABLE IF EXISTS qgis_test.[constraints];
 GO
 
 DROP SCHEMA qgis_test;
@@ -214,5 +228,75 @@ GO
 INSERT [qgis_test].[invalid_polys] ([id], [ogr_geometry]) VALUES (3705938, 0x47100000010405000000748C75BBA8BE654098EF25FCAEC044C010A90134AEBE6540D816E36BABC044C0E4B4B40EAFBE65405095162BB3C044C0709E8FD7A8BE654048E5924FB4C044C0748C75BBA8BE654098EF25FCAEC044C001000000020000000002000000FFFFFFFF0000000006000000000000000003)
 GO
 SET IDENTITY_INSERT [qgis_test].[invalid_polys] OFF
+GO
+
+-- Provider check with compound key
+
+CREATE TABLE [qgis_test].[someDataCompound] (
+    pk integer NOT NULL,
+    cnt integer,
+    name nvarchar(max) DEFAULT 'qgis',
+    name2 nvarchar(max) DEFAULT 'qgis',
+    num_char nvarchar(max),
+    dt datetime,
+    "date" date,
+    "time" time,
+    geom geometry,
+    key1 integer,
+    key2 integer,
+    PRIMARY KEY(key1, key2)
+);
+
+INSERT INTO [qgis_test].[someDataCompound] ( key1, key2, pk, cnt, name, name2, num_char, dt, "date", "time", geom) VALUES
+(1, 1, 5, -200, NULL, 'NuLl', '5', '2020-05-04 12:13:14', '2020-05-02', '12:13:01', geometry::STGeomFromText('POINT(-71.123 78.23)', 4326)),
+(1, 2, 3,  300, 'Pear', 'PEaR', '3', NULL, NULL, NULL, NULL),
+(2, 1, 1,  100, 'Orange', 'oranGe', '1', '2020-05-03 12:13:14', '2020-05-03', '12:13:14', geometry::STGeomFromText('POINT(-70.332 66.33)', 4326)),
+(2, 2, 2,  200, 'Apple', 'Apple', '2', '2020-05-04 12:14:14', '2020-05-04', '12:14:14', geometry::STGeomFromText('POINT(-68.2 70.8)', 4326)),
+(2, 3, 4,  400, 'Honey', 'Honey', '4', '2021-05-04 13:13:14', '2021-05-04', '13:13:14', geometry::STGeomFromText('POINT(-65.32 78.3)', 4326));
+GO
+
+
+CREATE TABLE [qgis_test].[tb_test_compound_pk]
+(
+    pk1 integer,
+    pk2 bigint,
+    value nvarchar(16),
+    geom geometry,
+    PRIMARY KEY (pk1, pk2)
+);
+
+INSERT INTO [qgis_test].[tb_test_compound_pk] (pk1, pk2, value, geom) VALUES
+(1, 1, 'test 1', geometry::STGeomFromText('POINT(-47.930 -15.818)', 4326)),
+(1, 2, 'test 2', geometry::STGeomFromText('POINT(-47.887 -15.864)', 4326)),
+(2, 1, 'test 3', geometry::STGeomFromText('POINT(-47.902 -15.763)', 4326)),
+(2, 2, 'test 4', geometry::STGeomFromText('POINT(-47.952 -15.781)', 4326));
+GO
+
+CREATE TABLE [qgis_test].[tb_test_composite_float_pk]
+(
+    pk1 integer,
+    pk2 bigint,
+    pk3 real,
+    value nvarchar(16),
+    geom geometry,
+    PRIMARY KEY (pk1, pk2, pk3)
+);
+
+INSERT INTO [qgis_test].[tb_test_composite_float_pk] (pk1, pk2, pk3, value, geom) VALUES
+    (1, 1, 1.0,         'test 1', geometry::STGeomFromText('POINT(-47.930 -15.818)', 4326)),
+    (1, 2, 3.141592741, 'test 2', geometry::STGeomFromText('POINT(-47.887 -15.864)', 4326)),
+    (2, 2, 2.718281828, 'test 3', geometry::STGeomFromText('POINT(-47.902 -15.763)', 4326)),
+    (2, 2, 1.0,         'test 4', geometry::STGeomFromText('POINT(-47.952 -15.781)', 4326));
+GO
+
+-- Table for constraint tests
+CREATE TABLE [qgis_test].[constraints]
+(
+  gid integer PRIMARY KEY,
+  val int,
+  name text NOT NULL,
+  description text,
+  CONSTRAINT constraint_val UNIQUE (val)
+);
 GO
 

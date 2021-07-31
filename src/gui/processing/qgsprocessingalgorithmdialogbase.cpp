@@ -31,6 +31,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QFileDialog>
+#include <QMimeData>
 
 
 ///@cond NOT_STABLE
@@ -49,6 +50,12 @@ void QgsProcessingAlgorithmDialogFeedback::reportError( const QString &error, bo
 {
   QgsProcessingFeedback::reportError( error, fatalError );
   emit errorReported( error, fatalError );
+}
+
+void QgsProcessingAlgorithmDialogFeedback::pushWarning( const QString &warning )
+{
+  QgsProcessingFeedback::pushWarning( warning );
+  emit warningPushed( warning );
 }
 
 void QgsProcessingAlgorithmDialogFeedback::pushInfo( const QString &info )
@@ -176,7 +183,7 @@ void QgsProcessingAlgorithmDialogBase::setAlgorithm( QgsProcessingAlgorithm *alg
   const QString warning = algorithm->provider()->warningMessage();
   if ( !warning.isEmpty() )
   {
-    mMessageBar->pushMessage( warning, Qgis::Warning, 0 );
+    mMessageBar->pushMessage( warning, Qgis::MessageLevel::Warning );
   }
 }
 
@@ -227,12 +234,13 @@ void QgsProcessingAlgorithmDialogBase::saveLogToFile( const QString &path, const
 
 QgsProcessingFeedback *QgsProcessingAlgorithmDialogBase::createFeedback()
 {
-  auto feedback = qgis::make_unique< QgsProcessingAlgorithmDialogFeedback >();
+  auto feedback = std::make_unique< QgsProcessingAlgorithmDialogFeedback >();
   connect( feedback.get(), &QgsProcessingFeedback::progressChanged, this, &QgsProcessingAlgorithmDialogBase::setPercentage );
   connect( feedback.get(), &QgsProcessingAlgorithmDialogFeedback::commandInfoPushed, this, &QgsProcessingAlgorithmDialogBase::pushCommandInfo );
   connect( feedback.get(), &QgsProcessingAlgorithmDialogFeedback::consoleInfoPushed, this, &QgsProcessingAlgorithmDialogBase::pushConsoleInfo );
   connect( feedback.get(), &QgsProcessingAlgorithmDialogFeedback::debugInfoPushed, this, &QgsProcessingAlgorithmDialogBase::pushDebugInfo );
   connect( feedback.get(), &QgsProcessingAlgorithmDialogFeedback::errorReported, this, &QgsProcessingAlgorithmDialogBase::reportError );
+  connect( feedback.get(), &QgsProcessingAlgorithmDialogFeedback::warningPushed, this, &QgsProcessingAlgorithmDialogBase::pushWarning );
   connect( feedback.get(), &QgsProcessingAlgorithmDialogFeedback::infoPushed, this, &QgsProcessingAlgorithmDialogBase::pushInfo );
   connect( feedback.get(), &QgsProcessingAlgorithmDialogFeedback::progressTextChanged, this, &QgsProcessingAlgorithmDialogBase::setProgressText );
   connect( buttonCancel, &QPushButton::clicked, feedback.get(), &QgsProcessingFeedback::cancel );
@@ -392,12 +400,28 @@ void QgsProcessingAlgorithmDialogBase::closeClicked()
   close();
 }
 
+QgsProcessingContext::LogLevel QgsProcessingAlgorithmDialogBase::logLevel() const
+{
+  return mLogLevel;
+}
+
+void QgsProcessingAlgorithmDialogBase::setLogLevel( QgsProcessingContext::LogLevel level )
+{
+  mLogLevel = level;
+}
+
 void QgsProcessingAlgorithmDialogBase::reportError( const QString &error, bool fatalError )
 {
   setInfo( error, true );
   if ( fatalError )
     resetGui();
   showLog();
+  processEvents();
+}
+
+void QgsProcessingAlgorithmDialogBase::pushWarning( const QString &warning )
+{
+  setInfo( warning, false, true, true );
   processEvents();
 }
 
@@ -647,18 +671,28 @@ void QgsProcessingAlgorithmDialogBase::setCurrentTask( QgsProcessingAlgRunnerTas
 QString QgsProcessingAlgorithmDialogBase::formatStringForLog( const QString &string )
 {
   QString s = string;
-  s.replace( '\n', QStringLiteral( "<br>" ) );
+  s.replace( '\n', QLatin1String( "<br>" ) );
   return s;
 }
 
-void QgsProcessingAlgorithmDialogBase::setInfo( const QString &message, bool isError, bool escapeHtml )
+void QgsProcessingAlgorithmDialogBase::setInfo( const QString &message, bool isError, bool escapeHtml, bool isWarning )
 {
-  if ( isError )
-    txtLog->append( QStringLiteral( "<span style=\"color:red\">%1</span>" ).arg( escapeHtml ? formatStringForLog( message.toHtmlEscaped() ) : formatStringForLog( message ) ) );
+  constexpr int MESSAGE_COUNT_LIMIT = 10000;
+  // Avoid logging too many messages, which might blow memory.
+  if ( mMessageLoggedCount == MESSAGE_COUNT_LIMIT )
+    return;
+  ++mMessageLoggedCount;
+
+  // note -- we have to wrap the message in a span block, or QTextEdit::append sometimes gets confused
+  // and varies between treating it as a HTML string or a plain text string! (see https://github.com/qgis/QGIS/issues/37934)
+  if ( mMessageLoggedCount == MESSAGE_COUNT_LIMIT )
+    txtLog->append( QStringLiteral( "<span style=\"color:red\">%1</span>" ).arg( tr( "Message log truncated" ) ) );
+  else if ( isError || isWarning )
+    txtLog->append( QStringLiteral( "<span style=\"color:%1\">%2</span>" ).arg( isError ? QStringLiteral( "red" ) : QStringLiteral( "#b85a20" ), escapeHtml ? formatStringForLog( message.toHtmlEscaped() ) : formatStringForLog( message ) ) );
   else if ( escapeHtml )
-    txtLog->append( formatStringForLog( message.toHtmlEscaped() ) );
+    txtLog->append( QStringLiteral( "<span>%1</span" ).arg( formatStringForLog( message.toHtmlEscaped() ) ) );
   else
-    txtLog->append( formatStringForLog( message ) );
+    txtLog->append( QStringLiteral( "<span>%1</span>" ).arg( formatStringForLog( message ) ) );
   scrollToBottomOfLog();
   processEvents();
 }

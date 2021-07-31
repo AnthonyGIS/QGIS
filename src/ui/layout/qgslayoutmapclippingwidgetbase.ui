@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>318</width>
-    <height>408</height>
+    <height>619</height>
    </rect>
   </property>
   <property name="sizePolicy">
@@ -77,7 +77,7 @@
       <item row="5" column="0">
        <widget class="QRadioButton" name="mRadioClipSelectedLayers">
         <property name="text">
-         <string>Clip selected layers:</string>
+         <string>Clip selected layers</string>
         </property>
        </widget>
       </item>
@@ -94,6 +94,51 @@
          <string>Force labels inside atlas feature</string>
         </property>
        </widget>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <item>
+    <widget class="QgsCollapsibleGroupBox" name="mClipToItemCheckBox">
+     <property name="title">
+      <string>Clip to item</string>
+     </property>
+     <property name="checkable">
+      <bool>true</bool>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_2">
+      <item row="2" column="0">
+       <widget class="QLabel" name="label_2">
+        <property name="text">
+         <string>The clipping mode determines how features from vector layers will be clipped.</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="0" column="0">
+       <widget class="QLabel" name="mClipToItemLabel">
+        <property name="text">
+         <string>&lt;b&gt;When enabled, the map will be automatically clipped to the selected shape.&lt;/b&gt;</string>
+        </property>
+        <property name="wordWrap">
+         <bool>true</bool>
+        </property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QComboBox" name="mItemClippingTypeComboBox"/>
+      </item>
+      <item row="4" column="0">
+       <widget class="QCheckBox" name="mForceLabelsInsideItemCheckBox">
+        <property name="text">
+         <string>Force labels inside clipping shape</string>
+        </property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QgsLayoutItemComboBox" name="mClipItemComboBox"/>
       </item>
      </layout>
     </widget>
@@ -121,7 +166,24 @@
    <header>qgscollapsiblegroupbox.h</header>
    <container>1</container>
   </customwidget>
+  <customwidget>
+   <class>QgsLayoutItemComboBox</class>
+   <extends>QComboBox</extends>
+   <header>qgslayoutitemcombobox.h</header>
+  </customwidget>
  </customwidgets>
+ <tabstops>
+  <tabstop>mClipToAtlasCheckBox</tabstop>
+  <tabstop>mAtlasClippingTypeComboBox</tabstop>
+  <tabstop>mForceLabelsInsideCheckBox</tabstop>
+  <tabstop>mRadioClipAllLayers</tabstop>
+  <tabstop>mRadioClipSelectedLayers</tabstop>
+  <tabstop>mLayersTreeView</tabstop>
+  <tabstop>mClipToItemCheckBox</tabstop>
+  <tabstop>mClipItemComboBox</tabstop>
+  <tabstop>mItemClippingTypeComboBox</tabstop>
+  <tabstop>mForceLabelsInsideItemCheckBox</tabstop>
+ </tabstops>
  <resources/>
  <connections/>
 </ui>

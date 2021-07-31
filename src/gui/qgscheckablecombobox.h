@@ -25,13 +25,14 @@
 
 #include "qgis_sip.h"
 #include "qgis_gui.h"
+#include "qgis.h"
 
 class QEvent;
 
 /**
  * \class QgsCheckableItemModel
  * \ingroup gui
- * QStandardItemModel subclass which makes all items checkable
+ * \brief QStandardItemModel subclass which makes all items checkable
  * by default.
  * \note not available in Python bindings
  * \since QGIS 3.0
@@ -86,7 +87,7 @@ class QgsCheckableItemModel : public QStandardItemModel
 /**
  * \class QgsCheckBoxDelegate
  * \ingroup gui
- * QStyledItemDelegate subclass for QgsCheckableComboBox. Needed for
+ * \brief QStyledItemDelegate subclass for QgsCheckableComboBox. Needed for
  * correct drawing of the checkable items on Mac and GTK.
  * \note not available in Python bindings
  * \since QGIS 3.0
@@ -117,7 +118,7 @@ class QgsCheckBoxDelegate : public QStyledItemDelegate
 /**
  * \class QgsCheckableComboBox
  * \ingroup gui
- * QComboBox subclass which allows selecting multiple items.
+ * \brief QComboBox subclass which allows selecting multiple items.
  * \since QGIS 3.0
  */
 class GUI_EXPORT QgsCheckableComboBox : public QComboBox
@@ -164,6 +165,14 @@ class GUI_EXPORT QgsCheckableComboBox : public QComboBox
     void setDefaultText( const QString &text );
 
     /**
+     * Adds an item to the combobox with the given \a text, check \a state (stored in the Qt::CheckStateRole)
+     * and containing the specified \a userData (stored in the Qt::UserRole).
+     * The item is appended to the list of existing items.
+     * \since QGIS 3.16
+     */
+    void addItemWithCheckState( const QString &text, Qt::CheckState state, const QVariant &userData = QVariant() );
+
+    /**
      * Returns currently checked items.
      * \see setCheckedItems()
      */
@@ -200,6 +209,13 @@ class GUI_EXPORT QgsCheckableComboBox : public QComboBox
      * \see setItemCheckState()
      */
     void toggleItemCheckState( int index );
+
+    /**
+     * Returns the custom item model which handles checking the items
+     * \see QgsCheckableItemModel
+     * \since QGIS 3.16
+     */
+    QgsCheckableItemModel *model() const SIP_SKIP {return mModel;}
 
     /**
      * Hides the list of items in the combobox if it is currently
@@ -252,6 +268,9 @@ class GUI_EXPORT QgsCheckableComboBox : public QComboBox
      * Removes selection from all items.
      */
     void deselectAllOptions();
+
+  protected:
+    QgsCheckableItemModel *mModel = nullptr;
 
   private:
     void updateCheckedItems();

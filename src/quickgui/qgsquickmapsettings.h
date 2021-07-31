@@ -16,21 +16,22 @@
 #ifndef QGSQUICKMAPSETTINGS_H
 #define QGSQUICKMAPSETTINGS_H
 
+#include "qgis_quick.h"
+
 #include <QObject>
 
 #include "qgscoordinatetransformcontext.h"
+#include "qgsmaplayer.h"
 #include "qgsmapsettings.h"
 #include "qgsmapthemecollection.h"
 #include "qgspoint.h"
 #include "qgsrectangle.h"
 
-#include "qgis_quick.h"
-
 class QgsProject;
 
 /**
  * \ingroup quick
- * The QgsQuickMapSettings class encapsulates QgsMapSettings class to offer
+ * \brief The QgsQuickMapSettings class encapsulates QgsMapSettings class to offer
  * settings of configuration of map rendering via QML properties.
  *
  * On top of QgsMapSettings functionality, when QgsProject is attached,
@@ -69,6 +70,8 @@ class QUICK_EXPORT QgsQuickMapSettings : public QObject
     Q_PROPERTY( QgsRectangle visibleExtent READ visibleExtent NOTIFY visibleExtentChanged )
     //! \copydoc QgsMapSettings::mapUnitsPerPixel()
     Q_PROPERTY( double mapUnitsPerPixel READ mapUnitsPerPixel NOTIFY mapUnitsPerPixelChanged )
+    //! Returns the distance in geographical coordinates that equals to one point unit in the map
+    Q_PROPERTY( double mapUnitsPerPoint READ mapUnitsPerPoint NOTIFY mapUnitsPerPointChanged )
 
     /**
      * The rotation of the resulting map image, in degrees clockwise.
@@ -79,7 +82,7 @@ class QUICK_EXPORT QgsQuickMapSettings : public QObject
     /**
      * The background color used to render the map
      *
-     * The value is set to the project's bacckground color setting on QgsProject::readProject
+     * The value is set to the project's background color setting on QgsProject::readProject
      */
     Q_PROPERTY( QColor backgroundColor READ backgroundColor WRITE setBackgroundColor NOTIFY backgroundColorChanged )
 
@@ -116,7 +119,7 @@ class QUICK_EXPORT QgsQuickMapSettings : public QObject
 
   public:
     //! Create new map settings
-    QgsQuickMapSettings( QObject *parent = nullptr );
+    explicit QgsQuickMapSettings( QObject *parent = nullptr );
     ~QgsQuickMapSettings() = default;
 
     //! Clone map settings
@@ -140,6 +143,12 @@ class QUICK_EXPORT QgsQuickMapSettings : public QObject
     //! \copydoc QgsMapSettings::mapUnitsPerPixel()
     double mapUnitsPerPixel() const;
 
+    //! Move current map extent to have center point defined by \a layer. Optionally only pan to the layer if \a shouldZoom is false.
+    Q_INVOKABLE void setCenterToLayer( QgsMapLayer *layer, bool shouldZoom = true );
+
+    //! \copydoc QgsQuickMapSettings::mapUnitsPerPoint
+    double mapUnitsPerPoint() const;
+
     //! \copydoc QgsMapSettings::visibleExtent()
     QgsRectangle visibleExtent() const;
 
@@ -154,7 +163,6 @@ class QUICK_EXPORT QgsQuickMapSettings : public QObject
      * \return A coordinate in pixel / screen space
      */
     Q_INVOKABLE QPointF coordinateToScreen( const QgsPoint &point ) const;
-
 
     /**
      * Convert a screen coordinate to a map coordinate
@@ -180,11 +188,19 @@ class QUICK_EXPORT QgsQuickMapSettings : public QObject
     //! \copydoc QgsQuickMapSettings::backgroundColor
     void setBackgroundColor( const QColor &color );
 
-    //! \copydoc QgsMapSettings::outputSize()
+    /**
+     * Returns the size of the resulting map image, in pixels.
+     *
+     * \see setOutputSize()
+     */
     QSize outputSize() const;
 
-    //! \copydoc QgsMapSettings::setOutputSize()
-    void setOutputSize( const QSize &outputSize );
+    /**
+     * Sets the size of the resulting map image, in pixels.
+     *
+     * \see outputSize()
+     */
+    void setOutputSize( QSize outputSize );
 
     //! \copydoc QgsMapSettings::outputDpi()
     double outputDpi() const;
@@ -198,11 +214,40 @@ class QUICK_EXPORT QgsQuickMapSettings : public QObject
     //! \copydoc QgsMapSettings::setDestinationCrs()
     void setDestinationCrs( const QgsCoordinateReferenceSystem &destinationCrs );
 
-    //! \copydoc QgsMapSettings::layers()
+    /**
+     * Returns the list of layers which will be rendered in the map.
+     *
+     * The layers are stored in the reverse order of how they are rendered (layer with index 0 will be on top)
+     *
+     * \see setLayers()
+     */
     QList<QgsMapLayer *> layers() const;
 
-    //! \copydoc QgsMapSettings::setLayers()
+    /**
+     * Sets the list of \a layers to render in the map.
+     *
+     * The layers are stored in the reverse order of how they are rendered (layer with index 0 will be on top)
+     *
+     * \note Any non-spatial layers will be automatically stripped from the list (since they cannot be rendered!).
+     *
+     * \see layers()
+     */
     void setLayers( const QList<QgsMapLayer *> &layers );
+
+    /**
+     * Returns the ratio between physical pixels and device-independent pixels.
+     * This value is dependent on the screen the window is on, and may change when the window is moved.
+     * Common values are 1.0 on normal displays and 2.0 on Apple "retina" displays.
+     */
+    qreal devicePixelRatio() const;
+
+
+    /**
+     * Sets the ratio between physical pixels and device-independent pixels.
+     * This value is dependent on the screen the window is on, and may change when the window is moved.
+     * Common values are 1.0 on normal displays and 2.0 on Apple "retina" displays.
+     */
+    void setDevicePixelRatio( const qreal &devicePixelRatio );
 
   signals:
     //! \copydoc QgsQuickMapSettings::project
@@ -216,6 +261,8 @@ class QUICK_EXPORT QgsQuickMapSettings : public QObject
 
     //! \copydoc QgsQuickMapSettings::mapUnitsPerPixel
     void mapUnitsPerPixelChanged();
+    //! \copydoc QgsQuickMapSettings::mapUnitsPerPoint
+    void mapUnitsPerPointChanged();
 
     //! \copydoc QgsQuickMapSettings::rotation
     void rotationChanged();
@@ -244,10 +291,15 @@ class QUICK_EXPORT QgsQuickMapSettings : public QObject
      */
     void onReadProject( const QDomDocument &doc );
 
+    /**
+     * Sets the destination CRS to match the changed project CRS
+     */
+    void onCrsChanged();
+
   private:
     QgsProject *mProject = nullptr;
     QgsMapSettings mMapSettings;
-
+    qreal mDevicePixelRatio = 1.0;
 };
 
 #endif // QGSQUICKMAPSETTINGS_H

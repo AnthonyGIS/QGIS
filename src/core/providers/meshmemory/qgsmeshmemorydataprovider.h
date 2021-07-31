@@ -32,7 +32,7 @@
 
 /**
  * \ingroup core
- * Provides data stored in-memory for QgsMeshLayer. Useful for plugins or tests.
+ * \brief Provides data stored in-memory for QgsMeshLayer. Useful for plugins or tests.
  * \since QGIS 3.2
  */
 class CORE_EXPORT QgsMeshMemoryDataProvider final: public QgsMeshDataProvider
@@ -83,7 +83,8 @@ class CORE_EXPORT QgsMeshMemoryDataProvider final: public QgsMeshDataProvider
      *    );
      * \endcode
      */
-    QgsMeshMemoryDataProvider( const QString &uri, const QgsDataProvider::ProviderOptions &providerOptions );
+    QgsMeshMemoryDataProvider( const QString &uri, const QgsDataProvider::ProviderOptions &providerOptions,
+                               QgsDataProvider::ReadFlags flags = QgsDataProvider::ReadFlags() );
 
     bool isValid() const override;
     QString name() const override;
@@ -152,12 +153,18 @@ class CORE_EXPORT QgsMeshMemoryDataProvider final: public QgsMeshDataProvider
                                       int datasetGroupIndex
                                     ) override;
 
+    bool saveMeshFrame( const QgsMesh & ) override {return false;}
+
+    void close() override;
+
     //! Returns the memory provider key
     static QString providerKey();
     //! Returns the memory provider description
     static QString providerDescription();
     //! Provider factory
-    static QgsMeshMemoryDataProvider *createProvider( const QString &uri, const QgsDataProvider::ProviderOptions &providerOptions );
+    static QgsMeshMemoryDataProvider *createProvider( const QString &uri,
+        const QgsDataProvider::ProviderOptions &providerOptions,
+        QgsDataProvider::ReadFlags flags = QgsDataProvider::ReadFlags() );
 
   private:
     QgsRectangle calculateExtent( ) const;

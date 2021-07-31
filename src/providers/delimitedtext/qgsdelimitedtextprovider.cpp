@@ -24,11 +24,12 @@
 #include <QTextStream>
 #include <QStringList>
 #include <QSettings>
-#include <QRegExp>
+#include <QRegularExpression>
 #include <QUrl>
 #include <QUrlQuery>
 
 #include "qgsapplication.h"
+#include "qgscoordinateutils.h"
 #include "qgsdataprovider.h"
 #include "qgsexpression.h"
 #include "qgsfeature.h"
@@ -55,21 +56,12 @@ const QString QgsDelimitedTextProvider::TEXT_PROVIDER_DESCRIPTION = QStringLiter
 
 static const int SUBSET_ID_THRESHOLD_FACTOR = 10;
 
-QRegExp QgsDelimitedTextProvider::sWktPrefixRegexp( "^\\s*(?:\\d+\\s+|SRID\\=\\d+\\;)", Qt::CaseInsensitive );
-QRegExp QgsDelimitedTextProvider::sCrdDmsRegexp( "^\\s*(?:([-+nsew])\\s*)?(\\d{1,3})(?:[^0-9.]+([0-5]?\\d))?[^0-9.]+([0-5]?\\d(?:\\.\\d+)?)[^0-9.]*([-+nsew])?\\s*$", Qt::CaseInsensitive );
+QRegularExpression QgsDelimitedTextProvider::sWktPrefixRegexp( QStringLiteral( "^\\s*(?:\\d+\\s+|SRID\\=\\d+\\;)" ), QRegularExpression::CaseInsensitiveOption );
+QRegularExpression QgsDelimitedTextProvider::sCrdDmsRegexp( QStringLiteral( "^\\s*(?:([-+nsew])\\s*)?(\\d{1,3})(?:[^0-9.]+([0-5]?\\d))?[^0-9.]+([0-5]?\\d(?:\\.\\d+)?)[^0-9.]*([-+nsew])?\\s*$" ), QRegularExpression::CaseInsensitiveOption );
 
-QgsDelimitedTextProvider::QgsDelimitedTextProvider( const QString &uri, const ProviderOptions &options )
-  : QgsVectorDataProvider( uri, options )
+QgsDelimitedTextProvider::QgsDelimitedTextProvider( const QString &uri, const ProviderOptions &options, QgsDataProvider::ReadFlags flags )
+  : QgsVectorDataProvider( uri, options, flags )
 {
-  // uri should be in the form of "file:///path/to/file.csv?query=params", if not, enforce it in that format
-  // first read the already encoded url to get the query string
-  QUrl url = QUrl::fromEncoded( uri.toLatin1() );
-  // temporarily store the query string
-  const QString tmpUrlQuery = url.query();
-  // make sure that the url is actually prefixed with "file://". However, this breaks the query part ("?" char gets encoded), so discard the query string
-  url = QUrl::fromLocalFile( url.path() );
-  // finally restore the query part
-  url.setQuery( tmpUrlQuery );
 
   // Add supported types to enable creating expression fields in field calculator
   setNativeTypes( QList< NativeType >()
@@ -86,7 +78,8 @@ QgsDelimitedTextProvider::QgsDelimitedTextProvider( const QString &uri, const Pr
 
   QgsDebugMsgLevel( "Delimited text file uri is " + uri, 2 );
 
-  mFile = qgis::make_unique< QgsDelimitedTextFile >();
+  const QUrl url = QUrl::fromEncoded( uri.toLatin1() );
+  mFile = std::make_unique< QgsDelimitedTextFile >();
   mFile->setFromUrl( url );
 
   QString subset;
@@ -229,9 +222,9 @@ QStringList QgsDelimitedTextProvider::readCsvtFieldTypes( const QString &filenam
   // This is a slightly generous regular expression in that it allows spaces and unquoted field types
   // not allowed in OGR CSVT files.  Also doesn't care if int and string fields have
 
-  strTypeList = strTypeList.toLower();
-  QRegExp reTypeList( "^(?:\\s*(\\\"?)(?:integer|real|double|long|longlong|int8|string|date|datetime|time)(?:\\(\\d+(?:\\.\\d+)?\\))?\\1\\s*(?:,|$))+" );
-  if ( ! reTypeList.exactMatch( strTypeList ) )
+  const QRegularExpression reTypeList( QRegularExpression::anchoredPattern( QStringLiteral( "^(?:\\s*(\\\"?)(?:integer|real|double|long|longlong|int8|string|date|datetime|time)(?:\\(\\d+(?:\\.\\d+)?\\))?\\1\\s*(?:,|$))+" ) ) );
+  const QRegularExpressionMatch match = reTypeList.match( strTypeList );
+  if ( !match.hasMatch() )
   {
     // Looks like this was supposed to be a CSVT file, so report bad formatted string
     if ( message ) { *message = tr( "File type string in %1 is not correctly formatted" ).arg( csvtInfo.fileName() ); }
@@ -243,13 +236,15 @@ QStringList QgsDelimitedTextProvider::readCsvtFieldTypes( const QString &filenam
   QgsDebugMsgLevel( QStringLiteral( "Field type string: %1" ).arg( strTypeList ), 2 );
 
   int pos = 0;
-  QRegExp reType( "(integer|real|double|string|date|datetime|time)" );
-
-  while ( ( pos = reType.indexIn( strTypeList, pos ) ) != -1 )
+  const QRegularExpression reType( QStringLiteral( "(integer|real|double|string|date|datetime|time)" ) );
+  QRegularExpressionMatch typeMatch = reType.match( strTypeList, pos );
+  while ( typeMatch.hasMatch() )
   {
-    QgsDebugMsgLevel( QStringLiteral( "Found type: %1" ).arg( reType.cap( 1 ) ), 2 );
-    types << reType.cap( 1 );
-    pos += reType.matchedLength();
+    QgsDebugMsgLevel( QStringLiteral( "Found type: %1" ).arg( typeMatch.captured( 1 ) ), 2 );
+    types << typeMatch.captured( 1 );
+    pos = typeMatch.capturedEnd();
+
+    typeMatch = reType.match( strTypeList, pos );
   }
 
   if ( message )
@@ -276,7 +271,7 @@ void QgsDelimitedTextProvider::resetIndexes() const
 
   mSubsetIndex.clear();
   if ( mBuildSpatialIndex && mGeomRep != GeomNone )
-    mSpatialIndex = qgis::make_unique< QgsSpatialIndex >();
+    mSpatialIndex = std::make_unique< QgsSpatialIndex >();
 }
 
 bool QgsDelimitedTextProvider::createSpatialIndex()
@@ -659,8 +654,46 @@ void QgsDelimitedTextProvider::scanFile( bool buildIndexes )
 
       if ( couldBeTime[i] && !couldBeDateTime[i] )
       {
+#if QT_VERSION >= QT_VERSION_CHECK(5, 14, 0)
         QTime t = QTime::fromString( value );
         couldBeTime[i] = t.isValid();
+#else
+        // Accept 12:34, 12:34:56 or 12:34:56.789
+        // We do not use QTime::fromString() with Qt < 5.14 as it accepts
+        // strings like 01/03/2004 as valid times
+        couldBeTime[i] = value.length() >= 5 &&
+                         value[0] >= '0' && value[0] <= '2' &&
+                         value[1] >= '0' && value[1] <= '9' &&
+                         value[2] == ':' &&
+                         value[3] >= '0' && value[3] <= '5' &&
+                         value[4] >= '0' && value[4] <= '9';
+        if ( couldBeTime[i] && value.length() == 5 )
+        {
+          // ok
+        }
+        else if ( couldBeTime[i] && value.length() >= 8 )
+        {
+          couldBeTime[i] = value[5] == ':' &&
+                           value[6] >= '0' && value[6] <= '6' &&
+                           value[7] >= '0' && value[7] <= '9';
+          if ( couldBeTime[i] && value.length() == 8 )
+          {
+            // ok
+          }
+          else if ( couldBeTime[i] && value.length() >= 9 )
+          {
+            couldBeTime[i] = value[8] == '.';
+          }
+          else
+          {
+            couldBeTime[i] = false;
+          }
+        }
+        else
+        {
+          couldBeTime[i] = false;
+        }
+#endif
       }
     }
   }
@@ -717,28 +750,28 @@ void QgsDelimitedTextProvider::scanFile( bool buildIndexes )
       }
     }
 
-    if ( typeName == QStringLiteral( "integer" ) )
+    if ( typeName == QLatin1String( "integer" ) )
     {
       fieldType = QVariant::Int;
     }
-    else if ( typeName == QStringLiteral( "longlong" ) )
+    else if ( typeName == QLatin1String( "longlong" ) )
     {
       fieldType = QVariant::LongLong;
     }
-    else if ( typeName == QStringLiteral( "real" ) || typeName == QStringLiteral( "double" ) )
+    else if ( typeName == QLatin1String( "real" ) || typeName == QLatin1String( "double" ) )
     {
       typeName = QStringLiteral( "double" );
       fieldType = QVariant::Double;
     }
-    else if ( typeName == QStringLiteral( "datetime" ) )
+    else if ( typeName == QLatin1String( "datetime" ) )
     {
       fieldType = QVariant::DateTime;
     }
-    else if ( typeName == QStringLiteral( "date" ) )
+    else if ( typeName == QLatin1String( "date" ) )
     {
       fieldType = QVariant::Date;
     }
-    else if ( typeName == QStringLiteral( "time" ) )
+    else if ( typeName == QLatin1String( "time" ) )
     {
       fieldType = QVariant::Time;
     }
@@ -910,45 +943,6 @@ QgsGeometry QgsDelimitedTextProvider::geomFromWkt( QString &sWkt, bool wktHasPre
   return geom;
 }
 
-double QgsDelimitedTextProvider::dmsStringToDouble( const QString &sX, bool *xOk )
-{
-  static QString negative( QStringLiteral( "swSW-" ) );
-  QRegExp re( sCrdDmsRegexp );
-  double x = 0.0;
-
-  *xOk = re.indexIn( sX ) == 0;
-  if ( ! *xOk )
-    return 0.0;
-  QString dms1 = re.capturedTexts().at( 2 );
-  QString dms2 = re.capturedTexts().at( 3 );
-  QString dms3 = re.capturedTexts().at( 4 );
-  x = dms3.toDouble( xOk );
-  // Allow for Degrees/minutes format as well as DMS
-  if ( ! dms2.isEmpty() )
-  {
-    x = dms2.toInt( xOk ) + x / 60.0;
-  }
-  x = dms1.toInt( xOk ) + x / 60.0;
-  QString sign1 = re.capturedTexts().at( 1 );
-  QString sign2 = re.capturedTexts().at( 5 );
-
-  if ( sign1.isEmpty() )
-  {
-    if ( ! sign2.isEmpty() && negative.contains( sign2 ) )
-      x = -x;
-  }
-  else if ( sign2.isEmpty() )
-  {
-    if ( ! sign1.isEmpty() && negative.contains( sign1 ) )
-      x = -x;
-  }
-  else
-  {
-    *xOk = false;
-  }
-  return x;
-}
-
 void QgsDelimitedTextProvider::appendZM( QString &sZ, QString &sM, QgsPoint &point, const QString &decimalPoint )
 {
   if ( ! decimalPoint.isEmpty() )
@@ -985,8 +979,8 @@ bool QgsDelimitedTextProvider::pointFromXY( QString &sX, QString &sY, QgsPoint &
   double x, y;
   if ( xyDms )
   {
-    x = dmsStringToDouble( sX, &xOk );
-    y = dmsStringToDouble( sY, &yOk );
+    x = QgsCoordinateUtils::dmsToDecimal( sX, &xOk );
+    y = QgsCoordinateUtils::dmsToDecimal( sY, &yOk );
   }
   else
   {
@@ -1111,7 +1105,7 @@ bool QgsDelimitedTextProvider::setSubsetString( const QString &subset, bool upda
   if ( ! nonNullSubset.isEmpty() )
   {
 
-    expression = qgis::make_unique< QgsExpression >( nonNullSubset );
+    expression = std::make_unique< QgsExpression >( nonNullSubset );
     QString error;
     if ( expression->hasParserError() )
     {
@@ -1230,7 +1224,7 @@ QgsWkbTypes::Type QgsDelimitedTextProvider::wkbType() const
   return mWkbType;
 }
 
-long QgsDelimitedTextProvider::featureCount() const
+long long QgsDelimitedTextProvider::featureCount() const
 {
   if ( mRescanRequired )
     const_cast<QgsDelimitedTextProvider *>( this )->rescanFile();
@@ -1268,21 +1262,66 @@ QString  QgsDelimitedTextProvider::description() const
   return TEXT_PROVIDER_DESCRIPTION;
 }
 
-QVariantMap QgsDelimitedTextProviderMetadata::decodeUri( const QString &uri )
+QVariantMap QgsDelimitedTextProviderMetadata::decodeUri( const QString &uri ) const
 {
+  const QUrl url = QUrl::fromEncoded( uri.toLatin1() );
+  const QUrlQuery queryItems( url.query() );
+
+  QString subset;
+  QStringList openOptions;
+  for ( const auto &item : queryItems.queryItems() )
+  {
+    if ( item.first == QLatin1String( "subset" ) )
+    {
+      subset = item.second;
+    }
+    else
+    {
+      openOptions << QStringLiteral( "%1=%2" ).arg( item.first, item.second );
+    }
+  }
+
   QVariantMap components;
-  components.insert( QStringLiteral( "path" ), QUrl( uri ).toLocalFile() );
+  components.insert( QStringLiteral( "path" ), url.toLocalFile() );
+  if ( !subset.isEmpty() )
+    components.insert( QStringLiteral( "subset" ), subset );
+  components.insert( QStringLiteral( "openOptions" ), openOptions );
   return components;
 }
 
-QString QgsDelimitedTextProviderMetadata::encodeUri( const QVariantMap &parts )
+QString QgsDelimitedTextProviderMetadata::encodeUri( const QVariantMap &parts ) const
 {
-  return QStringLiteral( "file://%1" ).arg( parts.value( QStringLiteral( "path" ) ).toString() );
+  QUrl url = QUrl::fromLocalFile( parts.value( QStringLiteral( "path" ) ).toString() );
+  const QStringList openOptions = parts.value( QStringLiteral( "openOptions" ) ).toStringList();
+
+  QUrlQuery queryItems;
+  for ( const auto &option : openOptions )
+  {
+    int separator = option.indexOf( '=' );
+    if ( separator >= 0 )
+    {
+      queryItems.addQueryItem( option.mid( 0, separator ), option.mid( separator + 1 ) );
+    }
+    else
+    {
+      queryItems.addQueryItem( option, QString() );
+    }
+  }
+  if ( parts.contains( QStringLiteral( "subset" ) ) )
+    queryItems.addQueryItem( QStringLiteral( "subset" ), parts.value( QStringLiteral( "subset" ) ).toString() );
+  url.setQuery( queryItems );
+
+  return QString::fromLatin1( url.toEncoded() );
 }
 
-QgsDataProvider *QgsDelimitedTextProviderMetadata::createProvider( const QString &uri, const QgsDataProvider::ProviderOptions &options )
+QgsProviderMetadata::ProviderCapabilities QgsDelimitedTextProviderMetadata::providerCapabilities() const
 {
-  return new QgsDelimitedTextProvider( uri, options );
+  return FileBasedUris;
+}
+
+QgsDataProvider *QgsDelimitedTextProviderMetadata::createProvider( const QString &uri, const QgsDataProvider::ProviderOptions &options, QgsDataProvider::ReadFlags flags )
+{
+  return new QgsDelimitedTextProvider( uri, options, flags );
 }
 
 

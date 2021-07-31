@@ -17,7 +17,12 @@
 #define QGSGEOMETRYGENERATORSYMBOLLAYER_H
 
 #include "qgis_core.h"
+#include "qgis.h"
 #include "qgssymbollayer.h"
+
+class QgsFillSymbol;
+class QgsLineSymbol;
+class QgsMarkerSymbol;
 
 /**
  * \ingroup core
@@ -28,7 +33,8 @@ class CORE_EXPORT QgsGeometryGeneratorSymbolLayer : public QgsSymbolLayer
   public:
     ~QgsGeometryGeneratorSymbolLayer() override;
 
-    static QgsSymbolLayer *create( const QgsStringMap &properties ) SIP_FACTORY;
+    //! Creates the symbol layer
+    static QgsSymbolLayer *create( const QVariantMap &properties ) SIP_FACTORY;
 
     QString layerType() const override;
 
@@ -38,7 +44,7 @@ class CORE_EXPORT QgsGeometryGeneratorSymbolLayer : public QgsSymbolLayer
      *
      * \param symbolType The symbol type which shall be used below this symbol.
      */
-    void setSymbolType( QgsSymbol::SymbolType symbolType );
+    void setSymbolType( Qgis::SymbolType symbolType );
 
     /**
      * Access the symbol type. This defines the type of geometry
@@ -46,16 +52,17 @@ class CORE_EXPORT QgsGeometryGeneratorSymbolLayer : public QgsSymbolLayer
      *
      * \returns Symbol type
      */
-    QgsSymbol::SymbolType symbolType() const { return mSymbolType; }
+    Qgis::SymbolType symbolType() const { return mSymbolType; }
 
     void startRender( QgsSymbolRenderContext &context ) override;
     void stopRender( QgsSymbolRenderContext &context ) override;
     void startFeatureRender( const QgsFeature &feature, QgsRenderContext &context ) override;
     void stopFeatureRender( const QgsFeature &feature, QgsRenderContext &context ) override;
+    bool usesMapUnits() const override;
 
     QgsSymbolLayer *clone() const override SIP_FACTORY;
 
-    QgsStringMap properties() const override;
+    QVariantMap properties() const override;
 
     void drawPreviewIcon( QgsSymbolRenderContext &context, QSize size ) override;
 
@@ -113,7 +120,7 @@ class CORE_EXPORT QgsGeometryGeneratorSymbolLayer : public QgsSymbolLayer
     /**
      * The type of the sub symbol.
      */
-    QgsSymbol::SymbolType mSymbolType;
+    Qgis::SymbolType mSymbolType;
 
     bool mRenderingFeature = false;
     bool mHasRenderedFeature = false;

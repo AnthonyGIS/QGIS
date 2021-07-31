@@ -13,17 +13,17 @@
 
 class QgsMeshLayer : QgsMapLayer
 {
-%Docstring
+%Docstring(signature="appended")
 
 Represents a mesh layer supporting display of data on structured or unstructured meshes
 
-The QgsMeshLayer is instantiated by specifying the name of a data provider,
+The :py:class:`QgsMeshLayer` is instantiated by specifying the name of a data provider,
 such as mdal, and url defining the specific data set to connect to.
-The vector layer constructor in turn instantiates a QgsMeshDataProvider subclass
+The vector layer constructor in turn instantiates a :py:class:`QgsMeshDataProvider` subclass
 corresponding to the provider type, and passes it the url. The data provider
 connects to the data source.
 
-The QgsMeshLayer provides a common interface to the different data types. It does not
+The :py:class:`QgsMeshLayer` provides a common interface to the different data types. It does not
 yet support editing transactions.
 
 The main data providers supported by QGIS are listed below.
@@ -40,10 +40,9 @@ Data can be populated by setMesh(const QString &vertices, const QString &faces),
 vertices and faces is comma separated coordinates and connections for mesh.
 E.g. to create mesh with one quad and one triangle
 
-.. code-block::
+.. code-block:: python
 
-      QString uri(
-          "1.0, 2.0 \n" \
+      uri = "1.0, 2.0 \n" \
           "2.0, 2.0 \n" \
           "3.0, 2.0 \n" \
           "2.0, 3.0 \n" \
@@ -51,8 +50,8 @@ E.g. to create mesh with one quad and one triangle
           "---" \
           "0, 1, 3, 4 \n" \
           "1, 2, 3 \n"
-        );
-        QgsMeshLayer *scratchLayer = new QgsMeshLayer(uri, "My Scratch layer", "mesh_memory");
+
+      scratchLayer = QgsMeshLayer(uri, "My Scratch layer", "mesh_memory")
 
 MDAL data provider (mdal)
 ~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -60,10 +59,13 @@ MDAL data provider (mdal)
 Accesses data using the MDAL drivers (https://github.com/lutraconsulting/MDAL). The url
 is the MDAL connection string. QGIS must be built with MDAL support to allow this provider.
 
-.. code-block::
 
-         QString uri = "test/land.2dm";
-         QgsMeshLayer *scratchLayer = new QgsMeshLayer(uri, "My Scratch Layer",  "mdal");
+.. code-block:: python
+
+         uri = "test/land.2dm"
+         scratchLayer = QgsMeshLayer(uri, "My Scratch Layer",  "mdal")
+
+
 
 .. note::
 
@@ -114,11 +116,17 @@ data.
     ~QgsMeshLayer();
 
 
-    virtual QgsMeshDataProvider *dataProvider();
-
+    SIP_PYOBJECT __repr__();
 %Docstring
 QgsMeshLayer cannot be copied.
 %End
+%MethodCode
+    QString str = QStringLiteral( "<QgsMeshLayer: '%1' (%2)>" ).arg( sipCpp->name(), sipCpp->dataProvider() ? sipCpp->dataProvider()->name() : QStringLiteral( "Invalid" ) );
+    sipRes = PyUnicode_FromString( str.toUtf8().constData() );
+%End
+
+    virtual QgsMeshDataProvider *dataProvider();
+
     virtual QgsMeshLayer *clone() const /Factory/;
 
     virtual QgsRectangle extent() const;
@@ -147,7 +155,11 @@ QgsMeshLayer cannot be copied.
 
     virtual QStringList subLayers() const;
 
-    virtual bool isTemporary() const;
+    virtual QString htmlMetadata() const;
+
+    virtual bool isEditable() const;
+
+    virtual bool supportsEditing() const;
 
 
     QString providerType() const;
@@ -167,6 +179,16 @@ Adds datasets to the mesh from file with ``path``. Use the the time ``defaultRef
 .. versionadded:: 3.14
 %End
 
+    bool addDatasets( QgsMeshDatasetGroup *datasetGroup /Transfer/ );
+%Docstring
+Adds extra datasets to the mesh. Take ownership.
+
+:param datasetGroup: the extra dataset group
+
+:return: whether the dataset is effectively added
+
+.. versionadded:: 3.16
+%End
 
     bool saveDataset( const QString &path, int datasetGroupIndex, QString driver );
 %Docstring
@@ -180,6 +202,8 @@ Saves datasets group on file with the specified ``driver``
 
 .. versionadded:: 3.16
 %End
+
+
 
 
 
@@ -246,7 +270,7 @@ Returns the extra dataset groups count handle by the layer
 
     QList<int> datasetGroupsIndexes() const;
 %Docstring
-Returns the list of indexes of dataset groups count handled by the layer
+Returns the list of indexes of dataset groups handled by the layer
 
 .. note::
 
@@ -254,6 +278,18 @@ Returns the list of indexes of dataset groups count handled by the layer
    In the layer scope, those indexes can be different from the data provider indexes.
 
 .. versionadded:: 3.16
+%End
+
+    QList<int> enabledDatasetGroupsIndexes() const;
+%Docstring
+Returns the list of indexes of enables dataset groups handled by the layer
+
+.. note::
+
+   indexes are used to distinguish all the dataset groups handled by the layer (from dataprovider, extra dataset group,...)
+   In the layer scope, those indexes can be different from the data provider indexes.
+
+.. versionadded:: 3.16.3
 %End
 
     QgsMeshDatasetGroupMetadata datasetGroupMetadata( const QgsMeshDatasetIndex &index ) const;
@@ -352,7 +388,7 @@ See :py:func:`QgsMeshDatasetMetadata.isVector()` to check if the returned value 
 returns invalid block for DataOnFaces and DataOnVertices.
 
 :param index: index of the dataset
-:param valueIndex: index of the value
+:param faceIndex: index of the face
 :param count: number of values to return
 
 .. note::
@@ -378,7 +414,7 @@ returns invalid block for DataOnFaces and DataOnVertices.
 Returns whether the faces are active for particular dataset
 
 :param index: index of the dataset
-:param valueIndex: index of the value
+:param faceIndex: index of the face
 :param count: number of values to return
 
 .. note::
@@ -480,13 +516,13 @@ Returns the value of 1D mesh dataset defined on edge that are in the search area
 .. versionadded:: 3.14
 %End
 
-
     QgsMeshDatasetIndex datasetIndexAtTime( const QgsDateTimeRange &timeRange, int datasetGroupIndex ) const;
 %Docstring
 Returns dataset index from datasets group depending on the time range.
-If the temporal properties is not active, returns invalid dataset index
+If the temporal properties is not active, returns invalid dataset index. This method is used for rendering mesh layer.
 
 :param timeRange: the time range
+:param datasetGroupIndex: the index of the dataset group
 
 :return: dataset index
 
@@ -502,6 +538,30 @@ If the temporal properties is not active, returns invalid dataset index
 
 
 .. versionadded:: 3.14
+%End
+
+    QgsMeshDatasetIndex datasetIndexAtRelativeTime( const QgsInterval &relativeTime, int datasetGroupIndex ) const;
+%Docstring
+Returns dataset index from datasets group depending on the relative time from the layer reference time.
+Dataset index is valid even the temporal properties is inactive. This method is used for calculation on mesh layer.
+
+:param relativeTime: the relative from the mesh layer reference time
+:param datasetGroupIndex: the index of the dataset group
+
+:return: dataset index
+
+.. note::
+
+   the returned dataset index depends on the matching method, see :py:func:`~QgsMeshLayer.setTemporalMatchingMethod`
+
+
+.. note::
+
+   indexes are used to distinguish all the dataset groups handled by the layer (from dataprovider, extra dataset group,...)
+   In the layer scope, those indexes are different from the data provider indexes.
+
+
+.. versionadded:: 3.16
 %End
 
     QgsMeshDatasetIndex activeScalarDatasetAtTime( const QgsDateTimeRange &timeRange ) const;
@@ -594,7 +654,7 @@ The returned position is in map coordinates.
 :param point: the center of the search area in map coordinates
 :param searchRadius: the radius of the search area in map units
 
-:return: the position of the snapped point on the closest element, empty QgsPointXY if no element of type ``elementType``
+:return: the position of the snapped point on the closest element, empty :py:class:`QgsPointXY` if no element of type ``elementType``
 
 
 .. versionadded:: 3.14
@@ -640,9 +700,98 @@ Returns the first valid time step of the dataset groups, invalid QgInterval if n
 
     QgsInterval datasetRelativeTime( const QgsMeshDatasetIndex &index );
 %Docstring
+Returns the relative time of the dataset from the reference time of its group
+
+.. versionadded:: 3.16
+%End
+
+    qint64 datasetRelativeTimeInMilliseconds( const QgsMeshDatasetIndex &index );
+%Docstring
 Returns the relative time (in milliseconds) of the dataset from the reference time of its group
 
 .. versionadded:: 3.16
+%End
+
+    bool startFrameEditing( const QgsCoordinateTransform &transform );
+%Docstring
+Starts edition of the mesh frame. Coordinate ``transform`` used to initialize the triangular mesh if needed.
+This operation will disconnect the mesh layer from the data provider anf removes all existing dataset group
+
+.. versionadded:: 3.22
+%End
+
+    bool commitFrameEditing( const QgsCoordinateTransform &transform, bool continueEditing = true );
+%Docstring
+Commits edition of the mesh frame,
+Rebuilds the triangular mesh and its spatial index with ``transform``,
+Continue editing with the same mesh editor if ``continueEditing`` is True
+
+:return: ``True`` if the commit succeeds
+
+.. versionadded:: 3.22
+%End
+
+    bool rollBackFrameEditing( const QgsCoordinateTransform &transform, bool continueEditing = true );
+%Docstring
+Rolls Back edition of the mesh frame.
+Reload mesh from file, rebuilds the triangular mesh and its spatial index with ``transform``,
+Continue editing with the same mesh editor if ``continueEditing`` is ``True``
+
+:return: ``True`` if the rollback succeeds
+
+.. versionadded:: 3.22
+%End
+
+    void stopFrameEditing( const QgsCoordinateTransform &transform );
+%Docstring
+Stops edition of the mesh, re-indexes the faces and vertices,
+rebuilds the triangular mesh and its spatial index with ``transform``,
+clean the undostack
+
+.. versionadded:: 3.22
+%End
+
+    QgsMeshEditor *meshEditor();
+%Docstring
+Returns a pointer to the mesh editor own by the mesh layer
+
+.. versionadded:: 3.22
+%End
+
+    virtual bool isModified() const;
+
+%Docstring
+Returns whether the mesh frame has been modified since the last save
+
+.. versionadded:: 3.22
+%End
+
+    bool contains( const QgsMesh::ElementType &type ) const;
+%Docstring
+Returns whether the mesh contains at mesh elements of given type
+
+.. versionadded:: 3.22
+%End
+
+    int meshVertexCount() const;
+%Docstring
+Returns the vertices count of the mesh frame
+
+.. versionadded:: 3.22
+%End
+
+    int meshFaceCount() const;
+%Docstring
+Returns the faces count of the mesh frame
+
+.. versionadded:: 3.22
+%End
+
+    int meshEdgeCount() const;
+%Docstring
+Returns the edges count of the mesh frame
+
+.. versionadded:: 3.22
 %End
 
   public slots:

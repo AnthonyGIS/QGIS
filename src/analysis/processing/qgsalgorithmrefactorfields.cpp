@@ -78,7 +78,7 @@ QgsRefactorFieldsAlgorithm *QgsRefactorFieldsAlgorithm::createInstance() const
 
 void QgsRefactorFieldsAlgorithm::initParameters( const QVariantMap & )
 {
-  std::unique_ptr< QgsProcessingParameterFieldMapping > param = qgis::make_unique< QgsProcessingParameterFieldMapping> ( QStringLiteral( "FIELDS_MAPPING" ), QObject::tr( "Fields mapping" ), QStringLiteral( "INPUT" ) );
+  std::unique_ptr< QgsProcessingParameterFieldMapping > param = std::make_unique< QgsProcessingParameterFieldMapping> ( QStringLiteral( "FIELDS_MAPPING" ), QObject::tr( "Fields mapping" ), QStringLiteral( "INPUT" ) );
   addParameter( param.release() );
 }
 
@@ -94,7 +94,7 @@ bool QgsRefactorFieldsAlgorithm::prepareAlgorithm( const QVariantMap &parameters
     throw QgsProcessingException( invalidSourceError( parameters, QStringLiteral( "INPUT" ) ) );
 
   mDa.setSourceCrs( source->sourceCrs(), context.transformContext() );
-  mDa.setEllipsoid( context.project()->ellipsoid() );
+  mDa.setEllipsoid( context.ellipsoid() );
 
   mExpressionContext = createExpressionContext( parameters, context, source.get() );
 
@@ -118,11 +118,8 @@ bool QgsRefactorFieldsAlgorithm::prepareAlgorithm( const QVariantMap &parameters
     {
       QgsExpression expression( expressionString );
       expression.setGeomCalculator( &mDa );
-      if ( context.project() )
-      {
-        expression.setDistanceUnits( context.project()->distanceUnits() );
-        expression.setAreaUnits( context.project()->areaUnits() );
-      }
+      expression.setDistanceUnits( context.distanceUnit() );
+      expression.setAreaUnits( context.areaUnit() );
       if ( expression.hasParserError() )
       {
         throw QgsProcessingException( QObject::tr( "Parser error for field \"%1\" with expression \"%2\": %3" )

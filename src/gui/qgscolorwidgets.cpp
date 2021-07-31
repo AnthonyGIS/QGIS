@@ -21,7 +21,12 @@
 #include "qgsguiutils.h"
 
 #include <QResizeEvent>
+
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
 #include <QStyleOptionFrameV3>
+#else
+#include <QStyleOptionFrame>
+#endif
 #include <QPainter>
 #include <QHBoxLayout>
 #include <QSpinBox>
@@ -392,11 +397,7 @@ QgsColorWheel::~QgsColorWheel()
 
 QSize QgsColorWheel::sizeHint() const
 {
-#if QT_VERSION < QT_VERSION_CHECK(5, 11, 0)
-  int size = Qgis::UI_SCALE_FACTOR * fontMetrics().width( QStringLiteral( "XXXXXXXXXXXXXXXXXXXXXX" ) );
-#else
   int size = Qgis::UI_SCALE_FACTOR * fontMetrics().horizontalAdvance( 'X' ) * 22;
-#endif
   return QSize( size, size );
 }
 
@@ -754,11 +755,7 @@ QgsColorBox::~QgsColorBox()
 
 QSize QgsColorBox::sizeHint() const
 {
-#if QT_VERSION < QT_VERSION_CHECK(5, 11, 0)
-  int size = Qgis::UI_SCALE_FACTOR * fontMetrics().width( QStringLiteral( "XXXXXXXXXXXXXXXXXXXXXX" ) );
-#else
   int size = Qgis::UI_SCALE_FACTOR * fontMetrics().horizontalAdvance( 'X' ) * 22;
-#endif
   return QSize( size, size );
 }
 
@@ -989,20 +986,12 @@ QSize QgsColorRampWidget::sizeHint() const
   if ( mOrientation == QgsColorRampWidget::Horizontal )
   {
     //horizontal
-#if QT_VERSION < QT_VERSION_CHECK(5, 11, 0)
-    return QSize( Qgis::UI_SCALE_FACTOR * fontMetrics().width( QStringLiteral( "XXXXXXXXXXXXXXXXXXXXXX" ) ), Qgis::UI_SCALE_FACTOR * fontMetrics().height() * 1.3 );
-#else
     return QSize( Qgis::UI_SCALE_FACTOR * fontMetrics().horizontalAdvance( 'X' ) * 22, Qgis::UI_SCALE_FACTOR * fontMetrics().height() * 1.3 );
-#endif
   }
   else
   {
     //vertical
-#if QT_VERSION < QT_VERSION_CHECK(5, 11, 0)
-    return QSize( Qgis::UI_SCALE_FACTOR * fontMetrics().height() * 1.3, Qgis::UI_SCALE_FACTOR * fontMetrics().width( QStringLiteral( "XXXXXXXXXXXXXXXXXXXXXX" ) ) );
-#else
     return QSize( Qgis::UI_SCALE_FACTOR * fontMetrics().height() * 1.3, Qgis::UI_SCALE_FACTOR * fontMetrics().horizontalAdvance( 'X' ) * 22 );
-#endif
   }
 }
 
@@ -1180,7 +1169,7 @@ void QgsColorRampWidget::wheelEvent( QWheelEvent *event )
 {
   int oldValue = componentValue();
 
-  if ( event->delta() > 0 )
+  if ( event->angleDelta().y() > 0 )
   {
     setComponentValue( componentValue() + 1 );
   }
@@ -1284,7 +1273,7 @@ QgsColorSliderWidget::QgsColorSliderWidget( QWidget *parent, const ColorComponen
 
 {
   QHBoxLayout *hLayout = new QHBoxLayout();
-  hLayout->setMargin( 0 );
+  hLayout->setContentsMargins( 0, 0, 0, 0 );
   hLayout->setSpacing( 5 );
 
   mRampWidget = new QgsColorRampWidget( nullptr, component );
@@ -1293,11 +1282,7 @@ QgsColorSliderWidget::QgsColorSliderWidget( QWidget *parent, const ColorComponen
 
   mSpinBox = new QSpinBox();
   //set spinbox to a reasonable width
-#if QT_VERSION < QT_VERSION_CHECK(5, 11, 0)
-  int largestCharWidth = mSpinBox->fontMetrics().width( QStringLiteral( "888%" ) );
-#else
   int largestCharWidth = mSpinBox->fontMetrics().horizontalAdvance( QStringLiteral( "888%" ) );
-#endif
   mSpinBox->setMinimumWidth( largestCharWidth + 35 );
   mSpinBox->setMinimum( 0 );
   mSpinBox->setMaximum( convertRealToDisplay( componentRange() ) );
@@ -1415,7 +1400,7 @@ QgsColorTextWidget::QgsColorTextWidget( QWidget *parent )
   : QgsColorWidget( parent )
 {
   QHBoxLayout *hLayout = new QHBoxLayout();
-  hLayout->setMargin( 0 );
+  hLayout->setContentsMargins( 0, 0, 0, 0 );
   hLayout->setSpacing( 0 );
 
   mLineEdit = new QLineEdit( nullptr );
@@ -1469,10 +1454,10 @@ void QgsColorTextWidget::updateText()
       mLineEdit->setText( mCurrentColor.name() + QStringLiteral( "%1" ).arg( mCurrentColor.alpha(), 2, 16, QChar( '0' ) ) );
       break;
     case Rgb:
-      mLineEdit->setText( QString( tr( "rgb( %1, %2, %3 )" ) ).arg( mCurrentColor.red() ).arg( mCurrentColor.green() ).arg( mCurrentColor.blue() ) );
+      mLineEdit->setText( tr( "rgb( %1, %2, %3 )" ).arg( mCurrentColor.red() ).arg( mCurrentColor.green() ).arg( mCurrentColor.blue() ) );
       break;
     case Rgba:
-      mLineEdit->setText( QString( tr( "rgba( %1, %2, %3, %4 )" ) ).arg( mCurrentColor.red() ).arg( mCurrentColor.green() ).arg( mCurrentColor.blue() ).arg( QString::number( mCurrentColor.alphaF(), 'f', 2 ) ) );
+      mLineEdit->setText( tr( "rgba( %1, %2, %3, %4 )" ).arg( mCurrentColor.red() ).arg( mCurrentColor.green() ).arg( mCurrentColor.blue() ).arg( QString::number( mCurrentColor.alphaF(), 'f', 2 ) ) );
       break;
   }
 }
@@ -1608,11 +1593,7 @@ void QgsColorPreviewWidget::paintEvent( QPaintEvent *event )
 
 QSize QgsColorPreviewWidget::sizeHint() const
 {
-#if QT_VERSION < QT_VERSION_CHECK(5, 11, 0)
-  return QSize( Qgis::UI_SCALE_FACTOR *  fontMetrics().width( QStringLiteral( "XXXXXXXXXXXXXXXXXXXXXX" ) ), Qgis::UI_SCALE_FACTOR * fontMetrics().width( QStringLiteral( "XXXXXXXXXXXXXXXXXXXXXX" ) ) * 0.75 );
-#else
   return QSize( Qgis::UI_SCALE_FACTOR * fontMetrics().horizontalAdvance( 'X' ) * 22, Qgis::UI_SCALE_FACTOR * fontMetrics().horizontalAdvance( 'X' ) * 22 * 0.75 );
-#endif
 }
 
 void QgsColorPreviewWidget::setColor2( const QColor &color )
@@ -1734,9 +1715,9 @@ void QgsColorWidgetAction::onHover()
 void QgsColorWidgetAction::setColor( const QColor &color )
 {
   emit colorChanged( color );
-  QAction::trigger();
   if ( mMenu && mDismissOnColorSelection )
   {
+    QAction::trigger();
     mMenu->hide();
   }
 }

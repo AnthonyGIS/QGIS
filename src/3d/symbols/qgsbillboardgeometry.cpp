@@ -20,17 +20,15 @@
 QgsBillboardGeometry::QgsBillboardGeometry( Qt3DCore::QNode *parent )
   : Qt3DRender::QGeometry( parent )
   , mPositionAttribute( new Qt3DRender::QAttribute( this ) )
-#if QT_VERSION < QT_VERSION_CHECK(5, 10, 0)
-  , mVertexBuffer( new Qt3DRender::QBuffer( Qt3DRender::QBuffer::VertexBuffer, this ) )
-#else
   , mVertexBuffer( new Qt3DRender::QBuffer( this ) )
-#endif
 {
 
   mPositionAttribute->setAttributeType( Qt3DRender::QAttribute::VertexAttribute );
   mPositionAttribute->setBuffer( mVertexBuffer );
   mPositionAttribute->setVertexBaseType( Qt3DRender::QAttribute::Float );
   mPositionAttribute->setVertexSize( 3 );
+  mPositionAttribute->setByteOffset( 0 );
+  mPositionAttribute->setByteStride( 3 * sizeof( float ) );
   mPositionAttribute->setName( Qt3DRender::QAttribute::defaultPositionAttributeName() );
 
   addAttribute( mPositionAttribute );

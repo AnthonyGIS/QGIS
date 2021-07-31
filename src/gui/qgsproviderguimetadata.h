@@ -27,10 +27,13 @@
 class QgsDataItemGuiProvider;
 class QgsSourceSelectProvider;
 class QgsProjectStorageGuiProvider;
+class QgsSubsetStringEditorProvider;
+class QgsProviderSourceWidgetProvider;
+class QgsMapLayerConfigWidgetFactory;
 
 /**
  * \ingroup gui
- * Holds data for GUI part of the data providers
+ * \brief Holds data for GUI part of the data providers
  *
  * \since QGIS 3.10
  */
@@ -68,6 +71,28 @@ class GUI_EXPORT QgsProviderGuiMetadata
      * \note Ownership of created source select providers is passed to the caller.
      */
     virtual QList<QgsSourceSelectProvider *> sourceSelectProviders() SIP_FACTORY;
+
+    /**
+     * Returns subset string editor providers
+     * \note Ownership of created providers is passed to the caller.
+     * \since QGIS 3.18
+     */
+    virtual QList<QgsSubsetStringEditorProvider *> subsetStringEditorProviders() SIP_FACTORY;
+
+    /**
+     * Returns source widget providers
+     * \note Ownership of created providers is passed to the caller.
+     * \since QGIS 3.18
+     */
+    virtual QList<QgsProviderSourceWidgetProvider *> sourceWidgetProviders() SIP_FACTORY;
+
+    /**
+     * Returns map layer config widget factories associated with the provider.
+     *
+     * \note Ownership of factories remains with the provider.
+     * \since QGIS 3.20
+     */
+    virtual QList<const QgsMapLayerConfigWidgetFactory *> mapLayerConfigWidgetFactories();
 
     //! Returns unique provider key
     QString key() const;

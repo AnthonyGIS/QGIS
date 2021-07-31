@@ -148,17 +148,22 @@ QMenu
     padding-right: 0em;
 }
 
+QMenu::icon
+{
+    padding-left: 0.3em;
+}
+
 QMenu::item
 {
     background: transparent;
-    padding: 0.2em 1.3em 0.2em 1.3em;
+    padding: 0.2em 1.3em 0.2em 0.4em;
 }
 
 QMenu::item:disabled
 {
     color: #555;
     background: transparent;
-    padding: 0.2em 1.3em 0.2em 1.3em;
+    padding: 0.2em 1.3em 0.2em 0.4em;
 }
 
 QMenu::item:selected
@@ -170,6 +175,11 @@ QMenu::item:selected
 QMenu::item:checked
 {
     text-decoration:underline;
+}
+
+QMenu::indicator
+{
+    width: 0em;
 }
 
 QWidget:disabled, QWidget:editable:disabled
@@ -335,15 +345,15 @@ QComboBox::down-arrow
 }
 
 QComboBox:item {
-    padding-left: 1.3em;
+    padding-left: 0.1em;
     height:1.25em;
 }
 QComboBox:item:selected {
-    padding-left: 1.3em;
+    padding-left: 0.1em;
     height:1.25em;
 }
 QComboBox:item:checked {
-    padding-left: 1.3em;
+    padding-left: 0.1em;
     height:1.25em;
     text-decoration:underline;
 }
@@ -631,7 +641,7 @@ QGroupBox::indicator:checked:disabled {
 
 QRadioButton::indicator
 {
-    border: 1px solid @background;
+    border: 1px solid rgba(0,0,0,0);
     width:0.8em;
     height:0.8em;
 }
@@ -654,13 +664,17 @@ QRadioButton::indicator:checked:disabled {
     image: url(@theme_path/icons/qradiobox-checked-disabled.svg);
 }
 
+QRadioButton:disabled {
+    background-color: transparent;
+}
+
 /* ==================================================================================== */
 /* CHECKBOX                                                                             */
 /* ==================================================================================== */
 
 QCheckBox::indicator
 {
-    border: 1px solid @background;
+    border: 1px solid rgba(0,0,0,0);
     width:0.8em;
     height:0.8em;
 }
@@ -681,6 +695,10 @@ QCheckBox::indicator:checked:disabled {
     image: url(@theme_path/icons/qcheckbox-checked-disabled.svg);
 }
 
+QCheckBox:disabled {
+    background-color: transparent;
+}
+
 /* ==================================================================================== */
 /* SLIDER                                                                                */
 /* ==================================================================================== */
@@ -692,13 +710,18 @@ QSlider::groove:horizontal {
     background-color: @itemdarkbackground;
     margin: 0.15em 1px;
 }
-
+QSlider::groove:horizontal[invertedAppearance="true"] {
+    background-color: @itembackground;
+}
 QSlider::groove:vertical  {
     border: 1px solid @itemdarkbackground;
     border-radius: 0.15em;
     width: 0.4em; /* the groove expands to the size of the slider by default. by giving it a height, it has a fixed size */
-    background-color: @itemdarkbackground;
+    background-color: @itembackground;
     margin: 1px 0.15em;
+}
+QSlider::groove:vertical[invertedAppearance="true"] {
+    background-color: @itemdarkbackground;
 }
 
 QSlider::handle:horizontal {
@@ -723,13 +746,18 @@ QSlider::sub-page:horizontal {
     background-color: @itembackground;
     margin: 0.15em 1px;
 }
-
+QSlider::sub-page:horizontal[invertedAppearance="true"] {
+    background-color: @itemdarkbackground;
+}
 QSlider::sub-page:vertical {
     border: 1px solid @itemdarkbackground;
     border-radius: 0.15em;
     height: 0.4em; /* the groove expands to the size of the slider by default. by giving it a height, it has a fixed size */
-    background-color: @itembackground;
+    background-color: @itemdarkbackground;
     margin: 1px 0.15em;
+}
+QSlider::sub-page:vertical[invertedAppearance="true"] {
+    background-color: @itembackground;
 }
 
 /* ==================================================================================== */
@@ -1031,4 +1059,8 @@ QWidget#QgsRendererMeshPropsWidgetBase QTabWidget#mStyleOptionsTab QTabBar::tab 
 
 QWidget#QgsRasterCalcDialogBase QWidget#mOperatorsGroupBox QPushButton {
     min-width:2.3em;
+}
+
+QFrame#mUserInputContainer { 
+    background-color: @background;
 }

@@ -31,10 +31,10 @@
 #include <QVector>
 
 #include "qgis_sip.h"
+#include "qgis.h"
 #include "qgsmaplayer.h"
 #include "qgsraster.h"
 #include "qgsrasterdataprovider.h"
-#include "qgsrasterpipe.h"
 #include "qgsrasterviewport.h"
 #include "qgsrasterminmaxorigin.h"
 #include "qgscontrastenhancement.h"
@@ -43,6 +43,10 @@ class QgsMapToPixel;
 class QgsRasterRenderer;
 class QgsRectangle;
 class QgsRasterLayerTemporalProperties;
+class QgsRasterPipe;
+class QgsRasterResampleFilter;
+class QgsBrightnessContrastFilter;
+class QgsHueSaturationFilter;
 
 class QImage;
 class QPixmap;
@@ -53,7 +57,7 @@ typedef QList < QPair< QString, QColor > > QgsLegendColorList;
 /**
  * \ingroup core
  *
- * Represents a raster layer.
+ * \brief Represents a raster layer.
  *
  * A QgsRasterLayer is instantiated by specifying the name of a data provider,
  * such as "gdal" or "wms", and a url defining the specific data set to connect to.
@@ -63,10 +67,8 @@ typedef QList < QPair< QString, QColor > > QgsLegendColorList;
  *
  *  Sample usage of the QgsRasterLayer class:
  *
- * \code{.cpp}
- *     QString myFileNameQString = "/path/to/file";
- *     QString myBaseNameQString = "my layer";
- *     QgsRasterLayer *myRasterLayer = new QgsRasterLayer(myFileNameQString, myBaseNameQString);
+ * \code{.py}
+ *     my_raster_layer = QgsRasterLayer("/path/to/file.tif", "my layer")
  * \endcode
  */
 class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
@@ -159,6 +161,14 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
 
     ~QgsRasterLayer() override;
 
+#ifdef SIP_RUN
+    SIP_PYOBJECT __repr__();
+    % MethodCode
+    QString str = QStringLiteral( "<QgsRasterLayer: '%1' (%2)>" ).arg( sipCpp->name(), sipCpp->dataProvider() ? sipCpp->dataProvider()->name() : QStringLiteral( "Invalid" ) );
+    sipRes = PyUnicode_FromString( str.toUtf8().constData() );
+    % End
+#endif
+
     /**
      * Returns a new instance equivalent to this one. A new provider is
      *  created for the same data source and renderer is cloned too.
@@ -210,23 +220,10 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
      * Set the data provider.
      * \param provider provider key string, must match a valid QgsRasterDataProvider key. E.g. "gdal", "wms", etc.
      * \param options provider options
+     * \param flags provider flags since QGIS 3.16
      * \since QGIS 3.2
      */
-    void setDataProvider( const QString &provider, const QgsDataProvider::ProviderOptions &options );
-
-    /**
-     * Updates the data source of the layer. The layer's renderer and legend will be preserved only
-     * if the geometry type of the new data source matches the current geometry type of the layer.
-     * \param dataSource new layer data source
-     * \param baseName base name of the layer
-     * \param provider provider string
-     * \param options provider options
-     * \param loadDefaultStyleFlag set to TRUE to reset the layer's style to the default for the
-     * data source
-     * \see dataSourceChanged()
-     * \since QGIS 3.6
-     */
-    void setDataSource( const QString &dataSource, const QString &baseName, const QString &provider, const QgsDataProvider::ProviderOptions &options, bool loadDefaultStyleFlag = false ) override;
+    void setDataProvider( const QString &provider, const QgsDataProvider::ProviderOptions &options, QgsDataProvider::ReadFlags flags = QgsDataProvider::ReadFlags() );
 
     /**
      * Returns the raster layer type (which is a read only property).
@@ -244,7 +241,7 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
      *
      * \see setRenderer()
      */
-    QgsRasterRenderer *renderer() const { return mPipe.renderer(); }
+    QgsRasterRenderer *renderer() const;
 
     /**
      * Returns the raster's resample filter.
@@ -252,7 +249,7 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
      * \see brightnessFilter()
      * \see hueSaturationFilter()
      */
-    QgsRasterResampleFilter *resampleFilter() const { return mPipe.resampleFilter(); }
+    QgsRasterResampleFilter *resampleFilter() const;
 
     /**
      * Returns the raster's brightness/contrast filter.
@@ -260,7 +257,7 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
      * \see resampleFilter()
      * \see hueSaturationFilter()
      */
-    QgsBrightnessContrastFilter *brightnessFilter() const { return mPipe.brightnessFilter(); }
+    QgsBrightnessContrastFilter *brightnessFilter() const;
 
     /**
      * Returns the raster's hue/saturation filter.
@@ -268,7 +265,7 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
      * \see resampleFilter()
      * \see brightnessFilter()
      */
-    QgsHueSaturationFilter *hueSaturationFilter() const { return mPipe.hueSaturationFilter(); }
+    QgsHueSaturationFilter *hueSaturationFilter() const;
 
     /**
      * Select which stage of the pipe should apply resampling.
@@ -277,7 +274,7 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
      *
      * \since QGIS 3.16
      */
-    void setResamplingStage( QgsRasterPipe::ResamplingStage stage );
+    void setResamplingStage( Qgis::RasterResamplingStage stage );
 
     /**
      * Returns which stage of the pipe should apply resampling.
@@ -286,12 +283,12 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
      *
      * \since QGIS 3.16
      */
-    QgsRasterPipe::ResamplingStage resamplingStage() const { return mPipe.resamplingStage(); }
+    Qgis::RasterResamplingStage resamplingStage() const;
 
     /**
      * Returns the raster pipe.
      */
-    QgsRasterPipe *pipe() { return &mPipe; }
+    QgsRasterPipe *pipe() { return mPipe.get(); }
 
     /**
      * Returns the width of the (unclipped) raster.
@@ -337,8 +334,12 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
                QgsRasterViewPort *myRasterViewPort,
                const QgsMapToPixel *qgsMapToPixel = nullptr );
 
-    //! Returns a list with classification items (Text and color)
-    QgsLegendColorList legendSymbologyItems() const;
+    /**
+     * Returns a list with classification items (Text and color).
+     *
+     * \deprecated use QgsRasterRenderer::createLegendNodes() instead.
+     */
+    Q_DECL_DEPRECATED QgsLegendColorList legendSymbologyItems() const SIP_DEPRECATED;
 
     bool isSpatial() const override { return true; }
 
@@ -372,15 +373,17 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
      */
     double rasterUnitsPerPixelY() const;
 
+    void setOpacity( double opacity ) FINAL;
+    double opacity() const FINAL;
+
     /**
      * \brief Set contrast enhancement algorithm
      *  \param algorithm Contrast enhancement algorithm
      *  \param limits Limits
      *  \param extent Extent used to calculate limits, if empty, use full layer extent
      *  \param sampleSize Size of data sample to calculate limits, if 0, use full resolution
-     *  \param generateLookupTableFlag Generate lookup table. */
-
-
+     *  \param generateLookupTableFlag Generate lookup table.
+    */
     void setContrastEnhancement( QgsContrastEnhancement::ContrastEnhancementAlgorithm algorithm,
                                  QgsRasterMinMaxOrigin::Limits limits = QgsRasterMinMaxOrigin::MinMax,
                                  const QgsRectangle &extent = QgsRectangle(),
@@ -431,7 +434,8 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
 
     /**
      * \brief Draws a preview of the rasterlayer into a QImage
-     \since QGIS 2.4 */
+     * \since QGIS 2.4
+    */
     QImage previewAsImage( QSize size, const QColor &bgColor = Qt::white,
                            QImage::Format format = QImage::Format_ARGB32_Premultiplied );
 
@@ -449,7 +453,7 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
      * \returns TRUE in case of success
      * \since QGIS 3.6
      */
-    bool writeSld( QDomNode &node, QDomDocument &doc, QString &errorMessage, const QgsStringMap &props = QgsStringMap() ) const;
+    bool writeSld( QDomNode &node, QDomDocument &doc, QString &errorMessage, const QVariantMap &props = QVariantMap() ) const;
 
     /**
      * If the ignoreExtent flag is set, the layer will also render outside the
@@ -524,6 +528,19 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
                         int sampleSize,
                         double &min, double &max );
 
+    /**
+     * Updates the data source of the layer. The layer's renderer and legend will be preserved only
+     * if the geometry type of the new data source matches the current geometry type of the layer.
+     * \param dataSource new layer data source
+     * \param baseName base name of the layer
+     * \param provider provider string
+     * \param options provider options
+     * \param flags provider read flags
+     * \see dataSourceChanged()
+     * \since QGIS 3.20
+     */
+    void setDataSourcePrivate( const QString &dataSource, const QString &baseName, const QString &provider, const QgsDataProvider::ProviderOptions &options, QgsDataProvider::ReadFlags flags ) override;
+
     //! \brief  Constant defining flag for XML and a constant that signals property not used
     const QString QSTRING_NOT_SET;
     const QString TRSTRING_NOT_SET;
@@ -539,9 +556,9 @@ class CORE_EXPORT QgsRasterLayer : public QgsMapLayer
 
     QgsRasterViewPort mLastViewPort;
 
-    LayerType mRasterType;
+    LayerType mRasterType = GrayOrUndefined;
 
-    QgsRasterPipe mPipe;
+    std::unique_ptr< QgsRasterPipe > mPipe;
 
     //! To save computations and possible infinite cycle of notifications
     QgsRectangle mLastRectangleUsedByRefreshContrastEnhancementIfNeeded;

@@ -19,6 +19,9 @@
 #include "qgsmapsettings.h"
 #include "qgsproject.h"
 #include "qgsexpressioncontextutils.h"
+#include "qgsmarkersymbol.h"
+#include "qgslinesymbol.h"
+
 #include <QPainter>
 #include <cmath>
 
@@ -33,6 +36,8 @@ QgsMapCanvasSymbolItem::QgsMapCanvasSymbolItem( QgsMapCanvas *canvas )
 {
   setCacheMode( QGraphicsItem::ItemCoordinateCache );
 }
+
+QgsMapCanvasSymbolItem::~QgsMapCanvasSymbolItem() = default;
 
 QgsRenderContext QgsMapCanvasSymbolItem::renderContext( QPainter *painter )
 {
@@ -51,6 +56,7 @@ QgsRenderContext QgsMapCanvasSymbolItem::renderContext( QPainter *painter )
   }
   //context << QgsExpressionContextUtils::layerScope( mLayer );
   context.setFeature( mFeature );
+  context.setFields( mFeature.fields() );
 
   //setup render context
   QgsMapSettings ms = mMapCanvas->mapSettings();
@@ -120,7 +126,7 @@ double QgsMapCanvasSymbolItem::opacity() const
 QgsMapCanvasMarkerSymbolItem::QgsMapCanvasMarkerSymbolItem( QgsMapCanvas *canvas )
   : QgsMapCanvasSymbolItem( canvas )
 {
-  setSymbol( qgis::make_unique< QgsMarkerSymbol >() );
+  setSymbol( std::make_unique< QgsMarkerSymbol >() );
 }
 
 
@@ -163,12 +169,19 @@ QgsMarkerSymbol *QgsMapCanvasMarkerSymbolItem::markerSymbol()
 QgsMapCanvasLineSymbolItem::QgsMapCanvasLineSymbolItem( QgsMapCanvas *canvas )
   : QgsMapCanvasSymbolItem( canvas )
 {
-  setSymbol( qgis::make_unique< QgsLineSymbol >() );
+  setSymbol( std::make_unique< QgsLineSymbol >() );
+}
+
+void QgsMapCanvasLineSymbolItem::setLine( const QPolygonF &line )
+{
+  mLine = line;
+  update();
 }
 
 void QgsMapCanvasLineSymbolItem::setLine( const QLineF &line )
 {
-  mLine = line;
+  mLine.clear();
+  mLine << line.p1() << line.p2();
   update();
 }
 
@@ -179,9 +192,7 @@ QRectF QgsMapCanvasLineSymbolItem::boundingRect() const
 
 void QgsMapCanvasLineSymbolItem::renderSymbol( QgsRenderContext &context, const QgsFeature &feature )
 {
-  QPolygonF points;
-  points << mLine.p1() << mLine.p2();
-  lineSymbol()->renderPolyline( points, &feature, context );
+  lineSymbol()->renderPolyline( mLine, &feature, context );
 }
 
 QgsLineSymbol *QgsMapCanvasLineSymbolItem::lineSymbol()

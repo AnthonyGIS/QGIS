@@ -21,6 +21,7 @@
 #include <memory>
 #include <QColor>
 #include <QMatrix4x4>
+#include <Qt3DRender/QCamera>
 
 #include "qgscoordinatereferencesystem.h"
 #include "qgsmaplayerref.h"
@@ -30,6 +31,9 @@
 #include "qgsdirectionallightsettings.h"
 #include "qgsterraingenerator.h"
 #include "qgsvector3d.h"
+#include "qgsskyboxsettings.h"
+#include "qgsshadowsettings.h"
+#include "qgscameracontroller.h"
 
 class QgsMapLayer;
 class QgsRasterLayer;
@@ -42,10 +46,9 @@ class QgsProject;
 
 class QDomElement;
 
-
 /**
  * \ingroup 3d
- * Definition of the world
+ * \brief Definition of the world.
  *
  * \since QGIS 3.0
  */
@@ -155,9 +158,63 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject, public QgsTemporalRangeObjec
     //! Returns color used for selected features
     QColor selectionColor() const;
 
+    /**
+     * Sets the list of 3D map \a layers to be rendered in the scene.
+     *
+     * This setting dictates which layers are to be rendered using their 3D rendering configuration, if available.
+     *
+     * \note Layers which are rendered as part of the map terrain are specified via \a setTerrainLayers().
+     *
+     * \see layers()
+     * \see layersChanged()
+     * \see setTerrainLayers()
+     */
+    void setLayers( const QList<QgsMapLayer *> &layers );
+
+    /**
+     * Returns the list of 3D map layers to be rendered in the scene.
+     *
+     * This setting dictates which layers are to be rendered using their 3D rendering configuration, if available.
+     *
+     * \note Layers which are rendered as part of the map terrain are retrieved via \a terrainLayers().
+     *
+     * \see setLayers()
+     * \see layersChanged()
+     * \see terrainLayers()
+     */
+    QList<QgsMapLayer *> layers() const;
+
     //
     // terrain related config
     //
+
+    /**
+     * Sets the list of 2d map \a layers to be rendered in the terrain.
+     *
+     * \note Layers which are rendered as 3D layers as part of the scene are specified via \a setLayers().
+     *
+     * \note If terrainMapTheme() is set, it has a priority over the list of layers specified here.
+     *
+     * \see terrainLayers()
+     * \see terrainLayersChanged()
+     * \see setLayers()
+     * \since QGIS 3.16
+     */
+    void setTerrainLayers( const QList<QgsMapLayer *> &layers );
+
+    /**
+     * Returns the list of map layers to be rendered as a texture of the terrain.
+     *
+     * \note Layers which are rendered as 3D layers as part of the scene are retrieved via \a layers().
+     *
+     * \note If terrainMapTheme() is set, it has a priority over the list of layers returned here.
+     *
+     * \see setTerrainLayers()
+     * \see terrainLayersChanged()
+     * \see layers()
+     * \since QGIS 3.16
+     */
+    QList<QgsMapLayer *> terrainLayers() const;
 
     /**
      * Sets vertical scale (exaggeration) of terrain
@@ -166,18 +223,6 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject, public QgsTemporalRangeObjec
     void setTerrainVerticalScale( double zScale );
     //! Returns vertical scale (exaggeration) of terrain
     double terrainVerticalScale() const;
-
-    /**
-     * Sets the list of map layers to be rendered as a texture of the terrain
-     * \note If terrain map theme is set, it has a priority over the list of layers specified here.
-     */
-    void setLayers( const QList<QgsMapLayer *> &layers );
-
-    /**
-     * Returns the list of map layers to be rendered as a texture of the terrain
-     * \note If terrain map theme is set, it has a priority over the list of layers specified here.
-     */
-    QList<QgsMapLayer *> layers() const;
 
     /**
      * Sets resolution (in pixels) of the texture of a terrain tile
@@ -221,12 +266,29 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject, public QgsTemporalRangeObjec
     float maxTerrainGroundError() const;
 
     /**
+     * Sets the terrain elevation offset (used to move the terrain up or down)
+     * \see terrainElevationOffset()
+     * \since QGIS 3.18
+     */
+    void setTerrainElevationOffset( float offset );
+
+    /**
+     * Returns the elevation offset of the terrain (used to move the terrain up or down)
+     */
+    float terrainElevationOffset() const { return mTerrainElevationOffset; }
+
+    /**
      * Sets terrain generator. It takes care of producing terrain tiles from the input data.
      * Takes ownership of the generator
      */
     void setTerrainGenerator( QgsTerrainGenerator *gen SIP_TRANSFER ) SIP_SKIP;
     //! Returns terrain generator. It takes care of producing terrain tiles from the input data.
-    QgsTerrainGenerator *terrainGenerator() const SIP_SKIP { return mTerrainGenerator.get(); }
+    QgsTerrainGenerator *terrainGenerator() const SIP_SKIP
+    {
+      if ( mTerrainRenderingEnabled )
+        return mTerrainGenerator.get();
+      return nullptr;
+    }
 
     /**
      * Sets whether terrain shading is enabled.
@@ -281,20 +343,6 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject, public QgsTemporalRangeObjec
     //! Returns list of extra 3D renderers
     QList<QgsAbstract3DRenderer *> renderers() const { return mRenderers; }
 
-    /**
-     * Sets skybox configuration. When enabled, map scene will try to load six texture files
-     * using the following syntax of filenames: "[base]_[side][extension]" where [side] is one
-     * of the following: posx/posy/posz/negx/negy/negz and [base] and [extension] are the arguments
-     * passed this method.
-     */
-    void setSkybox( bool enabled, const QString &fileBase = QString(), const QString &fileExtension = QString() );
-    //! Returns whether skybox is enabled
-    bool hasSkyboxEnabled() const { return mSkyboxEnabled; }
-    //! Returns base part of filenames of skybox (see setSkybox())
-    QString skyboxFileBase() const { return mSkyboxFileBase; }
-    //! Returns extension part of filenames of skybox (see setSkybox())
-    QString skyboxFileExtension() const { return mSkyboxFileExtension; }
-
     //! Sets whether to display bounding boxes of terrain tiles (for debugging)
     void setShowTerrainBoundingBoxes( bool enabled );
     //! Returns whether to display bounding boxes of terrain tiles (for debugging)
@@ -334,6 +382,59 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject, public QgsTemporalRangeObjec
     bool showLabels() const { return mShowLabels; }
 
     /**
+    * Sets whether eye dome lighting will be used
+    * \see eyeDomeLightingEnabled()
+    * \since QGIS 3.18
+    */
+    void setEyeDomeLightingEnabled( bool enabled );
+    //! Returns whether eye dome lighting is used
+    bool eyeDomeLightingEnabled() const { return mEyeDomeLightingEnabled; }
+
+    /**
+     * Sets the eye dome lighting strength value
+     * \see eyeDomeLightingStrength()
+     * \since QGIS 3.18
+     */
+    void setEyeDomeLightingStrength( double strength );
+    //! Returns the eye dome lighting strength value
+    double eyeDomeLightingStrength() const { return mEyeDomeLightingStrength; }
+
+    /**
+     * Sets the eye dome lighting distance value (contributes to the contrast of the image
+     * \see eyeDomeLightingDistance()
+     * \since QGIS 3.18
+     */
+    void setEyeDomeLightingDistance( int distance );
+    //! Returns the eye dome lighting distance value (contributes to the contrast of the image)
+    int eyeDomeLightingDistance() const { return mEyeDomeLightingDistance; }
+
+    /**
+     * Sets the debugging settings of the shadow map
+     * \see debugShadowMapEnabled() debugShadowMapCorner() debugShadowMapSize()
+     * \since QGIS 3.18
+     */
+    void setDebugShadowMapSettings( bool enabled, Qt::Corner corner, double size );
+    //! Returns whether the shadow map debugging is enabled
+    bool debugShadowMapEnabled() const { return mDebugShadowMapEnabled; }
+    //! Returns the corner where the shadow map preview is displayed
+    Qt::Corner debugShadowMapCorner() const { return mDebugShadowMapCorner; }
+    //! Returns the size of the shadow map preview
+    double debugShadowMapSize() const { return mDebugShadowMapSize; }
+
+    /**
+     * Sets the debugging settings of the depth map
+     * \see debugDepthMapEnabled() debugDepthMapCorner() debugDepthMapSize()
+     * \since QGIS 3.18
+     */
+    void setDebugDepthMapSettings( bool enabled, Qt::Corner corner, double size );
+    //! Returns whether the shadow map debugging is enabled
+    bool debugDepthMapEnabled() const { return mDebugDepthMapEnabled; }
+    //! Returns the corner where the shadow map preview is displayed
+    Qt::Corner debugDepthMapCorner() const { return mDebugDepthMapCorner; }
+    //! Returns the size of the shadow map preview
+    double debugDepthMapSize() const { return mDebugDepthMapSize; }
+
+    /**
      * Returns list of point lights defined in the scene
      * \since QGIS 3.6
      */
@@ -370,6 +471,45 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject, public QgsTemporalRangeObjec
     void setFieldOfView( const float fieldOfView );
 
     /**
+     * Returns the camera lens' projection type
+     * \since QGIS 3.18
+     */
+    Qt3DRender::QCameraLens::ProjectionType projectionType() const SIP_SKIP { return mProjectionType; }
+
+    /**
+     * Sets the camera lens' projection type
+     * \since QGIS 3.18
+     */
+    void setProjectionType( const Qt3DRender::QCameraLens::ProjectionType projectionType ) SIP_SKIP;
+
+#ifndef SIP_RUN
+
+    /**
+     * Returns the navigation mode used by the camera
+     * \since QGIS 3.18
+     */
+    QgsCameraController::NavigationMode cameraNavigationMode() const { return mCameraNavigationMode; }
+
+    /**
+     * Sets the navigation mode for the camera
+     * \since QGIS 3.18
+     */
+    void setCameraNavigationMode( QgsCameraController::NavigationMode navigationMode );
+#endif
+
+    /**
+     * Returns the camera movement speed
+     * \since QGIS 3.18
+     */
+    double cameraMovementSpeed() const { return mCameraMovementSpeed; }
+
+    /**
+     * Sets the camera movement speed
+     * \since QGIS 3.18
+     */
+    void setCameraMovementSpeed( double movementSpeed );
+
+    /**
      * Sets DPI used for conversion between real world units (e.g. mm) and pixels
      * \param dpi the number of dot per inch
      * \since QGIS 3.10
@@ -384,13 +524,98 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject, public QgsTemporalRangeObjec
      */
     double outputDpi() const { return mDpi; }
 
+    /**
+     * Returns the current configuration of the skybox
+     * \since QGIS 3.16
+     */
+    QgsSkyboxSettings skyboxSettings() const SIP_SKIP { return mSkyboxSettings; }
+
+    /**
+     * Returns the current configuration of shadows
+     * \return QGIS 3.16
+     */
+    QgsShadowSettings shadowSettings() const SIP_SKIP { return mShadowSettings; }
+
+    /**
+     * Sets the current configuration of the skybox
+     * \since QGIS 3.16
+     */
+    void setSkyboxSettings( const QgsSkyboxSettings &skyboxSettings ) SIP_SKIP;
+
+    /**
+     * Sets the current configuration of shadow rendering
+     * \since QGIS 3.16
+     */
+    void setShadowSettings( const QgsShadowSettings &shadowSettings ) SIP_SKIP;
+
+    /**
+     * Returns whether the skybox is enabled.
+     * \see setIsSkyboxEnabled()
+     * \since QGIS 3.16
+     */
+    bool isSkyboxEnabled() const { return mIsSkyboxEnabled; }
+
+    /**
+     * Sets whether the skybox is enabled.
+     * \see isSkyboxEnabled()
+     * \since QGIS 3.16
+     */
+    void setIsSkyboxEnabled( bool enabled ) { mIsSkyboxEnabled = enabled; }
+
+    /**
+     * Returns whether FPS counter label is enabled
+     * \see setIsFpsCounterEnabled()
+     * \since QGIS 3.18
+     */
+    bool isFpsCounterEnabled() const { return mIsFpsCounterEnabled; }
+
+    /**
+     * Sets whether FPS counter label is enabled
+     * \see isFpsCounterEnabled()
+     * \since QGIS 3.18
+     */
+    void setIsFpsCounterEnabled( bool fpsCounterEnabled );
+
+    /**
+     * Returns whether the 2D terrain surface will be rendered.
+     * \see setTerrainRenderingEnabled()
+     * \since QGIS 3.22
+     */
+    bool terrainRenderingEnabled() { return mTerrainRenderingEnabled; }
+
+    /**
+     * Sets whether the 2D terrain surface will be rendered in.
+     * \see terrainRenderingEnabled()
+     * \since QGIS 3.22
+     */
+    void setTerrainRenderingEnabled( bool terrainRenderingEnabled );
+
   signals:
     //! Emitted when the background color has changed
     void backgroundColorChanged();
     //! Emitted when the selection color has changed
     void selectionColorChanged();
-    //! Emitted when the list of map layers for terrain texture has changed
+
+    /**
+     * Emitted when the list of map layers for 3d rendering has changed.
+     *
+     * \see setLayers()
+     * \see layers()
+     * \see terrainLayersChanged()
+     */
     void layersChanged();
+
+    /**
+     * Emitted when the list of map layers for terrain texture has changed.
+     *
+     * \see terrainLayers()
+     * \see setTerrainLayers()
+     * \see layersChanged()
+     *
+     * \since QGIS 3.16
+     */
+    void terrainLayersChanged();
+
     //! Emitted when the terrain generator has changed
     void terrainGeneratorChanged();
     //! Emitted when the vertical scale of the terrain has changed
@@ -401,6 +626,12 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject, public QgsTemporalRangeObjec
     void maxTerrainScreenErrorChanged();
     //! Emitted when the maximum terrain ground error has changed
     void maxTerrainGroundErrorChanged();
+
+    /**
+     * Emitted when the terrain elevation offset is changed
+     * \since QGIS 3.16
+     */
+    void terrainElevationOffsetChanged( float newElevation );
 
     /**
      * Emitted when terrain shading enabled flag or terrain shading material has changed
@@ -441,6 +672,36 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject, public QgsTemporalRangeObjec
     void showLabelsChanged();
 
     /**
+     * Emitted when the flag whether eye dome lighting is used has changed
+     * \since QGIS 3.18
+     */
+    void eyeDomeLightingEnabledChanged();
+
+    /**
+     * Emitted when the eye dome lighting strength has changed
+     * \since QGIS 3.18
+     */
+    void eyeDomeLightingStrengthChanged();
+
+    /**
+     * Emitted when the eye dome lighting distance has changed
+     * \since QGIS 3.18
+     */
+    void eyeDomeLightingDistanceChanged();
+
+    /**
+     * Emitted when shadow map debugging has changed
+     * \since QGIS 3.18
+     */
+    void debugShadowMapSettingsChanged();
+
+    /**
+     * Emitted when depth map debugging has changed
+     * \since QGIS 3.18
+     */
+    void debugDepthMapSettingsChanged();
+
+    /**
      * Emitted when the list of point lights changes
      * \since QGIS 3.6
      */
@@ -458,6 +719,42 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject, public QgsTemporalRangeObjec
      */
     void fieldOfViewChanged();
 
+    /**
+     * Emitted when the camera lens projection type changes
+     * \since QGIS 3.18
+     */
+    void projectionTypeChanged();
+
+    /**
+     * Emitted when the camera navigation mode was changed
+     * \since QGIS 3.18
+     */
+    void cameraNavigationModeChanged();
+
+    /**
+     * Emitted when the camera movement speed was changed
+     * \since QGIS 3.18
+     */
+    void cameraMovementSpeedChanged();
+
+    /**
+     * Emitted when skybox settings are changed
+     * \since QGIS 3.16
+     */
+    void skyboxSettingsChanged();
+
+    /**
+     * Emitted when shadow rendering settings are changed
+     * \since QGIS 3.16
+     */
+    void shadowSettingsChanged();
+
+    /**
+     * Emitted when the FPS counter is enabled or disabled
+     * \since QGIS 3.18
+     */
+    void fpsCounterEnabledChanged( bool fpsCounterEnabled );
+
   private:
 #ifdef SIP_RUN
     Qgs3DMapSettings &operator=( const Qgs3DMapSettings & );
@@ -474,6 +771,7 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject, public QgsTemporalRangeObjec
     int mMapTileResolution = 512;   //!< Size of map textures of tiles in pixels (width/height)
     float mMaxTerrainScreenError = 3.f;   //!< Maximum allowed terrain error in pixels (determines when tiles are switched to more detailed ones)
     float mMaxTerrainGroundError = 1.f;  //!< Maximum allowed horizontal map error in map units (determines how many zoom levels will be used)
+    float mTerrainElevationOffset = 0.0f; //!< Terrain elevation offset (used to adjust the position of the terrain and move it up and down)
     bool mTerrainShadingEnabled = false;   //!< Whether terrain should be shaded taking lights into account
     QgsPhongMaterialSettings mTerrainShadingMaterial;  //!< Material to use for the terrain (if shading is enabled). Diffuse color is ignored.
     QString mTerrainMapTheme;  //!< Name of map theme used for terrain's texture (empty means use the current map theme)
@@ -485,16 +783,36 @@ class _3D_EXPORT Qgs3DMapSettings : public QObject, public QgsTemporalRangeObjec
     QList<QgsPointLightSettings> mPointLights;  //!< List of point lights defined for the scene
     QList<QgsDirectionalLightSettings> mDirectionalLights;  //!< List of directional lights defined for the scene
     float mFieldOfView = 45.0f; //<! Camera lens field of view value
+    Qt3DRender::QCameraLens::ProjectionType mProjectionType = Qt3DRender::QCameraLens::PerspectiveProjection;  //<! Camera lens projection type
+    QgsCameraController::NavigationMode mCameraNavigationMode = QgsCameraController::NavigationMode::TerrainBasedNavigation;
+    double mCameraMovementSpeed = 5.0;
     QList<QgsMapLayerRef> mLayers;   //!< Layers to be rendered
+    QList<QgsMapLayerRef> mTerrainLayers;   //!< Terrain layers to be rendered
     QList<QgsAbstract3DRenderer *> mRenderers;  //!< Extra stuff to render as 3D object
-    bool mSkyboxEnabled = false;  //!< Whether to render skybox
-    QString mSkyboxFileBase; //!< Base part of the files with skybox textures
-    QString mSkyboxFileExtension; //!< Extension part of the files with skybox textures
     //! Coordinate transform context
     QgsCoordinateTransformContext mTransformContext;
     QgsPathResolver mPathResolver;
     QgsMapThemeCollection *mMapThemes = nullptr;   //!< Pointer to map themes (e.g. from the current project) to resolve map theme content from the name
     double mDpi = 96;  //!< Dot per inch value for the screen / painter
+    bool mIsFpsCounterEnabled = false;
+
+    bool mIsSkyboxEnabled = false;  //!< Whether the skybox is enabled
+    QgsSkyboxSettings mSkyboxSettings; //!< Skybox related configuration
+    QgsShadowSettings mShadowSettings; //!< Shadow rendering related settings
+
+    bool mEyeDomeLightingEnabled = false;
+    double mEyeDomeLightingStrength = 1000.0;
+    int mEyeDomeLightingDistance = 1;
+
+    bool mDebugShadowMapEnabled = false;
+    Qt::Corner mDebugShadowMapCorner = Qt::Corner::TopLeftCorner;
+    double mDebugShadowMapSize = 0.2;
+
+    bool mDebugDepthMapEnabled = false;
+    Qt::Corner mDebugDepthMapCorner = Qt::Corner::TopRightCorner;
+    double mDebugDepthMapSize = 0.2;
+
+    bool mTerrainRenderingEnabled = true;
 };
 
 

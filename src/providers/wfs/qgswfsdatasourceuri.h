@@ -54,13 +54,13 @@ class QgsWFSDataSourceURI
     QString version() const;
 
     //! Returns user defined limit of features to download. 0=no limitation
-    int maxNumFeatures() const;
+    long long maxNumFeatures() const;
 
     //! Sets user defined limit of features to download
-    void setMaxNumFeatures( int maxNumFeatures );
+    void setMaxNumFeatures( long long maxNumFeatures );
 
     //! Returns user defined limit page size. 0=server udefault
-    int pageSize() const;
+    long long pageSize() const;
 
     //! Returns whether paging is enabled.
     bool pagingEnabled() const;
@@ -112,6 +112,9 @@ class QgsWFSDataSourceURI
 
     //! Whether to hide download progress dialog in QGIS main app. Defaults to false
     bool hideDownloadProgressDialog() const;
+
+    //! Whether to use "coordinates" instead of "pos" and "posList" for WFS-T 1.1 transactions (ESRI mapserver)
+    bool preferCoordinatesForWfst11() const;
 
     //! Returns authorization parameters
     const QgsAuthorizationSettings &auth() const { return mAuth; }

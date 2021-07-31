@@ -82,6 +82,19 @@ void QgsMessageLogViewer::showContextMenuForTabBar( QPoint point )
          );
   mTabBarContextMenu->addAction( actionCloseOtherTabs );
 
+  QAction *actionCloseAllTabs = new QAction( tr( "Close All Tabs" ), mTabBarContextMenu );
+  actionCloseAllTabs->setEnabled( tabWidget->tabBar()->count() > 0 );
+  connect( actionCloseAllTabs, &QAction::triggered, this, [this]
+  {
+    int i;
+    for ( i = tabWidget->tabBar()->count() - 1; i >= 0; i-- )
+    {
+      closeTab( i );
+    }
+  }
+         );
+  mTabBarContextMenu->addAction( actionCloseAllTabs );
+
   mTabBarContextMenu->exec( tabWidget->tabBar()->mapToGlobal( point ) );
 }
 
@@ -96,6 +109,12 @@ void QgsMessageLogViewer::reject()
 
 void QgsMessageLogViewer::logMessage( const QString &message, const QString &tag, Qgis::MessageLevel level )
 {
+  constexpr int MESSAGE_COUNT_LIMIT = 10000;
+  // Avoid logging too many messages, which might blow memory.
+  if ( mMessageLoggedCount == MESSAGE_COUNT_LIMIT )
+    return;
+  ++mMessageLoggedCount;
+
   QString cleanedTag = tag;
   if ( cleanedTag.isNull() )
     cleanedTag = tr( "General" );
@@ -125,23 +144,23 @@ void QgsMessageLogViewer::logMessage( const QString &message, const QString &tag
   QString colorName;
   switch ( level )
   {
-    case Qgis::Info:
+    case Qgis::MessageLevel::Info:
       levelString = QStringLiteral( "INFO" );
       colorName = settings.value( QStringLiteral( "colors/info" ), QString() ).toString();
       break;
-    case Qgis::Warning:
+    case Qgis::MessageLevel::Warning:
       levelString = QStringLiteral( "WARNING" );
       colorName = settings.value( QStringLiteral( "colors/warning" ), QString() ).toString();
       break;
-    case Qgis::Critical:
+    case Qgis::MessageLevel::Critical:
       levelString = QStringLiteral( "CRITICAL" );
       colorName = settings.value( QStringLiteral( "colors/critical" ), QString() ).toString();
       break;
-    case Qgis::Success:
+    case Qgis::MessageLevel::Success:
       levelString = QStringLiteral( "SUCCESS" );
       colorName = settings.value( QStringLiteral( "colors/success" ), QString() ).toString();
       break;
-    case Qgis::None:
+    case Qgis::MessageLevel::NoLevel:
       levelString = QStringLiteral( "NONE" );
       colorName = settings.value( QStringLiteral( "colors/default" ), QString() ).toString();
       break;
@@ -151,17 +170,24 @@ void QgsMessageLogViewer::logMessage( const QString &message, const QString &tag
   QString prefix = QStringLiteral( "<font color=\"%1\">%2 &nbsp;&nbsp;&nbsp; %3 &nbsp;&nbsp;&nbsp;</font>" )
                    .arg( color.name(), QDateTime::currentDateTime().toString( Qt::ISODate ), levelString );
   QString cleanedMessage = message;
+  if ( mMessageLoggedCount == MESSAGE_COUNT_LIMIT )
+    cleanedMessage = tr( "Message log truncated" );
+
   cleanedMessage = cleanedMessage.prepend( prefix ).replace( '\n', QLatin1String( "<br>&nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp; &nbsp;" ) );
   w->appendHtml( cleanedMessage );
   w->verticalScrollBar()->setValue( w->verticalScrollBar()->maximum() );
+  tabWidget->show();
+  emptyLabel->hide();
 }
 
 void QgsMessageLogViewer::closeTab( int index )
 {
-  if ( tabWidget->count() == 1 )
-    qobject_cast<QPlainTextEdit *>( tabWidget->widget( 0 ) )->clear();
-  else
-    tabWidget->removeTab( index );
+  tabWidget->removeTab( index );
+  if ( tabWidget->count() == 0 )
+  {
+    tabWidget->hide();
+    emptyLabel->show();
+  }
 }
 
 bool QgsMessageLogViewer::eventFilter( QObject *object, QEvent *event )

@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """QGIS Unit tests for QgsServerSettings.
 
+From build dir, run: ctest -R PyQgsServerSettings -V
+
 .. note:: This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation; either version 2 of the License, or
@@ -17,7 +19,7 @@ from qgis.PyQt.QtCore import QCoreApplication
 
 from utilities import unitTestDataPath
 from qgis.testing import unittest
-from qgis.server import QgsServerSettings
+from qgis.server import QgsServerSettings, QgsServerSettingsEnv
 
 
 class TestQgsServerSettings(unittest.TestCase):
@@ -85,20 +87,6 @@ class TestQgsServerSettings(unittest.TestCase):
         self.assertEqual(self.settings.projectFile(), "/tmp/myproject2.qgs")
         os.environ.pop(env)
 
-    def test_env_max_cache_layers(self):
-        env = "MAX_CACHE_LAYERS"
-
-        # test parallel rendering value from environment variable
-        os.environ[env] = "3"
-        self.settings.load()
-        self.assertEqual(self.settings.maxCacheLayers(), 3)
-        os.environ.pop(env)
-
-        os.environ[env] = "100"
-        self.settings.load()
-        self.assertEqual(self.settings.maxCacheLayers(), 100)
-        os.environ.pop(env)
-
     def test_env_max_threads(self):
         env = "QGIS_SERVER_MAX_THREADS"
 
@@ -129,6 +117,36 @@ class TestQgsServerSettings(unittest.TestCase):
         os.environ[env] = "/tmp/fake"
         self.settings.load()
         self.assertEqual(self.settings.cacheDirectory(), "/tmp/fake")
+        os.environ.pop(env)
+
+    def test_env_trust_layer_metadata(self):
+        env = "QGIS_SERVER_TRUST_LAYER_METADATA"
+
+        self.assertFalse(self.settings.trustLayerMetadata())
+
+        os.environ[env] = "1"
+        self.settings.load()
+        self.assertTrue(self.settings.trustLayerMetadata())
+        os.environ.pop(env)
+
+        os.environ[env] = "0"
+        self.settings.load()
+        self.assertFalse(self.settings.trustLayerMetadata())
+        os.environ.pop(env)
+
+    def test_env_load_layouts_disabled(self):
+        env = "QGIS_SERVER_DISABLE_GETPRINT"
+
+        self.assertFalse(self.settings.getPrintDisabled())
+
+        os.environ[env] = "1"
+        self.settings.load()
+        self.assertTrue(self.settings.getPrintDisabled())
+        os.environ.pop(env)
+
+        os.environ[env] = "0"
+        self.settings.load()
+        self.assertFalse(self.settings.getPrintDisabled())
         os.environ.pop(env)
 
     def test_priority(self):
@@ -205,6 +223,39 @@ class TestQgsServerSettings(unittest.TestCase):
 
         # clear environment
         os.environ.pop(env)
+
+    def test_env_actual(self):
+        env = "QGIS_SERVER_LANDING_PAGE_PROJECTS_DIRECTORIES"
+        env2 = "QGIS_SERVER_LANDING_PAGE_PROJECTS_PG_CONNECTIONS"
+
+        os.environ[env] = "/tmp/initial"
+        os.environ[env2] = "pg:initial"
+
+        # test initial value
+        self.settings.load()
+        self.assertEqual(self.settings.landingPageProjectsDirectories(), "/tmp/initial")
+        self.assertEqual(self.settings.landingPageProjectsPgConnections(), "pg:initial")
+
+        # set new environment variable
+        os.environ[env] = "/tmp/new"
+        os.environ[env2] = "pg:new"
+
+        # test new environment variable
+        self.assertEqual(self.settings.landingPageProjectsDirectories(), "/tmp/new")
+        self.assertEqual(self.settings.landingPageProjectsPgConnections(), "pg:new")
+
+        # current environment variable are popped
+        os.environ.pop(env)
+        os.environ.pop(env2)
+
+        # fallback to initial values
+        self.assertEqual(self.settings.landingPageProjectsDirectories(), "/tmp/initial")
+        self.assertEqual(self.settings.landingPageProjectsPgConnections(), "pg:initial")
+
+    def test_env_name(self):
+        env = QgsServerSettingsEnv.QGIS_SERVER_LANDING_PAGE_PROJECTS_DIRECTORIES
+        name = QgsServerSettings.name(env)
+        self.assertEqual(name, "QGIS_SERVER_LANDING_PAGE_PROJECTS_DIRECTORIES")
 
 
 if __name__ == '__main__':

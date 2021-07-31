@@ -17,11 +17,16 @@
 #include "qgsspatialiteconnection.h"
 #include "qgsspatialitedataitems.h"
 #include "qgsspatialitesourceselect.h"
+#include "qgsproviderregistry.h"
+#include "qgsprovidermetadata.h"
+#include "qgsspatialiteproviderconnection.h"
 
 #include "qgsapplication.h"
 #include "qgsmessageoutput.h"
 #include "qgsmimedatautils.h"
 #include "qgssettings.h"
+#include "qgsvectorlayer.h"
+#include "qgsvectorlayerexporter.h"
 
 #include <QFileDialog>
 #include <QMessageBox>
@@ -31,24 +36,24 @@ void QgsSpatiaLiteDataItemGuiProvider::populateContextMenu( QgsDataItem *item, Q
 {
   if ( QgsSLRootItem *rootItem = qobject_cast< QgsSLRootItem * >( item ) )
   {
-    QAction *actionNew = new QAction( tr( "New Connection…" ), this );
+    QAction *actionNew = new QAction( tr( "New Connection…" ), menu );
     connect( actionNew, &QAction::triggered, this, [rootItem] { newConnection( rootItem ); } );
     menu->addAction( actionNew );
 
-    QAction *actionCreateDatabase = new QAction( tr( "Create Database…" ), this );
+    QAction *actionCreateDatabase = new QAction( tr( "Create Database…" ), menu );
     connect( actionCreateDatabase, &QAction::triggered, this, [rootItem] { createDatabase( rootItem ); } );
     menu->addAction( actionCreateDatabase );
   }
 
   if ( QgsSLConnectionItem *connItem = qobject_cast< QgsSLConnectionItem * >( item ) )
   {
-    QAction *actionDelete = new QAction( tr( "Delete" ), this );
+    QAction *actionDelete = new QAction( tr( "Delete" ), menu );
     connect( actionDelete, &QAction::triggered, this, [connItem] { deleteConnection( connItem ); } );
     menu->addAction( actionDelete );
   }
 }
 
-bool QgsSpatiaLiteDataItemGuiProvider::deleteLayer( QgsLayerItem *item, QgsDataItemGuiContext )
+bool QgsSpatiaLiteDataItemGuiProvider::deleteLayer( QgsLayerItem *item, QgsDataItemGuiContext context )
 {
   if ( QgsSLLayerItem *layerItem = qobject_cast< QgsSLLayerItem * >( item ) )
   {
@@ -61,13 +66,13 @@ bool QgsSpatiaLiteDataItemGuiProvider::deleteLayer( QgsLayerItem *item, QgsDataI
     QString errCause;
     if ( !SpatiaLiteUtils::deleteLayer( uri.database(), uri.table(), errCause ) )
     {
-      QMessageBox::warning( nullptr, tr( "Delete Layer" ), errCause );
-      return false;
+      notify( tr( "Delete Layer" ), errCause, context, Qgis::MessageLevel::Warning );
     }
     else
     {
-      QMessageBox::information( nullptr, tr( "Delete Layer" ), tr( "Layer deleted successfully." ) );
-      layerItem->parent()->refresh();
+      notify( tr( "Delete Layer" ), tr( "Layer deleted successfully." ), context, Qgis::MessageLevel::Success );
+      if ( layerItem->parent() )
+        layerItem->parent()->refresh();
       return true;
     }
   }
@@ -114,8 +119,9 @@ void QgsSpatiaLiteDataItemGuiProvider::createDatabase( QgsDataItem *item )
   QString errCause;
   if ( SpatiaLiteUtils::createDb( filename, errCause ) )
   {
-    // add connection
-    settings.setValue( "/SpatiaLite/connections/" + QFileInfo( filename ).fileName() + "/sqlitepath", filename );
+    QgsProviderMetadata *providerMetadata = QgsProviderRegistry::instance()->providerMetadata( QStringLiteral( "spatialite" ) );
+    QgsSpatiaLiteProviderConnection *providerConnection =  static_cast<QgsSpatiaLiteProviderConnection *>( providerMetadata->createConnection( filename ) );
+    providerMetadata->saveConnection( providerConnection, filename );
 
     item->refresh();
   }
@@ -132,7 +138,9 @@ void QgsSpatiaLiteDataItemGuiProvider::deleteConnection( QgsDataItem *item )
                               QMessageBox::Yes | QMessageBox::No, QMessageBox::No ) != QMessageBox::Yes )
     return;
 
-  QgsSpatiaLiteConnection::deleteConnection( item->name() );
+  QgsProviderMetadata *providerMetadata = QgsProviderRegistry::instance()->providerMetadata( QStringLiteral( "spatialite" ) );
+  providerMetadata->deleteConnection( item->name() );
+
   // the parent should be updated
   item->parent()->refreshConnections();
 }
@@ -181,9 +189,9 @@ bool QgsSpatiaLiteDataItemGuiProvider::handleDropConnectionItem( QgsSLConnection
       } );
 
       // when an error occurs:
-      connect( exportTask.get(), &QgsVectorLayerExporterTask::errorOccurred, connItem, [ = ]( int error, const QString & errorMessage )
+      connect( exportTask.get(), &QgsVectorLayerExporterTask::errorOccurred, connItem, [ = ]( Qgis::VectorExportResult error, const QString & errorMessage )
       {
-        if ( error != QgsVectorLayerExporter::ErrUserCanceled )
+        if ( error != Qgis::VectorExportResult::UserCanceled )
         {
           QgsMessageOutput *output = QgsMessageOutput::createMessageOutput();
           output->setTitle( tr( "Import to SpatiaLite database" ) );
@@ -206,7 +214,7 @@ bool QgsSpatiaLiteDataItemGuiProvider::handleDropConnectionItem( QgsSLConnection
   {
     QgsMessageOutput *output = QgsMessageOutput::createMessageOutput();
     output->setTitle( tr( "Import to SpatiaLite database" ) );
-    output->setMessage( tr( "Failed to import some layers!\n\n" ) + importResults.join( QStringLiteral( "\n" ) ), QgsMessageOutput::MessageText );
+    output->setMessage( tr( "Failed to import some layers!\n\n" ) + importResults.join( QLatin1Char( '\n' ) ), QgsMessageOutput::MessageText );
     output->showMessage();
   }
 

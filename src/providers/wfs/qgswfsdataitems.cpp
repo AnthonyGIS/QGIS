@@ -45,12 +45,12 @@
 //
 
 QgsWfsLayerItem::QgsWfsLayerItem( QgsDataItem *parent, QString name, const QgsDataSourceUri &uri, QString featureType, QString title, QString crsString, const QString &providerKey )
-  : QgsLayerItem( parent, title.isEmpty() ? featureType : title, parent->path() + '/' + name, QString(), QgsLayerItem::Vector, providerKey )
+  : QgsLayerItem( parent, title.isEmpty() ? featureType : title, parent->path() + '/' + name, QString(), Qgis::BrowserLayerType::Vector, providerKey )
 {
   QgsSettings settings;
   bool useCurrentViewExtent = settings.value( QStringLiteral( "Windows/WFSSourceSelect/FeatureCurrentViewExtent" ), true ).toBool();
   mUri = QgsWFSDataSourceURI::build( uri.uri( false ), featureType, crsString, QString(), QString(), useCurrentViewExtent );
-  setState( Populated );
+  setState( Qgis::BrowserItemState::Populated );
   mIconName = QStringLiteral( "mIconWfs.svg" );
   mBaseUri = uri.param( QStringLiteral( "url" ) );
 }
@@ -96,13 +96,13 @@ void QgsWfsLayerItem::copyStyle()
     // TODO: how to emit message from provider (which does not know about QgisApp)
     QgisApp::instance()->messageBar()->pushMessage( tr( "Cannot copy style" ),
         errorMsg,
-        Qgis::Critical, messageTimeout() );
+        Qgis::MessageLevel::Critical, messageTimeout() );
 #endif
     return;
   }
 
   QString url( connection->uri().encodedUri() );
-  QgsGeoNodeRequest geoNodeRequest( url.replace( QStringLiteral( "url=" ), QString() ), true );
+  QgsGeoNodeRequest geoNodeRequest( url.replace( QLatin1String( "url=" ), QString() ), true );
   QgsGeoNodeStyle style = geoNodeRequest.fetchDefaultStyleBlocking( this->name() );
   if ( style.name.isEmpty() )
   {
@@ -114,7 +114,7 @@ void QgsWfsLayerItem::copyStyle()
     // TODO: how to emit message from provider (which does not know about QgisApp)
     QgisApp::instance()->messageBar()->pushMessage( tr( "Cannot copy style" ),
         errorMsg,
-        Qgis::Critical, messageTimeout() );
+        Qgis::MessageLevel::Critical, messageTimeout() );
 #endif
     return;
   }
@@ -141,7 +141,7 @@ QgsWfsConnectionItem::QgsWfsConnectionItem( QgsDataItem *parent, QString name, Q
   , mUri( uri )
 {
   mIconName = QStringLiteral( "mIconConnect.svg" );
-  mCapabilities |= Collapse;
+  mCapabilities |= Qgis::BrowserItemCapability::Collapse;
 }
 
 
@@ -228,9 +228,9 @@ QVector<QgsDataItem *> QgsWfsConnectionItem::createChildren()
 //
 
 QgsWfsRootItem::QgsWfsRootItem( QgsDataItem *parent, QString name, QString path )
-  : QgsDataCollectionItem( parent, name, path, QStringLiteral( "WFS" ) )
+  : QgsConnectionsRootItem( parent, name, path, QStringLiteral( "WFS" ) )
 {
-  mCapabilities |= Fast;
+  mCapabilities |= Qgis::BrowserItemCapability::Fast;
   mIconName = QStringLiteral( "mIconWfs.svg" );
   populate();
 }
@@ -239,7 +239,8 @@ QVector<QgsDataItem *> QgsWfsRootItem::createChildren()
 {
   QVector<QgsDataItem *> connections;
 
-  Q_FOREACH ( const QString &connName, QgsWfsConnection::connectionList() )
+  const QStringList list = QgsWfsConnection::connectionList() ;
+  for ( const QString &connName : list )
   {
     QgsWfsConnection connection( connName );
     QString path = "wfs:/" + connName;
@@ -253,7 +254,7 @@ QVector<QgsDataItem *> QgsWfsRootItem::createChildren()
 
 QWidget *QgsWfsRootItem::paramWidget()
 {
-  QgsWFSSourceSelect *select = new QgsWFSSourceSelect( nullptr, nullptr, QgsProviderRegistry::WidgetMode::Manager );
+  QgsWFSSourceSelect *select = new QgsWFSSourceSelect( nullptr, Qt::WindowFlags(), QgsProviderRegistry::WidgetMode::Manager );
   connect( select, &QgsWFSSourceSelect::connectionsChanged, this, &QgsWfsRootItem::onConnectionsChanged );
   return select;
 }

@@ -22,17 +22,19 @@
 #include <QPainter>
 #include <QTime>
 #include <QDesktopServices>
+#include <QTemporaryFile>
 
 #include "cpl_conv.h"
 
 //qgis includes...
-#include <qgsrasterchecker.h>
+#include "qgsrasterchecker.h"
 #include "qgsrasterdataprovider.h"
-#include <qgsrasterlayer.h>
-#include <qgsrasterfilewriter.h>
-#include <qgsrasternuller.h>
+#include "qgsrasterlayer.h"
+#include "qgsrasterfilewriter.h"
+#include "qgsrasternuller.h"
 #include "qgsrasterprojector.h"
-#include <qgsapplication.h>
+#include "qgsapplication.h"
+#include "qgsrasterpipe.h"
 
 /**
  * \ingroup UnitTests
@@ -97,7 +99,7 @@ void TestQgsRasterFileWriter::writeTest()
   filters << QStringLiteral( "*.tif" );
   QStringList rasterNames = dir.entryList( filters, QDir::Files );
   bool allOK = true;
-  Q_FOREACH ( const QString &rasterName, rasterNames )
+  for ( const QString &rasterName : rasterNames )
   {
     bool ok = writeTest( "raster/" + rasterName );
     if ( !ok ) allOK = false;
@@ -200,13 +202,13 @@ void TestQgsRasterFileWriter::testCreateOneBandRaster()
   int width = 200, height = 100;
 
   QgsRasterFileWriter writer( filename );
-  QgsRasterDataProvider *dp = writer.createOneBandRaster( Qgis::Byte, width, height, extent, QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:4326" ) ) );
+  QgsRasterDataProvider *dp = writer.createOneBandRaster( Qgis::DataType::Byte, width, height, extent, QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:4326" ) ) );
   QVERIFY( dp );
   QCOMPARE( dp->xSize(), width );
   QCOMPARE( dp->ySize(), height );
   QCOMPARE( dp->extent(), extent );
   QCOMPARE( dp->bandCount(), 1 );
-  QCOMPARE( dp->dataType( 1 ), Qgis::Byte );
+  QCOMPARE( dp->dataType( 1 ), Qgis::DataType::Byte );
   QVERIFY( dp->isEditable() );
   delete dp;
 
@@ -216,7 +218,7 @@ void TestQgsRasterFileWriter::testCreateOneBandRaster()
   QCOMPARE( rlayer->height(), height );
   QCOMPARE( rlayer->extent(), extent );
   QCOMPARE( rlayer->bandCount(), 1 );
-  QCOMPARE( rlayer->dataProvider()->dataType( 1 ), Qgis::Byte );
+  QCOMPARE( rlayer->dataProvider()->dataType( 1 ), Qgis::DataType::Byte );
   delete rlayer;
 }
 
@@ -232,13 +234,13 @@ void TestQgsRasterFileWriter::testCreateMultiBandRaster()
   int width = 200, height = 100, nBands = 1;
 
   QgsRasterFileWriter writer( filename );
-  QgsRasterDataProvider *dp = writer.createMultiBandRaster( Qgis::Byte, width, height, extent, QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:4326" ) ), nBands );
+  QgsRasterDataProvider *dp = writer.createMultiBandRaster( Qgis::DataType::Byte, width, height, extent, QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:4326" ) ), nBands );
   QVERIFY( dp );
   QCOMPARE( dp->xSize(), width );
   QCOMPARE( dp->ySize(), height );
   QCOMPARE( dp->extent(), extent );
   QCOMPARE( dp->bandCount(), 1 );
-  QCOMPARE( dp->dataType( 1 ), Qgis::Byte );
+  QCOMPARE( dp->dataType( 1 ), Qgis::DataType::Byte );
   QVERIFY( dp->isEditable() );
   delete dp;
 
@@ -248,11 +250,11 @@ void TestQgsRasterFileWriter::testCreateMultiBandRaster()
   QCOMPARE( rlayer->height(), height );
   QCOMPARE( rlayer->extent(), extent );
   QCOMPARE( rlayer->bandCount(), 1 );
-  QCOMPARE( rlayer->dataProvider()->dataType( 1 ), Qgis::Byte );
+  QCOMPARE( rlayer->dataProvider()->dataType( 1 ), Qgis::DataType::Byte );
   delete rlayer;
 
   nBands = 3;
-  dp = writer.createMultiBandRaster( Qgis::Byte, width, height, extent, QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:4326" ) ), nBands );
+  dp = writer.createMultiBandRaster( Qgis::DataType::Byte, width, height, extent, QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:4326" ) ), nBands );
   QVERIFY( dp );
   QCOMPARE( dp->xSize(), width );
   QCOMPARE( dp->ySize(), height );
@@ -260,7 +262,7 @@ void TestQgsRasterFileWriter::testCreateMultiBandRaster()
   QCOMPARE( dp->bandCount(), nBands );
   for ( int i = 1; i <= nBands; i++ )
   {
-    QCOMPARE( dp->dataType( i ), Qgis::Byte );
+    QCOMPARE( dp->dataType( i ), Qgis::DataType::Byte );
   }
   QVERIFY( dp->isEditable() );
   delete dp;
@@ -273,7 +275,7 @@ void TestQgsRasterFileWriter::testCreateMultiBandRaster()
   QCOMPARE( rlayer->bandCount(), nBands );
   for ( int i = 1; i <= nBands; i++ )
   {
-    QCOMPARE( rlayer->dataProvider()->dataType( i ), Qgis::Byte );
+    QCOMPARE( rlayer->dataProvider()->dataType( i ), Qgis::DataType::Byte );
   }
   delete rlayer;
 }
@@ -283,10 +285,10 @@ void TestQgsRasterFileWriter::testVrtCreation()
   //create a raster layer that will be used in all tests...
   QString srcFileName = mTestDataDir + QStringLiteral( "ALLINGES_RGF93_CC46_1_1.tif" );
   QFileInfo rasterFileInfo( srcFileName );
-  std::unique_ptr< QgsRasterLayer > srcRasterLayer = qgis::make_unique< QgsRasterLayer >( rasterFileInfo.absoluteFilePath(), rasterFileInfo.completeBaseName() );
+  std::unique_ptr< QgsRasterLayer > srcRasterLayer = std::make_unique< QgsRasterLayer >( rasterFileInfo.absoluteFilePath(), rasterFileInfo.completeBaseName() );
 
   QTemporaryDir dir;
-  std::unique_ptr< QgsRasterFileWriter > rasterFileWriter = qgis::make_unique< QgsRasterFileWriter >( dir.path() + '/' + rasterFileInfo.completeBaseName() );
+  std::unique_ptr< QgsRasterFileWriter > rasterFileWriter = std::make_unique< QgsRasterFileWriter >( dir.path() + '/' + rasterFileInfo.completeBaseName() );
 
   //2. Definition of the pyramid levels
   QList<int> levelList;
@@ -312,7 +314,7 @@ void TestQgsRasterFileWriter::testVrtCreation()
   QCOMPARE( res, QgsRasterFileWriter::NoError );
 
   // Now let's compare the georef of the original raster with the georef of the generated vrt file
-  std::unique_ptr< QgsRasterLayer > vrtRasterLayer = qgis::make_unique< QgsRasterLayer >( dir.path() + '/' + rasterFileInfo.completeBaseName() + '/' + rasterFileInfo.completeBaseName() + QStringLiteral( ".vrt" ), rasterFileInfo.completeBaseName() );
+  std::unique_ptr< QgsRasterLayer > vrtRasterLayer = std::make_unique< QgsRasterLayer >( dir.path() + '/' + rasterFileInfo.completeBaseName() + '/' + rasterFileInfo.completeBaseName() + QStringLiteral( ".vrt" ), rasterFileInfo.completeBaseName() );
 
   double xminVrt = vrtRasterLayer->extent().xMinimum();
   double yminVrt = vrtRasterLayer->extent().yMaximum();

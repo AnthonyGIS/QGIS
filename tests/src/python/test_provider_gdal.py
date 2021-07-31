@@ -36,11 +36,6 @@ class PyQgsGdalProvider(unittest.TestCase):
             res.extend([block.value(r, c) for c in range(block.width())])
         self.assertEqual(res, expected)
 
-    def testCapabilities(self):
-        self.assertTrue(QgsProviderRegistry.instance().providerCapabilities("gdal") & QgsDataProvider.File)
-        self.assertTrue(QgsProviderRegistry.instance().providerCapabilities("gdal") & QgsDataProvider.Dir)
-        self.assertTrue(QgsProviderRegistry.instance().providerCapabilities("gdal") & QgsDataProvider.Net)
-
     def testRasterBlock(self):
         """Test raster block with extent"""
 
@@ -80,6 +75,45 @@ class PyQgsGdalProvider(unittest.TestCase):
             extent.setYMinimum(extent.yMaximum() - row_height)
             block = raster_layer.dataProvider().block(1, extent, 3, 1)
             self.checkBlockContents(block, full_content[row * 3:row * 3 + 3])
+
+    def testDecodeEncodeUriGpkg(self):
+        """Test decodeUri/encodeUri geopackage support"""
+
+        uri = '/my/raster.gpkg'
+        parts = QgsProviderRegistry.instance().decodeUri('gdal', uri)
+        self.assertEqual(parts, {'path': '/my/raster.gpkg', 'layerName': None})
+        encodedUri = QgsProviderRegistry.instance().encodeUri('gdal', parts)
+        self.assertEqual(encodedUri, uri)
+
+        uri = 'GPKG:/my/raster.gpkg'
+        parts = QgsProviderRegistry.instance().decodeUri('gdal', uri)
+        self.assertEqual(parts, {'path': '/my/raster.gpkg', 'layerName': None})
+        encodedUri = QgsProviderRegistry.instance().encodeUri('gdal', parts)
+        self.assertEqual(encodedUri, '/my/raster.gpkg')
+
+        uri = 'GPKG:/my/raster.gpkg:mylayer'
+        parts = QgsProviderRegistry.instance().decodeUri('gdal', uri)
+        self.assertEqual(parts, {'path': '/my/raster.gpkg', 'layerName': 'mylayer'})
+        encodedUri = QgsProviderRegistry.instance().encodeUri('gdal', parts)
+        self.assertEqual(encodedUri, uri)
+
+    def testDecodeEncodeUriOptions(self):
+        """Test decodeUri/encodeUri options support"""
+
+        uri = '/my/raster.pdf|option:DPI=300|option:GIVEME=TWO'
+        parts = QgsProviderRegistry.instance().decodeUri('gdal', uri)
+        self.assertEqual(parts, {'path': '/my/raster.pdf', 'layerName': None, 'openOptions': ['DPI=300', 'GIVEME=TWO']})
+        encodedUri = QgsProviderRegistry.instance().encodeUri('gdal', parts)
+        self.assertEqual(encodedUri, uri)
+
+    def testDecodeEncodeUriVsizip(self):
+        """Test decodeUri/encodeUri for /vsizip/ prefixed URIs"""
+
+        uri = '/vsizip//my/file.zip/image.tif'
+        parts = QgsProviderRegistry.instance().decodeUri('gdal', uri)
+        self.assertEqual(parts, {'path': '/my/file.zip', 'layerName': None, 'vsiPrefix': '/vsizip/', 'vsiSuffix': '/image.tif'})
+        encodedUri = QgsProviderRegistry.instance().encodeUri('gdal', parts)
+        self.assertEqual(encodedUri, uri)
 
 
 if __name__ == '__main__':

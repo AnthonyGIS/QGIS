@@ -68,14 +68,12 @@ class ParameterReliefColors(QgsProcessingParameterDefinition):
 
     @staticmethod
     def colorsToString(colors):
-        s = ''
-        for c in colors:
-            s += '{:f}, {:f}, {:d}, {:d}, {:d};'.format(c[0],
-                                                        c[1],
-                                                        c[2],
-                                                        c[3],
-                                                        c[4])
-        return s[:-1]
+        return ';'.join('{:f}, {:f}, {:d}, {:d}, {:d}'.format(c[0],
+                                                              c[1],
+                                                              c[2],
+                                                              c[3],
+                                                              c[4])
+                        for c in colors)
 
 
 class Relief(QgisAlgorithm):
@@ -170,6 +168,6 @@ class Relief(QgisAlgorithm):
         elif res == 6:
             raise QgsProcessingException(self.tr('Output raster size is too small (at least 3 rows needed).'))
         elif res == 7:
-            feedback.pushInfo(self.tr('Cancelled.'))
+            feedback.pushInfo(self.tr('Canceled.'))
 
         return {self.OUTPUT: outputFile, self.FREQUENCY_DISTRIBUTION: frequencyDistribution}

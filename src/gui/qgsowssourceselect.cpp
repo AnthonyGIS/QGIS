@@ -53,6 +53,7 @@
 #include <QValidator>
 #include <QNetworkRequest>
 #include <QNetworkReply>
+#include <QRegularExpression>
 
 QgsOWSSourceSelect::QgsOWSSourceSelect( const QString &service, QWidget *parent, Qt::WindowFlags fl, QgsProviderRegistry::WidgetMode theWidgetMode )
   : QgsAbstractDataSourceWidget( parent, fl, theWidgetMode )
@@ -178,7 +179,7 @@ void QgsOWSSourceSelect::populateFormats()
   {
     QString format = layersFormats.value( i );
     QgsDebugMsg( "server format = " + format );
-    QString simpleFormat = format.toLower().remove( QStringLiteral( "image/" ) ).remove( QRegExp( "_.*" ) );
+    QString simpleFormat = format.toLower().remove( QStringLiteral( "image/" ) ).remove( QRegularExpression( "_.*" ) );
     QgsDebugMsg( "server simpleFormat = " + simpleFormat );
     QString mimeFormat = "image/" + formatsMap.value( simpleFormat );
     QgsDebugMsg( "server mimeFormat = " + mimeFormat );
@@ -389,13 +390,16 @@ void QgsOWSSourceSelect::mChangeCRSButton_clicked()
   }
 
   QgsProjectionSelectionDialog *mySelector = new QgsProjectionSelectionDialog( this );
-  mySelector->setMessage( QString() );
   mySelector->setOgcWmsCrsFilter( mSelectedLayersCRSs );
 
   QgsCoordinateReferenceSystem defaultCRS = QgsProject::instance()->crs();
   if ( defaultCRS.isValid() )
   {
     mySelector->setCrs( defaultCRS );
+  }
+  else
+  {
+    mySelector->showNoCrsForLayerMessage();
   }
 
   if ( !mySelector->exec() )
@@ -448,8 +452,15 @@ void QgsOWSSourceSelect::populateCrs()
 
     if ( it == mSelectedLayersCRSs.constEnd() )
     {
-      // not found
-      mSelectedCRS = defaultCRS;
+      if ( mSelectedLayersCRSs.constFind( QgsProject::instance()->crs().authid() ) != mSelectedLayersCRSs.constEnd() )
+      {
+        mSelectedCRS = QgsProject::instance()->crs().authid();
+      }
+      else
+      {
+        // not found
+        mSelectedCRS = defaultCRS;
+      }
     }
     mSelectedCRSLabel->setText( descriptionForAuthId( mSelectedCRS ) );
     mChangeCRSButton->setEnabled( true );

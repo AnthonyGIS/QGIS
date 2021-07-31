@@ -21,11 +21,12 @@ QgsVectorLayer3DPropertiesWidget::QgsVectorLayer3DPropertiesWidget( QWidget *par
   : QWidget( parent )
 {
   setupUi( this );
+  spinZoomLevelsCount->setClearValue( 3 );
 
   groupLayerRendering->setCollapsed( true );
 
   connect( chkShowBoundingBoxes, &QCheckBox::clicked, this, &QgsVectorLayer3DPropertiesWidget::changed );
-  connect( spinZoomLevelsCount, qgis::overload<int>::of( &QSpinBox::valueChanged ), this, &QgsVectorLayer3DPropertiesWidget::changed );
+  connect( spinZoomLevelsCount, qOverload<int>( &QSpinBox::valueChanged ), this, &QgsVectorLayer3DPropertiesWidget::changed );
 }
 
 void QgsVectorLayer3DPropertiesWidget::load( QgsAbstractVectorLayer3DRenderer *renderer )

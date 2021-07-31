@@ -20,16 +20,16 @@
 #include "qgis_core.h"
 #include "qgis_sip.h"
 #include <QMap>
-#include <Qt>
-#include <QtCore>
 #include <QFont>
 #include <QColor>
 #include <QPainter>
-#include "qgssymbol.h"
 #include "qgis.h"
 #include "qgsmapunitscale.h"
 #include "qgscolorramp.h"
 #include "qgsarrowsymbollayer.h"
+#include "qgssymbol.h"
+
+#include <QFile>
 
 class QgsExpression;
 class QgsPathResolver;
@@ -46,6 +46,9 @@ class QIcon;
 class QPixmap;
 class QPointF;
 class QSize;
+class QMimeData;
+class QgsFeatureRenderer;
+class QgsSymbolLayerId;
 
 /**
  * \ingroup core
@@ -54,14 +57,6 @@ class QSize;
 class CORE_EXPORT QgsSymbolLayerUtils
 {
   public:
-
-    //! Editing vertex markers
-    enum VertexMarkerType
-    {
-      SemiTransparentCircle,
-      Cross,
-      NoMarker
-    };
 
     static QString encodeColor( const QColor &color );
     static QColor decodeColor( const QString &str );
@@ -202,8 +197,19 @@ class CORE_EXPORT QgsSymbolLayerUtils
      */
     static double sizeInPixelsFromSldUom( const QString &uom, double size );
 
-    static QString encodeScaleMethod( QgsSymbol::ScaleMethod scaleMethod );
-    static QgsSymbol::ScaleMethod decodeScaleMethod( const QString &str );
+    /**
+     * Encodes a symbol scale method to a string.
+     *
+     * \see decodeScaleMethod()
+     */
+    static QString encodeScaleMethod( Qgis::ScaleMethod scaleMethod );
+
+    /**
+     * Decodes a symbol scale method from a string.
+     *
+     * \see encodeScaleMethod()
+     */
+    static Qgis::ScaleMethod decodeScaleMethod( const QString &str );
 
     static QPainter::CompositionMode decodeBlendMode( const QString &s );
 
@@ -273,9 +279,15 @@ class CORE_EXPORT QgsSymbolLayerUtils
      * \param ramp color ramp
      * \param size target pixmap size
      * \param padding space between icon edge and color ramp
+     * \param direction direction to render pixmap (since QGIS 3.18)
+     * \param flipDirection set to TRUE to flip the direction of the ramp. For horizontal \a directions, ramps will be
+     * rendered left to right by default. For vertical \a directions, ramps will be rendered top to bottom by default. Setting
+     * this flag to TRUE will reverse these default directions.
+     * \param drawTransparentBackground set to FALSE to disable the checkerboard effect drawn below transparent colors in the ramp
      * \see colorRampPreviewIcon()
      */
-    static QPixmap colorRampPreviewPixmap( QgsColorRamp *ramp, QSize size, int padding = 0 );
+    static QPixmap colorRampPreviewPixmap( QgsColorRamp *ramp, QSize size, int padding = 0, Qt::Orientation direction = Qt::Horizontal,
+                                           bool flipDirection = false, bool drawTransparentBackground = true );
 
     static void drawStippledBackground( QPainter *painter, QRect rect );
 
@@ -283,7 +295,7 @@ class CORE_EXPORT QgsSymbolLayerUtils
      * Draws a vertex symbol at (painter) coordinates x, y. (Useful to assist vertex editing.)
      * \since QGIS 3.4.5
      */
-    static void drawVertexMarker( double x, double y, QPainter &p, QgsSymbolLayerUtils::VertexMarkerType type, int markerSize );
+    static void drawVertexMarker( double x, double y, QPainter &p, Qgis::VertexMarkerType type, int markerSize );
 
     //! Returns the maximum estimated bleed for the symbol
     static double estimateMaxSymbolBleed( QgsSymbol *symbol, const QgsRenderContext &context );
@@ -333,13 +345,19 @@ class CORE_EXPORT QgsSymbolLayerUtils
      */
     static QString symbolProperties( QgsSymbol *symbol );
 
-    static bool createSymbolLayerListFromSld( QDomElement &element, QgsWkbTypes::GeometryType geomType, QgsSymbolLayerList &layers );
+    /**
+     * Creates a symbol layer list from a DOM \a element.
+     */
+    static bool createSymbolLayerListFromSld( QDomElement &element, QgsWkbTypes::GeometryType geomType, QList<QgsSymbolLayer *> &layers );
 
     static QgsSymbolLayer *createFillLayerFromSld( QDomElement &element ) SIP_FACTORY;
     static QgsSymbolLayer *createLineLayerFromSld( QDomElement &element ) SIP_FACTORY;
     static QgsSymbolLayer *createMarkerLayerFromSld( QDomElement &element ) SIP_FACTORY;
 
-    static bool convertPolygonSymbolizerToPointMarker( QDomElement &element, QgsSymbolLayerList &layerList );
+    /**
+     * Converts a polygon symbolizer \a element to a list of marker symbol layers.
+     */
+    static bool convertPolygonSymbolizerToPointMarker( QDomElement &element, QList<QgsSymbolLayer *> &layerList );
     static bool hasExternalGraphic( QDomElement &element );
     static bool hasWellKnownMark( QDomElement &element );
 
@@ -402,7 +420,8 @@ class CORE_EXPORT QgsSymbolLayerUtils
 
     /**
      * Create ogr feature style string for brush
-     \param fillColr fill color*/
+     * \param fillColr fill color
+    */
     static QString ogrFeatureStyleBrush( const QColor &fillColr );
 
     static void createRotationElement( QDomDocument &doc, QDomElement &element, const QString &rotationFunc );
@@ -444,8 +463,10 @@ class CORE_EXPORT QgsSymbolLayerUtils
     static QDomElement createVendorOptionElement( QDomDocument &doc, const QString &name, const QString &value );
     static QgsStringMap getVendorOptionList( QDomElement &element );
 
-    static QgsStringMap parseProperties( QDomElement &element );
-    static void saveProperties( QgsStringMap props, QDomDocument &doc, QDomElement &element );
+    //! Parses the properties from XML and returns a map
+    static QVariantMap parseProperties( const QDomElement &element );
+    //! Saves the map of properties to XML
+    static void saveProperties( QVariantMap props, QDomDocument &doc, QDomElement &element );
 
     //! Reads a collection of symbols from XML and returns them in a map. Caller is responsible for deleting returned symbols.
     static QgsSymbolMap loadSymbols( QDomElement &element, const QgsReadWriteContext &context ) SIP_FACTORY;
@@ -536,11 +557,10 @@ class CORE_EXPORT QgsSymbolLayerUtils
      * \param data mime data to parse
      * \param hasAlpha will be set to TRUE if mime data was interpreted as a color containing
      * an explicit alpha value
-     * \returns valid color if mimedata could be interpreted as a color, otherwise an
-     * invalid color
+     * \returns valid color if mimedata could be interpreted as a color, otherwise an invalid color
      * \since QGIS 2.5
      */
-    static QColor colorFromMimeData( const QMimeData *data, bool &hasAlpha );
+    static QColor colorFromMimeData( const QMimeData *data, bool &hasAlpha SIP_OUT );
 
     /**
      * Attempts to parse mime data as a list of named colors
@@ -591,7 +611,7 @@ class CORE_EXPORT QgsSymbolLayerUtils
 
     /**
      * Attempts to parse a string as a color using a variety of common formats, including hex
-     * codes, rgb and rgba strings.
+     * codes, rgb and rgba, hsl and hsla strings.
      * \param colorStr string representing the color
      * \param containsAlpha if colorStr contains an explicit alpha value then containsAlpha will be set to TRUE
      * \param strictEval set to TRUE for stricter color parsing rules
@@ -613,6 +633,20 @@ class CORE_EXPORT QgsSymbolLayerUtils
      * \since QGIS 2.3
      */
     static void premultiplyColor( QColor &rgb, int alpha );
+
+    /**
+     * Attempts to condense a \a fill and \a outline layer, by moving the outline layer to the
+     * fill symbol's stroke.
+     *
+     * This will only be done if the \a outline can be transformed into a stroke on the fill layer
+     * losslessly. If so, \a fill will be updated in place with the new stroke. Any existing stroke
+     * settings in \a fill will be replaced.
+     *
+     * Returns TRUE if the fill and outline were successfully condensed.
+     *
+     * \since QGIS 3.20
+     */
+    static bool condenseFillAndOutline( QgsFillSymbolLayer *fill, QgsLineSymbolLayer *outline );
 
     //! Sorts the passed list in requested order
     static void sortVariantList( QList<QVariant> &list, Qt::SortOrder order );
@@ -649,6 +683,45 @@ class CORE_EXPORT QgsSymbolLayerUtils
     static bool pointInPolygon( const QPolygonF &points, QPointF point );
 
     /**
+     * Returns the total length of a \a polyline.
+     *
+     * \since QGIS 3.20
+     */
+    static double polylineLength( const QPolygonF &polyline );
+
+    /**
+     * Returns the substring of a \a polyline which starts at \a startOffset from the beginning of the line
+     * and ends at \a endOffset from the start of the line.
+     *
+     * If \a startOffset is less than 0, then the start point will be calculated by subtracting that distance
+     * from the end of the line. Similarly, if \a endOffset is less than zero then the end point will be subtracted
+     * from the end of the line.
+     *
+     * May return an empty linestring if the substring is zero length.
+     *
+     * \since QGIS 3.16
+     */
+    static QPolygonF polylineSubstring( const QPolygonF &polyline, double startOffset, double endOffset );
+
+    /**
+     * Returns TRUE if the angle formed by the line \a p1 - \a p2 - \a p3 forms a "sharp" corner.
+     *
+     * Sharp corners form an angle which exceeds a 45 degree threshold.
+     *
+     * \since QGIS 3.16
+     */
+    static bool isSharpCorner( QPointF p1, QPointF p2, QPointF p3 );
+
+    /**
+     * Appends a polyline \a line to an existing \a target polyline.
+     *
+     * Any duplicate points at the start \a line which match the end point from \a target will be skipped.
+     *
+     * \since QGIS 3.16
+     */
+    static void appendPolyline( QPolygonF &target, const QPolygonF &line );
+
+    /**
      * Returns a new valid expression instance for given field or expression string.
      * If the input is not a valid expression, it is assumed that it is a field name and gets properly quoted.
      * If the string is empty, returns NULLPTR.
@@ -679,33 +752,33 @@ class CORE_EXPORT QgsSymbolLayerUtils
      *  returns the value un-modified
      * \since QGIS 3.0
      */
-    static double rescaleUom( double size, QgsUnitTypes::RenderUnit unit, const QgsStringMap &props );
+    static double rescaleUom( double size, QgsUnitTypes::RenderUnit unit, const QVariantMap &props );
 
     /**
      * Rescales the given point based on the uomScale found in the props, if any is found, otherwise
      *  returns a copy of the original point
      * \since QGIS 3.0
      */
-    static QPointF rescaleUom( QPointF point, QgsUnitTypes::RenderUnit unit, const QgsStringMap &props ) SIP_PYNAME( rescalePointUom );
+    static QPointF rescaleUom( QPointF point, QgsUnitTypes::RenderUnit unit, const QVariantMap &props ) SIP_PYNAME( rescalePointUom );
 
     /**
      * Rescales the given array based on the uomScale found in the props, if any is found, otherwise
      *  returns a copy of the original point
      * \since QGIS 3.0
      */
-    static QVector<qreal> rescaleUom( const QVector<qreal> &array, QgsUnitTypes::RenderUnit unit, const QgsStringMap &props ) SIP_PYNAME( rescaleArrayUom );
+    static QVector<qreal> rescaleUom( const QVector<qreal> &array, QgsUnitTypes::RenderUnit unit, const QVariantMap &props ) SIP_PYNAME( rescaleArrayUom );
 
     /**
      * Checks if the properties contain scaleMinDenom and scaleMaxDenom, if available, they are added into the SE Rule element
      * \since QGIS 3.0
      */
-    static void applyScaleDependency( QDomDocument &doc, QDomElement &ruleElem, QgsStringMap &props );
+    static void applyScaleDependency( QDomDocument &doc, QDomElement &ruleElem, QVariantMap &props );
 
     /**
       * Merges the local scale limits, if any, with the ones already in the map, if any
       * \since QGIS 3.0
       */
-    static void mergeScaleDependencies( double mScaleMinDenom, double mScaleMaxDenom, QgsStringMap &props );
+    static void mergeScaleDependencies( double mScaleMinDenom, double mScaleMaxDenom, QVariantMap &props );
 
     /**
      * Encodes a reference to a parametric SVG into SLD, as a succession of parametric SVG using URL parameters,
@@ -740,6 +813,38 @@ class CORE_EXPORT QgsSymbolLayerUtils
      * \return 0 if size is within minSize/maxSize range. New symbol if size was out of min/max range. Caller takes ownership
      */
     static QgsSymbol *restrictedSizeSymbol( const QgsSymbol *s, double minSize, double maxSize, QgsRenderContext *context, double &width, double &height );
+
+    /**
+     * Evaluates a map of properties using the given \a context and returns a variant map with evaluated expressions from the properties.
+     * \since QGIS 3.18
+     */
+    static QgsStringMap evaluatePropertiesMap( const QMap<QString, QgsProperty> &propertiesMap, const QgsExpressionContext &context );
+
+    ///@cond PRIVATE
+#ifndef SIP_RUN
+    static QgsProperty rotateWholeSymbol( double additionalRotation, const QgsProperty &property )
+    {
+      QString exprString = property.asExpression();
+      return QgsProperty::fromExpression( QString::number( additionalRotation ) + " + (" + exprString + ')' );
+    }
+
+    static QgsProperty scaleWholeSymbol( double scaleFactor, const QgsProperty &property )
+    {
+      QString exprString = property.asExpression();
+      return QgsProperty::fromExpression( QString::number( scaleFactor ) + "*(" + exprString + ')' );
+    }
+
+    static QgsProperty scaleWholeSymbol( double scaleFactorX, double scaleFactorY, const QgsProperty &property )
+    {
+      QString exprString = property.asExpression();
+      return QgsProperty::fromExpression(
+               ( !qgsDoubleNear( scaleFactorX, 0.0 ) ? "tostring(" + QString::number( scaleFactorX ) + "*(" + exprString + "))" : QStringLiteral( "'0'" ) ) +
+               "|| ',' || " +
+               ( !qgsDoubleNear( scaleFactorY, 0.0 ) ? "tostring(" + QString::number( scaleFactorY ) + "*(" + exprString + "))" : QStringLiteral( "'0'" ) ) );
+    }
+#endif
+    ///@endcond
+
 };
 
 class QPolygonF;

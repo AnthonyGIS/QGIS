@@ -19,6 +19,7 @@
 #define QGSDELIMITEDTEXTPROVIDER_H
 
 #include <QStringList>
+#include <QRegularExpression>
 
 #include "qgsvectordataprovider.h"
 #include "qgscoordinatereferencesystem.h"
@@ -70,8 +71,8 @@ class QgsDelimitedTextProvider final: public QgsVectorDataProvider
      * Regular expression defining possible prefixes to WKT string,
      * (EWKT srid, Informix SRID)
      */
-    static QRegExp sWktPrefixRegexp;
-    static QRegExp sCrdDmsRegexp;
+    static QRegularExpression sWktPrefixRegexp;
+    static QRegularExpression sCrdDmsRegexp;
 
     enum GeomRepresentationType
     {
@@ -80,7 +81,7 @@ class QgsDelimitedTextProvider final: public QgsVectorDataProvider
       GeomAsWkt
     };
 
-    explicit QgsDelimitedTextProvider( const QString &uri, const QgsDataProvider::ProviderOptions &providerOptions );
+    explicit QgsDelimitedTextProvider( const QString &uri, const QgsDataProvider::ProviderOptions &providerOptions, QgsDataProvider::ReadFlags flags = QgsDataProvider::ReadFlags() );
     ~QgsDelimitedTextProvider() override;
 
     /* Implementation of functions from QgsVectorDataProvider */
@@ -89,7 +90,7 @@ class QgsDelimitedTextProvider final: public QgsVectorDataProvider
     QString storageType() const override;
     QgsFeatureIterator getFeatures( const QgsFeatureRequest &request ) const override;
     QgsWkbTypes::Type wkbType() const override;
-    long featureCount() const override;
+    long long featureCount() const override;
     QgsFields fields() const override;
     QgsVectorDataProvider::Capabilities capabilities() const override;
     bool createSpatialIndex() override;
@@ -156,7 +157,6 @@ class QgsDelimitedTextProvider final: public QgsVectorDataProvider
     static QgsGeometry geomFromWkt( QString &sWkt, bool wktHasPrefixRegexp );
     static bool pointFromXY( QString &sX, QString &sY, QgsPoint &point, const QString &decimalPoint, bool xyDms );
     static void appendZM( QString &sZ, QString &sM, QgsPoint &point, const QString &decimalPoint );
-    static double dmsStringToDouble( const QString &sX, bool *xOk );
 
     // mLayerValid defines whether the layer has been loaded as a valid layer
     bool mLayerValid = false;
@@ -195,7 +195,7 @@ class QgsDelimitedTextProvider final: public QgsVectorDataProvider
 
     int mGeomType;
 
-    mutable long mNumberFeatures;
+    mutable long long mNumberFeatures;
     int mSkipLines;
     QString mDecimalPoint;
     bool mXyDms = false;
@@ -238,9 +238,10 @@ class QgsDelimitedTextProviderMetadata final: public QgsProviderMetadata
 {
   public:
     QgsDelimitedTextProviderMetadata();
-    QgsDataProvider *createProvider( const QString &uri, const QgsDataProvider::ProviderOptions &options ) override;
-    QVariantMap decodeUri( const QString &uri ) override;
-    QString encodeUri( const QVariantMap &parts ) override;
+    QgsDataProvider *createProvider( const QString &uri, const QgsDataProvider::ProviderOptions &options, QgsDataProvider::ReadFlags flags = QgsDataProvider::ReadFlags() ) override;
+    QVariantMap decodeUri( const QString &uri ) const override;
+    QString encodeUri( const QVariantMap &parts ) const override;
+    ProviderCapabilities providerCapabilities() const override;
 };
 
 #endif

@@ -209,7 +209,7 @@ void QgsGrassTools::runModule( QString name, bool direct )
     QApplication::restoreOverrideCursor();
     if ( !gmod->errors().isEmpty() )
     {
-      QgsGrass::warning( gmod->errors().join( QStringLiteral( "\n" ) ) );
+      QgsGrass::warning( gmod->errors().join( QLatin1Char( '\n' ) ) );
     }
     m = qobject_cast<QWidget *>( gmod );
   }
@@ -365,7 +365,7 @@ void QgsGrassTools::addModules( QStandardItem *parent, QDomElement &element, QSt
         if ( !errors.isEmpty() )
         {
           QString label = e.attribute( QStringLiteral( "label" ) ) + e.attribute( QStringLiteral( "name" ) ); // one should be non empty
-          label += "\n  ERROR:\t" + errors.join( QStringLiteral( "\n\t" ) );
+          label += "\n  ERROR:\t" + errors.join( QLatin1String( "\n\t" ) );
           QStandardItem *item = new QStandardItem( label );
           item->setData( label, Qt::UserRole + Label );
           item->setData( label, Qt::UserRole + Search );
@@ -430,7 +430,7 @@ void QgsGrassTools::addModules( QStandardItem *parent, QDomElement &element, QSt
             myData.setIcon( pixmap );
             myData.setCheckable( false );
             myData.setRenderAsWidget( false );
-            QVariant myVariant = qVariantFromValue( myData );
+            QVariant myVariant = QVariant::fromValue( myData );
             listItem->setData( myVariant, Qt::UserRole );
             modulesListModel->appendRow( listItem );
           }
@@ -638,7 +638,7 @@ int QgsGrassTools::debug( QStandardItem *item )
     }
     QgsGrassModule *module = new QgsGrassModule( this, name, mIface, false );
     QgsDebugMsg( QString( "module: %1 errors: %2" ).arg( name ).arg( module->errors().size() ) );
-    Q_FOREACH ( QString error, module->errors() )
+    for ( QString error : module->errors() )
     {
       // each error may have multiple rows and may be html formatted (<br>)
       label += "\n  ERROR:\t" + error.replace( QLatin1String( "<br>" ), QLatin1String( "\n" ) ).replace( QLatin1String( "\n" ), QLatin1String( "\n\t" ) );

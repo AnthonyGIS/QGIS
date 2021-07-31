@@ -68,7 +68,7 @@ void QgsAbstractReportSection::setContext( const QgsReportSectionContext &contex
   if ( mFooter )
     setReportContext( mFooter.get() );
 
-  for ( QgsAbstractReportSection *section : qgis::as_const( mChildren ) )
+  for ( QgsAbstractReportSection *section : std::as_const( mChildren ) )
   {
     section->setContext( mContext );
   }
@@ -107,7 +107,7 @@ bool QgsAbstractReportSection::writeXml( QDomElement &parentElement, QDomDocumen
 
 bool QgsAbstractReportSection::readXml( const QDomElement &element, const QDomDocument &doc, const QgsReadWriteContext &context )
 {
-  if ( element.nodeName() != QStringLiteral( "Section" ) )
+  if ( element.nodeName() != QLatin1String( "Section" ) )
   {
     return false;
   }
@@ -118,7 +118,7 @@ bool QgsAbstractReportSection::readXml( const QDomElement &element, const QDomDo
   if ( !headerElement.isNull() )
   {
     const QDomElement headerLayoutElem = headerElement.firstChild().toElement();
-    std::unique_ptr< QgsLayout > header = qgis::make_unique< QgsLayout >( project() );
+    std::unique_ptr< QgsLayout > header = std::make_unique< QgsLayout >( project() );
     header->readXml( headerLayoutElem, doc, context );
     mHeader = std::move( header );
   }
@@ -126,7 +126,7 @@ bool QgsAbstractReportSection::readXml( const QDomElement &element, const QDomDo
   if ( !footerElement.isNull() )
   {
     const QDomElement footerLayoutElem = footerElement.firstChild().toElement();
-    std::unique_ptr< QgsLayout > footer = qgis::make_unique< QgsLayout >( project() );
+    std::unique_ptr< QgsLayout > footer = std::make_unique< QgsLayout >( project() );
     footer->readXml( footerLayoutElem, doc, context );
     mFooter = std::move( footer );
   }
@@ -135,7 +135,7 @@ bool QgsAbstractReportSection::readXml( const QDomElement &element, const QDomDo
   for ( int i = 0; i < sectionItemList.size(); ++i )
   {
     const QDomElement currentSectionElem = sectionItemList.at( i ).toElement();
-    if ( currentSectionElem.nodeName() != QStringLiteral( "Section" ) )
+    if ( currentSectionElem.nodeName() != QLatin1String( "Section" ) )
       continue;
 
     const QString sectionType = currentSectionElem.attribute( QStringLiteral( "type" ) );
@@ -144,11 +144,11 @@ bool QgsAbstractReportSection::readXml( const QDomElement &element, const QDomDo
     std::unique_ptr< QgsAbstractReportSection > section;
     if ( sectionType == QLatin1String( "SectionFieldGroup" ) )
     {
-      section = qgis::make_unique< QgsReportSectionFieldGroup >();
+      section = std::make_unique< QgsReportSectionFieldGroup >();
     }
     else if ( sectionType == QLatin1String( "SectionLayout" ) )
     {
-      section = qgis::make_unique< QgsReportSectionLayout >();
+      section = std::make_unique< QgsReportSectionLayout >();
     }
 
     if ( section )
@@ -237,7 +237,7 @@ bool QgsAbstractReportSection::beginRender()
 
   // and all children too
   bool result = true;
-  for ( QgsAbstractReportSection *child : qgis::as_const( mChildren ) )
+  for ( QgsAbstractReportSection *child : std::as_const( mChildren ) )
   {
     result = result && child->beginRender();
   }
@@ -310,7 +310,7 @@ bool QgsAbstractReportSection::next()
       {
         mNextChild = 0;
 
-        for ( QgsAbstractReportSection *section : qgis::as_const( mChildren ) )
+        for ( QgsAbstractReportSection *section : std::as_const( mChildren ) )
         {
           section->reset();
         }
@@ -356,7 +356,7 @@ bool QgsAbstractReportSection::endRender()
 
   // and all children too
   bool result = true;
-  for ( QgsAbstractReportSection *child : qgis::as_const( mChildren ) )
+  for ( QgsAbstractReportSection *child : std::as_const( mChildren ) )
   {
     result = result && child->endRender();
   }
@@ -368,7 +368,7 @@ void QgsAbstractReportSection::reset()
   mCurrentLayout = nullptr;
   mNextChild = 0;
   mNextSection = Header;
-  for ( QgsAbstractReportSection *section : qgis::as_const( mChildren ) )
+  for ( QgsAbstractReportSection *section : std::as_const( mChildren ) )
   {
     section->reset();
   }
@@ -417,7 +417,7 @@ void QgsAbstractReportSection::insertChild( int index, QgsAbstractReportSection 
 {
   section->setParentSection( this );
   index = std::max( 0, index );
-  index = std::min( index, mChildren.count() );
+  index = std::min( index, static_cast<int>( mChildren.count() ) );
   mChildren.insert( index, section );
 }
 
@@ -453,7 +453,7 @@ void QgsAbstractReportSection::copyCommonProperties( QgsAbstractReportSection *d
   qDeleteAll( destination->mChildren );
   destination->mChildren.clear();
 
-  for ( QgsAbstractReportSection *child : qgis::as_const( mChildren ) )
+  for ( QgsAbstractReportSection *child : std::as_const( mChildren ) )
   {
     destination->appendChild( child->clone() );
   }

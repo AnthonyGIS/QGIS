@@ -16,8 +16,7 @@
 
 use strict;
 use warnings;
-use Locale::Language;
-use Locale::Country;
+use Locales;
 
 my @lang;
 
@@ -59,7 +58,7 @@ my $translators= {
 	'hr' => 'Zoran Jankovic',
 	'is' => 'Ásta Kristín Óladóttir, Thordur Ivarsson, Sveinn í Felli',
 	'id' => 'Emir Hartato, Muhammad Iqnaul Haq Siregar, Trias Aditya, Januar V. Simarmata, I Made Anombawa',  #spellok
-	'it' => 'Marco Grisolia, Roberto Angeletti, Michele Beneventi, Marco Braida, Stefano Campus, Luca Casagrande, Paolo Cavallini, Giuliano Curti, Luca Delucchi, Alessandro Fanna, Michele Ferretti, Matteo Ghetta, Anne Gishla, Maurizio Napolitano, Flavio Rigolon',
+	'it' => 'Marco Braida, Stefano Campus, Roberta Castelli, Francesco D\'Amore, Eleonora D\'Elia, Simone Falceri, Giulio Fattori, Matteo Ghetta, Federico Gianoli, Marco Grisolia, Italang, Luca76, Pipep, Valerio Pinna, Alberto Vallortigara, Salvatore Fiandaca (reporter), Giuseppe Mattiozzi (documentation)',
 	'ja' => 'BABA Yoshihiko, Yoichi Kayama, Minoru Akagi, Takayuki Nuimura, Takayuki Mizutani, Norihiro Yamate, Kohei Tomita',
 	'ka' => 'Shota Murtskhvaladze, George Machitidze',
 	'km' => 'Khoem Sokhem',
@@ -78,6 +77,7 @@ my $translators= {
 	'pt_PT' => 'Giovanni Manghi, Joana Simões, Duarte Carreira, Alexandre Neto, Pedro Pereira, Pedro Palheiro, Nelson Silva, Ricardo Sena, Leandro Infantini, João Gaspar, José Macau',
 	'ro' => 'Sorin Călinică, Tudor Bărăscu, Georgiana Ioanovici, Alex Bădescu, Lonut Losifescu-Enescu, Bogdan Pacurar',
 	'ru' => 'Alexander Bruy, Artem Popov',
+	'sc' => 'Valerio Pinna',
 	'sk' => 'Lubos Balazovic, Jana Kormanikova, Ivan Mincik',
 	'sl' => 'Jože Detečnik, Dejan Gregor, Jaka Kranjc',
 	'sq' => '',
@@ -93,10 +93,12 @@ my $translators= {
 	'uk' => 'Alexander Bruy, Daria Svidzinska, Svitlana Shulik, Alesya Shushova',
 	'vi' => 'Phùng Văn Doanh, Bùi Hữu Mạnh, Nguyễn Văn Thanh, Nguyễn Hữu Phúc, Cao Minh Tu',
 	'zh-Hant' => 'Calvin Ngei, Zhang Jun, Richard Xie, Dennis Raylin Chen',
-	'zh-Hans' => 'Calvin Ngei, Lisashen, Wang Shuai',
+	'zh-Hans' => 'Calvin Ngei, Lisashen, Wang Shuai, Xu Baocai',
 };
 
 my $maxn;
+
+my $locale = Locales->new("en_US");
 
 for my $i (<i18n/qgis_*.ts>) {
 	my ($langcode) = $i =~ /i18n\/qgis_(.*).ts/;
@@ -120,15 +122,8 @@ for my $i (<i18n/qgis_*.ts>) {
                 $charset = " traditional";
                 $langcode = $1;
         }
-	my $name;
-	if($langcode =~ /(.*)_(.*)/) {
-		my $lang = code2language(lc $1);
-		my $country = code2country(lc $2);
-		$name = "$lang ($country)";
-	} else {
-		$name = code2language(lc $langcode);
-	}
 
+	my $name = $locale->get_language_from_code($langcode);
 	$name .= $charset;
 
 	open F, "lrelease $i|";
@@ -209,8 +204,8 @@ rename "i18n/CMakeLists.txt", "i18n/CMakeLists.txt.temp" || die "cannot rename i
 open I, "i18n/CMakeLists.txt.temp";
 open O, ">i18n/CMakeLists.txt";
 while(<I>) {
-	if( /^SET\(TS_FILES / || /^FILE \(GLOB TS_FILES \*\.ts\)/ ) {
-		print O "SET(TS_FILES " . join( " ", map { "qgis_$_\.ts"; } @ts ) . ")\n";
+	if( /^SET\(TS_FILES /i ) {
+		print O "set(TS_FILES " . join( " ", map { "qgis_$_\.ts"; } @ts ) . ")\n";
 	} else {
 		print O;
 	}

@@ -34,7 +34,7 @@ class QgsLayoutItemLegend;
 
 /**
  * \ingroup core
- * Item model implementation based on layer tree model for layout legend.
+ * \brief Item model implementation based on layer tree model for layout legend.
  *
  * Overrides some functionality of QgsLayerTreeModel to better fit the needs of layout legends.
  *
@@ -57,7 +57,7 @@ class CORE_EXPORT QgsLegendModel : public QgsLayerTreeModel
 
     /**
      * Returns filtered list of active legend nodes attached to a particular layer node
-     * (by default it returns also legend node embedded in parent layer node (if any) unless skipNodeEmbeddedInParent is true)
+     * (by default it returns also legend node embedded in parent layer node (if any) unless skipNodeEmbeddedInParent is TRUE)
      * \note Parameter skipNodeEmbeddedInParent added in QGIS 2.18
      * \note Not available in Python bindings
      * \see layerOriginalLegendNodes()
@@ -107,7 +107,7 @@ class CORE_EXPORT QgsLegendModel : public QgsLayerTreeModel
 
 /**
  * \ingroup core
- * A layout item subclass for map legends.
+ * \brief A layout item subclass for map legends.
  * \since QGIS 3.0
  */
 class CORE_EXPORT QgsLayoutItemLegend : public QgsLayoutItem

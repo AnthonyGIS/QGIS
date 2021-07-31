@@ -30,7 +30,8 @@ class QgsMapLayer;
 
 /**
  * \ingroup core
- * This class is a base class for nodes in a layer tree.
+ * \brief This class is a base class for nodes in a layer tree.
+ *
  * Layer tree is a hierarchical structure consisting of group and layer nodes:
  *
  * - group nodes are containers and may contain children (layer and group nodes)
@@ -112,6 +113,13 @@ class CORE_EXPORT QgsLayerTreeNode : public QObject
     QList<QgsLayerTreeNode *> children() { return mChildren; }
     //! Gets list of children of the node. Children are owned by the parent
     QList<QgsLayerTreeNode *> children() const { return mChildren; } SIP_SKIP
+
+    /**
+     * Removes the childrens, disconnect all the forwarded and external signals and sets their parent to NULLPTR
+     * \return the removed children
+     * \since QGIS 3.16
+     */
+    QList<QgsLayerTreeNode *> abandonChildren() SIP_SKIP;
 
     /**
      * Returns name of the node
@@ -286,8 +294,12 @@ class CORE_EXPORT QgsLayerTreeNode : public QObject
     //! custom properties attached to the node
     QgsObjectCustomProperties mProperties;
 
+    //! Sets parent to NULLPTR and disconnects all external and forwarded signals
+    virtual void makeOrphan() SIP_SKIP;
+
   private:
     QgsLayerTreeNode &operator=( const QgsLayerTreeNode & ) = delete;
+
 };
 
 

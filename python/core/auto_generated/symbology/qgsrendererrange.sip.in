@@ -24,6 +24,7 @@ class QgsRendererRange
 %Docstring
 Constructor for QgsRendererRange.
 %End
+    ~QgsRendererRange();
 
     QgsRendererRange( const QgsClassificationRange &range, QgsSymbol *symbol /Transfer/, bool render = true );
 %Docstring
@@ -31,7 +32,7 @@ Creates a renderer symbol range
 
 :param range: The classification range
 :param symbol: The symbol for this renderer range
-:param render: If true, it will be renderered
+:param render: If ``True``, it will be renderered
 %End
     QgsRendererRange( double lowerValue, double upperValue, QgsSymbol *symbol /Transfer/, const QString &label, bool render = true );
     QgsRendererRange( const QgsRendererRange &range );
@@ -55,7 +56,7 @@ Creates a renderer symbol range
 
     QString dump() const;
 
-    void toSld( QDomDocument &doc, QDomElement &element, QgsStringMap props, bool firstRange = false ) const;
+    void toSld( QDomDocument &doc, QDomElement &element, QVariantMap props, bool firstRange = false ) const;
 %Docstring
 Creates a DOM element representing the range in SLD format.
 
@@ -76,12 +77,12 @@ typedef QList<QgsRendererRange> QgsRangeList;
 
 class QgsRendererRangeLabelFormat /Deprecated/
 {
-%Docstring
+%Docstring(signature="appended")
 
 .. versionadded:: 2.6
 
 .. deprecated:: QGIS 3.10
-  use QgsClassificationMethod instead
+  use :py:class:`QgsClassificationMethod` instead
 %End
 
 %TypeHeaderCode

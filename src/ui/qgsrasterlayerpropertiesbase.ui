@@ -212,7 +212,7 @@
           </property>
           <property name="icon">
            <iconset resource="../../images/images.qrc">
-            <normaloff>:/images/themes/default/propertyicons/overlay.svg</normaloff>:/images/themes/default/propertyicons/overlay.svg</iconset>
+            <normaloff>:/images/themes/default/propertyicons/network_and_proxy.svg</normaloff>:/images/themes/default/propertyicons/network_and_proxy.svg</iconset>
           </property>
          </item>
         </widget>
@@ -270,9 +270,6 @@
            <property name="bottomMargin">
             <number>0</number>
            </property>
-           <item>
-            <widget class="QgsWebView" name="mMetadataViewer" native="true"/>
-           </item>
           </layout>
          </widget>
          <widget class="QWidget" name="mOptsPage_Source">
@@ -302,8 +299,8 @@
                <rect>
                 <x>0</x>
                 <y>0</y>
-                <width>325</width>
-                <height>978</height>
+                <width>650</width>
+                <height>673</height>
                </rect>
               </property>
               <layout class="QVBoxLayout" name="verticalLayout_7">
@@ -342,339 +339,58 @@ border-radius: 2px;</string>
                 </layout>
                </item>
                <item>
-                <layout class="QHBoxLayout" name="horizontalLayout_9" stretch="0">
-                 <property name="topMargin">
-                  <number>5</number>
-                 </property>
-                 <item>
-                  <widget class="QLabel" name="label_7">
-                   <property name="text">
-                    <string>Set source coordinate reference system</string>
-                   </property>
-                  </widget>
-                 </item>
-                </layout>
-               </item>
-               <item>
-                <widget class="QgsProjectionSelectionWidget" name="mCrsSelector" native="true">
+                <widget class="QgsCollapsibleGroupBox" name="mCrsGroupBox">
                  <property name="focusPolicy">
                   <enum>Qt::StrongFocus</enum>
                  </property>
-                </widget>
-               </item>
-               <item>
-                <widget class="QGroupBox" name="mWmstGroup">
-                 <property name="enabled">
-                  <bool>true</bool>
-                 </property>
                  <property name="title">
-                  <string>Use static WMS-T capabilities</string>
+                  <string>Assigned Coordinate Reference System (CRS)</string>
                  </property>
                  <property name="checkable">
-                  <bool>true</bool>
+                  <bool>false</bool>
                  </property>
-                 <property name="checked">
-                  <bool>true</bool>
+                 <property name="syncGroup" stdset="0">
+                  <string notr="true">vectorgeneral</string>
                  </property>
-                 <layout class="QGridLayout" name="gridLayout_15">
-                  <item row="0" column="0" colspan="3">
-                   <widget class="QLabel" name="mLabel">
+                 <layout class="QVBoxLayout" name="verticalLayout_28">
+                  <property name="spacing">
+                   <number>6</number>
+                  </property>
+                  <item>
+                   <widget class="QgsProjectionSelectionWidget" name="mCrsSelector" native="true">
+                    <property name="focusPolicy">
+                     <enum>Qt::StrongFocus</enum>
+                    </property>
+                   </widget>
+                  </item>
+                  <item>
+                   <widget class="QLabel" name="label_17">
                     <property name="text">
-                     <string/>
+                     <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;&lt;span style=&quot; font-weight:600;&quot;&gt;Changing this option does not modify the original data source or perform any reprojection of the raster layer. Rather, it can be used to override the layer's CRS within this project if it could not be detected or has been incorrectly detected.&lt;/span&gt;&lt;/p&gt;&lt;p&gt;The Processing “&lt;span style=&quot; font-style:italic;&quot;&gt;Warp (reproject)&lt;/span&gt;” tool should be used to reproject a raster source and permanently change the data source's CRS.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
+                    </property>
+                    <property name="textFormat">
+                     <enum>Qt::RichText</enum>
                     </property>
                     <property name="wordWrap">
                      <bool>true</bool>
                     </property>
                    </widget>
                   </item>
-                  <item row="1" column="1" rowspan="2" colspan="2">
-                   <widget class="QComboBox" name="mFetchModeComboBox"/>
-                  </item>
-                  <item row="3" column="0">
-                   <widget class="QCheckBox" name="mDisableTime">
-                    <property name="text">
-                     <string>Use dates only</string>
+                  <item>
+                   <widget class="Line" name="line_4">
+                    <property name="orientation">
+                     <enum>Qt::Vertical</enum>
                     </property>
-                   </widget>
-                  </item>
-                  <item row="1" column="0">
-                   <widget class="QLabel" name="label_16">
-                    <property name="text">
-                     <string>Time slice mode</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="8" column="0">
-                   <widget class="QFrame" name="mWmstReferenceTimeFrame">
-                    <property name="enabled">
-                     <bool>false</bool>
-                    </property>
-                    <property name="frameShape">
-                     <enum>QFrame::NoFrame</enum>
-                    </property>
-                    <property name="frameShadow">
-                     <enum>QFrame::Raised</enum>
-                    </property>
-                    <layout class="QGridLayout" name="gridLayout_17">
-                     <property name="topMargin">
-                      <number>0</number>
-                     </property>
-                     <item row="1" column="0">
-                      <widget class="QLabel" name="mReferenceTimeLabel">
-                       <property name="text">
-                        <string/>
-                       </property>
-                      </widget>
-                     </item>
-                     <item row="0" column="0">
-                      <widget class="QgsDateTimeEdit" name="mReferenceDateTimeEdit">
-                       <property name="dateTime">
-                        <datetime>
-                         <hour>6</hour>
-                         <minute>20</minute>
-                         <second>36</second>
-                         <year>2020</year>
-                         <month>1</month>
-                         <day>25</day>
-                        </datetime>
-                       </property>
-                       <property name="date">
-                        <date>
-                         <year>2020</year>
-                         <month>1</month>
-                         <day>25</day>
-                        </date>
-                       </property>
-                       <property name="currentSection">
-                        <enum>QDateTimeEdit::MonthSection</enum>
-                       </property>
-                       <property name="displayFormat">
-                        <string>M/d/yyyy H:mm:ss AP</string>
-                       </property>
-                       <property name="calendarPopup">
-                        <bool>false</bool>
-                       </property>
-                       <property name="timeSpec">
-                        <enum>Qt::UTC</enum>
-                       </property>
-                       <property name="allowNull" stdset="0">
-                        <bool>false</bool>
-                       </property>
-                      </widget>
-                     </item>
-                    </layout>
-                   </widget>
-                  </item>
-                  <item row="4" column="0" colspan="3">
-                   <widget class="QLabel" name="mWmstOptionsLabel">
-                    <property name="text">
-                     <string/>
-                    </property>
-                    <property name="wordWrap">
-                     <bool>true</bool>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="7" column="0">
-                   <widget class="QCheckBox" name="mReferenceTime">
-                    <property name="text">
-                     <string>Reference time</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="5" column="0" colspan="3">
-                   <widget class="QFrame" name="mWmstOptions">
-                    <property name="frameShape">
-                     <enum>QFrame::NoFrame</enum>
-                    </property>
-                    <property name="frameShadow">
-                     <enum>QFrame::Raised</enum>
-                    </property>
-                    <layout class="QVBoxLayout" name="verticalLayout_22">
-                     <property name="leftMargin">
-                      <number>0</number>
-                     </property>
-                     <property name="topMargin">
-                      <number>0</number>
-                     </property>
-                     <item>
-                      <widget class="QRadioButton" name="mStaticTemporalRange">
-                       <property name="text">
-                        <string>Use static WMS-T temporal range</string>
-                       </property>
-                      </widget>
-                     </item>
-                     <item>
-                      <widget class="QFrame" name="mStaticWmstFrame">
-                       <property name="enabled">
-                        <bool>false</bool>
-                       </property>
-                       <property name="frameShape">
-                        <enum>QFrame::NoFrame</enum>
-                       </property>
-                       <property name="frameShadow">
-                        <enum>QFrame::Raised</enum>
-                       </property>
-                       <layout class="QGridLayout" name="gridLayout_16">
-                        <property name="topMargin">
-                         <number>0</number>
-                        </property>
-                        <property name="bottomMargin">
-                         <number>0</number>
-                        </property>
-                        <item row="2" column="1" colspan="2">
-                         <widget class="QPushButton" name="mSetEndAsStartStaticButton">
-                          <property name="text">
-                           <string>Set end same as start</string>
-                          </property>
-                         </widget>
-                        </item>
-                        <item row="0" column="0">
-                         <widget class="QLabel" name="label_13">
-                          <property name="text">
-                           <string>Start date</string>
-                          </property>
-                         </widget>
-                        </item>
-                        <item row="1" column="1" colspan="2">
-                         <widget class="QgsDateTimeEdit" name="mEndStaticDateTimeEdit">
-                          <property name="displayFormat">
-                           <string>M/d/yyyy H:mm:ss AP</string>
-                          </property>
-                          <property name="timeSpec">
-                           <enum>Qt::UTC</enum>
-                          </property>
-                          <property name="allowNull" stdset="0">
-                           <bool>false</bool>
-                          </property>
-                         </widget>
-                        </item>
-                        <item row="1" column="0">
-                         <widget class="QLabel" name="label_4">
-                          <property name="text">
-                           <string>End date</string>
-                          </property>
-                         </widget>
-                        </item>
-                        <item row="0" column="1" colspan="2">
-                         <widget class="QgsDateTimeEdit" name="mStartStaticDateTimeEdit">
-                          <property name="dateTime">
-                           <datetime>
-                            <hour>9</hour>
-                            <minute>3</minute>
-                            <second>57</second>
-                            <year>2020</year>
-                            <month>4</month>
-                            <day>29</day>
-                           </datetime>
-                          </property>
-                          <property name="currentSection">
-                           <enum>QDateTimeEdit::MonthSection</enum>
-                          </property>
-                          <property name="displayFormat">
-                           <string>M/d/yyyy H:mm:ss AP</string>
-                          </property>
-                          <property name="timeSpec">
-                           <enum>Qt::UTC</enum>
-                          </property>
-                          <property name="allowNull" stdset="0">
-                           <bool>false</bool>
-                          </property>
-                         </widget>
-                        </item>
-                       </layout>
-                      </widget>
-                     </item>
-                     <item>
-                      <widget class="QLabel" name="label_10">
-                       <property name="text">
-                        <string>Note:  If the capabilities of this layer move out of this time range, the range will be reset to layer's advertised  default layer time range.</string>
-                       </property>
-                       <property name="wordWrap">
-                        <bool>true</bool>
-                       </property>
-                      </widget>
-                     </item>
-                     <item>
-                      <widget class="QLabel" name="mProjectTemporalRangeLabel">
-                       <property name="text">
-                        <string/>
-                       </property>
-                       <property name="wordWrap">
-                        <bool>true</bool>
-                       </property>
-                      </widget>
-                     </item>
-                     <item>
-                      <widget class="QRadioButton" name="mProjectTemporalRange">
-                       <property name="text">
-                        <string>Pass project temporal range to provider</string>
-                       </property>
-                      </widget>
-                     </item>
-                    </layout>
                    </widget>
                   </item>
                  </layout>
                 </widget>
                </item>
                <item>
-                <widget class="QGroupBox" name="mPostgresRasterTemporalGroup">
+                <widget class="QgsCollapsibleGroupBox" name="mSourceGroupBox">
                  <property name="title">
-                  <string>Temporal capabilities</string>
+                  <string>Layer Source</string>
                  </property>
-                 <property name="checkable">
-                  <bool>true</bool>
-                 </property>
-                 <layout class="QGridLayout" name="gridLayout_18">
-                  <item row="0" column="0" colspan="2">
-                   <widget class="QLabel" name="mPostgresRasterTemporalLabel">
-                    <property name="text">
-                     <string>If the dataset contains multiple rasters belonging to a time series, specify the field that contains the time information, the type of the field can be any type that can be converted to a timestamp.</string>
-                    </property>
-                    <property name="wordWrap">
-                     <bool>true</bool>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="3" column="0">
-                   <widget class="QLabel" name="label_12">
-                    <property name="text">
-                     <string>Default time</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="1" column="1">
-                   <widget class="QgsFieldComboBox" name="mPostgresRasterTemporalFieldComboBox">
-                    <property name="sizePolicy">
-                     <sizepolicy hsizetype="Preferred" vsizetype="Fixed">
-                      <horstretch>1</horstretch>
-                      <verstretch>0</verstretch>
-                     </sizepolicy>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="1" column="0">
-                   <widget class="QLabel" name="label">
-                    <property name="text">
-                     <string>Temporal field</string>
-                    </property>
-                   </widget>
-                  </item>
-                  <item row="3" column="1">
-                   <widget class="QgsDateTimeEdit" name="mPostgresRasterDefaultTime"/>
-                  </item>
-                  <item row="2" column="0" colspan="2">
-                   <widget class="QLabel" name="label_14">
-                    <property name="text">
-                     <string>&lt;html&gt;&lt;head/&gt;&lt;body&gt;&lt;p&gt;A default value can be specified and it will be used when the temporal controller is not requesting any particular time.&lt;/p&gt;&lt;p&gt;It is recommended to set a default temporal value here instead of using a provider filter because the provider filter will still be active when using the temporal controller while this default value will be ignored.&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
-                    </property>
-                    <property name="wordWrap">
-                     <bool>true</bool>
-                    </property>
-                   </widget>
-                  </item>
-                 </layout>
                 </widget>
                </item>
                <item>
@@ -727,7 +443,7 @@ border-radius: 2px;</string>
                 <x>0</x>
                 <y>0</y>
                 <width>643</width>
-                <height>682</height>
+                <height>679</height>
                </rect>
               </property>
               <layout class="QVBoxLayout" name="verticalLayout_10">
@@ -856,7 +572,7 @@ border-radius: 2px;</string>
                    </widget>
                   </item>
                   <item row="1" column="2">
-                   <widget class="QSpinBox" name="mBrightnessSpinBox">
+                   <widget class="QgsSpinBox" name="mBrightnessSpinBox">
                     <property name="minimum">
                      <number>-255</number>
                     </property>
@@ -895,7 +611,7 @@ border-radius: 2px;</string>
                    </widget>
                   </item>
                   <item row="1" column="6">
-                   <widget class="QSpinBox" name="mContrastSpinBox">
+                   <widget class="QgsSpinBox" name="mContrastSpinBox">
                     <property name="minimum">
                      <number>-100</number>
                     </property>
@@ -915,6 +631,13 @@ border-radius: 2px;</string>
                    <widget class="Line" name="line">
                     <property name="orientation">
                      <enum>Qt::Vertical</enum>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="3" column="0" colspan="3">
+                   <widget class="QCheckBox" name="mInvertColorsCheck">
+                    <property name="text">
+                     <string>Invert colors</string>
                     </property>
                    </widget>
                   </item>
@@ -974,7 +697,7 @@ border-radius: 2px;</string>
                      </widget>
                     </item>
                     <item>
-                     <widget class="QSpinBox" name="spinColorizeStrength">
+                     <widget class="QgsSpinBox" name="spinColorizeStrength">
                       <property name="suffix">
                        <string>%</string>
                       </property>
@@ -1072,7 +795,7 @@ border-radius: 2px;</string>
                    </widget>
                   </item>
                   <item row="2" column="2">
-                   <widget class="QDoubleSpinBox" name="mGammaSpinBox">
+                   <widget class="QgsDoubleSpinBox" name="mGammaSpinBox">
                     <property name="minimum">
                      <double>0.100000000000000</double>
                     </property>
@@ -1127,7 +850,7 @@ border-radius: 2px;</string>
                    </widget>
                   </item>
                   <item row="2" column="6">
-                   <widget class="QSpinBox" name="spinBoxSaturation">
+                   <widget class="QgsSpinBox" name="spinBoxSaturation">
                     <property name="minimum">
                      <number>-100</number>
                     </property>
@@ -1191,7 +914,7 @@ border-radius: 2px;</string>
                    </widget>
                   </item>
                   <item>
-                   <widget class="QDoubleSpinBox" name="mMaximumOversamplingSpinBox"/>
+                   <widget class="QgsDoubleSpinBox" name="mMaximumOversamplingSpinBox"/>
                   </item>
                   <item>
                    <widget class="QCheckBox" name="mCbEarlyResampling">
@@ -1215,129 +938,6 @@ border-radius: 2px;</string>
                   </item>
                  </layout>
                 </widget>
-               </item>
-               <item>
-                <layout class="QHBoxLayout" name="horizontalLayout_10">
-                 <item>
-                  <spacer name="spacer_2">
-                   <property name="orientation">
-                    <enum>Qt::Horizontal</enum>
-                   </property>
-                   <property name="sizeHint" stdset="0">
-                    <size>
-                     <width>0</width>
-                     <height>20</height>
-                    </size>
-                   </property>
-                  </spacer>
-                 </item>
-                 <item>
-                  <widget class="QGroupBox" name="groupBox10">
-                   <property name="title">
-                    <string>Thumbnail</string>
-                   </property>
-                   <layout class="QGridLayout" name="_7">
-                    <item row="0" column="0">
-                     <widget class="QLabel" name="pixmapThumbnail">
-                      <property name="minimumSize">
-                       <size>
-                        <width>120</width>
-                        <height>120</height>
-                       </size>
-                      </property>
-                      <property name="maximumSize">
-                       <size>
-                        <width>120</width>
-                        <height>120</height>
-                       </size>
-                      </property>
-                      <property name="frameShape">
-                       <enum>QFrame::StyledPanel</enum>
-                      </property>
-                      <property name="scaledContents">
-                       <bool>true</bool>
-                      </property>
-                     </widget>
-                    </item>
-                   </layout>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QGroupBox" name="groupBox9">
-                   <property name="title">
-                    <string>Legend</string>
-                   </property>
-                   <layout class="QGridLayout" name="_8">
-                    <item row="0" column="0">
-                     <widget class="QLabel" name="pixmapLegend">
-                      <property name="minimumSize">
-                       <size>
-                        <width>120</width>
-                        <height>120</height>
-                       </size>
-                      </property>
-                      <property name="maximumSize">
-                       <size>
-                        <width>120</width>
-                        <height>120</height>
-                       </size>
-                      </property>
-                      <property name="frameShape">
-                       <enum>QFrame::Box</enum>
-                      </property>
-                      <property name="scaledContents">
-                       <bool>true</bool>
-                      </property>
-                     </widget>
-                    </item>
-                   </layout>
-                  </widget>
-                 </item>
-                 <item>
-                  <widget class="QGroupBox" name="groupBox8">
-                   <property name="title">
-                    <string>Palette</string>
-                   </property>
-                   <layout class="QGridLayout" name="_9">
-                    <item row="0" column="0">
-                     <widget class="QLabel" name="pixmapPalette">
-                      <property name="minimumSize">
-                       <size>
-                        <width>120</width>
-                        <height>120</height>
-                       </size>
-                      </property>
-                      <property name="maximumSize">
-                       <size>
-                        <width>120</width>
-                        <height>120</height>
-                       </size>
-                      </property>
-                      <property name="frameShape">
-                       <enum>QFrame::Box</enum>
-                      </property>
-                      <property name="scaledContents">
-                       <bool>true</bool>
-                      </property>
-                     </widget>
-                    </item>
-                   </layout>
-                  </widget>
-                 </item>
-                 <item>
-                  <spacer name="spacer">
-                   <property name="orientation">
-                    <enum>Qt::Horizontal</enum>
-                   </property>
-                   <property name="sizeHint" stdset="0">
-                    <size>
-                     <width>0</width>
-                     <height>20</height>
-                    </size>
-                   </property>
-                  </spacer>
-                 </item>
-                </layout>
                </item>
                <item>
                 <spacer name="verticalSpacer">
@@ -1385,8 +985,8 @@ border-radius: 2px;</string>
                <rect>
                 <x>0</x>
                 <y>0</y>
-                <width>330</width>
-                <height>446</height>
+                <width>643</width>
+                <height>679</height>
                </rect>
               </property>
               <layout class="QVBoxLayout" name="verticalLayout_5">
@@ -1415,6 +1015,13 @@ border-radius: 2px;</string>
                    <widget class="QgsOpacityWidget" name="mOpacityWidget" native="true">
                     <property name="focusPolicy">
                      <enum>Qt::StrongFocus</enum>
+                    </property>
+                   </widget>
+                  </item>
+                  <item row="0" column="1">
+                   <widget class="QgsPropertyOverrideButton" name="mOpacityDDBtn">
+                    <property name="text">
+                     <string>…</string>
                     </property>
                    </widget>
                   </item>
@@ -1502,70 +1109,6 @@ border-radius: 2px;</string>
                   <string notr="true">rastertransp</string>
                  </property>
                  <layout class="QGridLayout" name="gridLayout_3">
-                  <item row="2" column="0">
-                   <widget class="QTableWidget" name="tableTransparency">
-                    <property name="verticalScrollBarPolicy">
-                     <enum>Qt::ScrollBarAsNeeded</enum>
-                    </property>
-                    <property name="alternatingRowColors">
-                     <bool>true</bool>
-                    </property>
-                    <property name="selectionMode">
-                     <enum>QAbstractItemView::SingleSelection</enum>
-                    </property>
-                    <property name="selectionBehavior">
-                     <enum>QAbstractItemView::SelectRows</enum>
-                    </property>
-                    <property name="showGrid">
-                     <bool>false</bool>
-                    </property>
-                    <property name="rowCount">
-                     <number>0</number>
-                    </property>
-                    <property name="columnCount">
-                     <number>0</number>
-                    </property>
-                    <attribute name="horizontalHeaderStretchLastSection">
-                     <bool>true</bool>
-                    </attribute>
-                   </widget>
-                  </item>
-                  <item row="0" column="0">
-                   <layout class="QHBoxLayout" name="horizontalLayout_7">
-                    <item>
-                     <widget class="QLabel" name="lblTransparent">
-                      <property name="sizePolicy">
-                       <sizepolicy hsizetype="Maximum" vsizetype="Preferred">
-                        <horstretch>0</horstretch>
-                        <verstretch>0</verstretch>
-                       </sizepolicy>
-                      </property>
-                      <property name="text">
-                       <string>Transparency band</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QgsRasterBandComboBox" name="cboxTransparencyBand">
-                      <property name="enabled">
-                       <bool>true</bool>
-                      </property>
-                      <property name="sizePolicy">
-                       <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-                        <horstretch>0</horstretch>
-                        <verstretch>0</verstretch>
-                       </sizepolicy>
-                      </property>
-                      <property name="minimumSize">
-                       <size>
-                        <width>150</width>
-                        <height>0</height>
-                       </size>
-                      </property>
-                     </widget>
-                    </item>
-                   </layout>
-                  </item>
                   <item row="2" column="1">
                    <layout class="QVBoxLayout" name="_2">
                     <property name="leftMargin">
@@ -1682,6 +1225,70 @@ border-radius: 2px;</string>
                     </item>
                    </layout>
                   </item>
+                  <item row="0" column="0">
+                   <layout class="QHBoxLayout" name="horizontalLayout_7">
+                    <item>
+                     <widget class="QLabel" name="lblTransparent">
+                      <property name="sizePolicy">
+                       <sizepolicy hsizetype="Maximum" vsizetype="Preferred">
+                        <horstretch>0</horstretch>
+                        <verstretch>0</verstretch>
+                       </sizepolicy>
+                      </property>
+                      <property name="text">
+                       <string>Transparency band</string>
+                      </property>
+                     </widget>
+                    </item>
+                    <item>
+                     <widget class="QgsRasterBandComboBox" name="cboxTransparencyBand" native="true">
+                      <property name="enabled">
+                       <bool>true</bool>
+                      </property>
+                      <property name="sizePolicy">
+                       <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
+                        <horstretch>0</horstretch>
+                        <verstretch>0</verstretch>
+                       </sizepolicy>
+                      </property>
+                      <property name="minimumSize">
+                       <size>
+                        <width>150</width>
+                        <height>0</height>
+                       </size>
+                      </property>
+                     </widget>
+                    </item>
+                   </layout>
+                  </item>
+                  <item row="2" column="0">
+                   <widget class="QTableWidget" name="tableTransparency">
+                    <property name="verticalScrollBarPolicy">
+                     <enum>Qt::ScrollBarAsNeeded</enum>
+                    </property>
+                    <property name="alternatingRowColors">
+                     <bool>true</bool>
+                    </property>
+                    <property name="selectionMode">
+                     <enum>QAbstractItemView::SingleSelection</enum>
+                    </property>
+                    <property name="selectionBehavior">
+                     <enum>QAbstractItemView::SelectRows</enum>
+                    </property>
+                    <property name="showGrid">
+                     <bool>false</bool>
+                    </property>
+                    <property name="rowCount">
+                     <number>0</number>
+                    </property>
+                    <property name="columnCount">
+                     <number>0</number>
+                    </property>
+                    <attribute name="horizontalHeaderStretchLastSection">
+                     <bool>true</bool>
+                    </attribute>
+                   </widget>
+                  </item>
                   <item row="1" column="0">
                    <widget class="QLabel" name="label_6">
                     <property name="text">
@@ -1738,8 +1345,8 @@ border-radius: 2px;</string>
                <rect>
                 <x>0</x>
                 <y>0</y>
-                <width>98</width>
-                <height>42</height>
+                <width>643</width>
+                <height>679</height>
                </rect>
               </property>
               <layout class="QVBoxLayout" name="verticalLayout_16">
@@ -1843,7 +1450,7 @@ border-radius: 2px;</string>
               </widget>
              </item>
              <item>
-              <widget class="QDoubleSpinBox" name="mRefreshLayerIntervalSpinBox">
+              <widget class="QgsDoubleSpinBox" name="mRefreshLayerIntervalSpinBox">
                <property name="toolTip">
                 <string>Higher values result in more simplification</string>
                </property>
@@ -1956,8 +1563,8 @@ border-radius: 2px;</string>
                <rect>
                 <x>0</x>
                 <y>0</y>
-                <width>535</width>
-                <height>193</height>
+                <width>650</width>
+                <height>673</height>
                </rect>
               </property>
               <layout class="QVBoxLayout" name="verticalLayout_12">
@@ -2026,7 +1633,7 @@ border-radius: 2px;</string>
                        <string>&lt;!DOCTYPE HTML PUBLIC &quot;-//W3C//DTD HTML 4.0//EN&quot; &quot;http://www.w3.org/TR/REC-html40/strict.dtd&quot;&gt;
 &lt;html&gt;&lt;head&gt;&lt;meta name=&quot;qrichtext&quot; content=&quot;1&quot; /&gt;&lt;style type=&quot;text/css&quot;&gt;
 p, li { white-space: pre-wrap; }
-&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Sans Serif'; font-size:9pt; font-weight:400; font-style:normal;&quot;&gt;
+&lt;/style&gt;&lt;/head&gt;&lt;body style=&quot; font-family:'Noto Sans'; font-size:12pt; font-weight:400; font-style:normal;&quot;&gt;
 &lt;p style=&quot; margin-top:0px; margin-bottom:0px; margin-left:0px; margin-right:0px; -qt-block-indent:0; text-indent:0px;&quot;&gt;&lt;span style=&quot; font-family:'Cantarell'; font-size:11pt;&quot;&gt;&lt;br /&gt;&lt;/span&gt;&lt;/p&gt;&lt;/body&gt;&lt;/html&gt;</string>
                       </property>
                      </widget>
@@ -2132,21 +1739,15 @@ p, li { white-space: pre-wrap; }
           </layout>
          </widget>
          <widget class="QWidget" name="mOptsPage_Legend">
-          <layout class="QVBoxLayout" name="verticalLayout_18">
-           <property name="leftMargin">
-            <number>0</number>
-           </property>
-           <property name="topMargin">
-            <number>0</number>
-           </property>
-           <property name="rightMargin">
-            <number>0</number>
-           </property>
-           <property name="bottomMargin">
-            <number>0</number>
-           </property>
-           <item>
+          <layout class="QGridLayout" name="gridLayout_15">
+           <item row="2" column="0">
             <widget class="QGroupBox" name="groupBox">
+             <property name="sizePolicy">
+              <sizepolicy hsizetype="Preferred" vsizetype="Expanding">
+               <horstretch>0</horstretch>
+               <verstretch>0</verstretch>
+              </sizepolicy>
+             </property>
              <property name="title">
               <string>Embedded Widgets in Legend</string>
              </property>
@@ -2155,6 +1756,16 @@ p, li { white-space: pre-wrap; }
                <widget class="QgsLayerTreeEmbeddedConfigWidget" name="mLegendConfigEmbeddedWidget" native="true"/>
               </item>
              </layout>
+            </widget>
+           </item>
+           <item row="1" column="0">
+            <widget class="QgsImageSourceLineEdit" name="mLegendPlaceholderWidget" native="true"/>
+           </item>
+           <item row="0" column="0">
+            <widget class="QLabel" name="mLegendPlaceholderLabel">
+             <property name="text">
+              <string>Legend placeholder image</string>
+             </property>
             </widget>
            </item>
           </layout>
@@ -2186,8 +1797,8 @@ p, li { white-space: pre-wrap; }
                <rect>
                 <x>0</x>
                 <y>0</y>
-                <width>306</width>
-                <height>616</height>
+                <width>629</width>
+                <height>793</height>
                </rect>
               </property>
               <layout class="QGridLayout" name="gridLayout_12">
@@ -2638,17 +2249,6 @@ p, li { white-space: pre-wrap; }
  </widget>
  <customwidgets>
   <customwidget>
-   <class>QgsScrollArea</class>
-   <extends>QScrollArea</extends>
-   <header>qgsscrollarea.h</header>
-   <container>1</container>
-  </customwidget>
-  <customwidget>
-   <class>QgsDateTimeEdit</class>
-   <extends>QDateTimeEdit</extends>
-   <header>qgsdatetimeedit.h</header>
-  </customwidget>
-  <customwidget>
    <class>QgsCollapsibleGroupBox</class>
    <extends>QGroupBox</extends>
    <header>qgscollapsiblegroupbox.h</header>
@@ -2661,15 +2261,35 @@ p, li { white-space: pre-wrap; }
    <container>1</container>
   </customwidget>
   <customwidget>
-   <class>QgsFilterLineEdit</class>
-   <extends>QLineEdit</extends>
-   <header>qgsfilterlineedit.h</header>
-  </customwidget>
-  <customwidget>
    <class>QgsOpacityWidget</class>
    <extends>QWidget</extends>
    <header>qgsopacitywidget.h</header>
    <container>1</container>
+  </customwidget>
+  <customwidget>
+   <class>QgsRasterBandComboBox</class>
+   <extends>QWidget</extends>
+   <header>qgsrasterbandcombobox.h</header>
+  </customwidget>
+  <customwidget>
+   <class>QgsPropertyOverrideButton</class>
+   <extends>QToolButton</extends>
+   <header>qgspropertyoverridebutton.h</header>
+  </customwidget>
+  <customwidget>
+   <class>QgsDoubleSpinBox</class>
+   <extends>QDoubleSpinBox</extends>
+   <header>qgsdoublespinbox.h</header>
+  </customwidget>
+  <customwidget>
+   <class>QgsSpinBox</class>
+   <extends>QSpinBox</extends>
+   <header>qgsspinbox.h</header>
+  </customwidget>
+  <customwidget>
+   <class>QgsFilterLineEdit</class>
+   <extends>QLineEdit</extends>
+   <header>qgsfilterlineedit.h</header>
   </customwidget>
   <customwidget>
    <class>QgsProjectionSelectionWidget</class>
@@ -2678,9 +2298,10 @@ p, li { white-space: pre-wrap; }
    <container>1</container>
   </customwidget>
   <customwidget>
-   <class>QgsRasterBandComboBox</class>
-   <extends>QComboBox</extends>
-   <header>qgsrasterbandcombobox.h</header>
+   <class>QgsScrollArea</class>
+   <extends>QScrollArea</extends>
+   <header>qgsscrollarea.h</header>
+   <container>1</container>
   </customwidget>
   <customwidget>
    <class>QgsScaleRangeWidget</class>
@@ -2699,27 +2320,35 @@ p, li { white-space: pre-wrap; }
    <header>qgsblendmodecombobox.h</header>
   </customwidget>
   <customwidget>
-   <class>QgsWebView</class>
+   <class>QgsOpacityWidget</class>
    <extends>QWidget</extends>
-   <header>qgswebview.h</header>
+   <header>qgsopacitywidget.h</header>
    <container>1</container>
   </customwidget>
   <customwidget>
-   <class>QgsFieldComboBox</class>
+   <class>QgsRasterBandComboBox</class>
    <extends>QComboBox</extends>
-   <header>qgsfieldcombobox.h</header>
+   <header>qgsrasterbandcombobox.h</header>
+  </customwidget>
+  <customwidget>
+   <class>QgsImageSourceLineEdit</class>
+   <extends>QWidget</extends>
+   <header>qgsfilecontentsourcelineedit.h</header>
+   <container>1</container>
   </customwidget>
  </customwidgets>
  <tabstops>
   <tabstop>mSearchLineEdit</tabstop>
   <tabstop>mOptionsListWidget</tabstop>
+  <tabstop>scrollArea_3</tabstop>
   <tabstop>mLayerOrigNameLineEd</tabstop>
   <tabstop>leDisplayName</tabstop>
+  <tabstop>mCrsGroupBox</tabstop>
   <tabstop>mCrsSelector</tabstop>
+  <tabstop>mResetColorRenderingBtn</tabstop>
   <tabstop>scrollArea</tabstop>
   <tabstop>mRenderTypeComboBox</tabstop>
   <tabstop>mBlendModeComboBox</tabstop>
-  <tabstop>mResetColorRenderingBtn</tabstop>
   <tabstop>mSliderBrightness</tabstop>
   <tabstop>mBrightnessSpinBox</tabstop>
   <tabstop>mSliderContrast</tabstop>
@@ -2736,11 +2365,12 @@ p, li { white-space: pre-wrap; }
   <tabstop>mZoomedInResamplingComboBox</tabstop>
   <tabstop>mZoomedOutResamplingComboBox</tabstop>
   <tabstop>mMaximumOversamplingSpinBox</tabstop>
+  <tabstop>mCbEarlyResampling</tabstop>
   <tabstop>scrollArea_2</tabstop>
   <tabstop>mOpacityWidget</tabstop>
+  <tabstop>mOpacityDDBtn</tabstop>
   <tabstop>mSrcNoDataValueCheckBox</tabstop>
   <tabstop>leNoDataValue</tabstop>
-  <tabstop>cboxTransparencyBand</tabstop>
   <tabstop>tableTransparency</tabstop>
   <tabstop>pbnAddValuesManually</tabstop>
   <tabstop>pbnAddValuesFromDisplay</tabstop>
@@ -2748,10 +2378,10 @@ p, li { white-space: pre-wrap; }
   <tabstop>pbnDefaultValues</tabstop>
   <tabstop>pbnImportTransparentPixelValues</tabstop>
   <tabstop>pbnExportTransparentPixelValues</tabstop>
+  <tabstop>scrollArea_6</tabstop>
   <tabstop>chkUseScaleDependentRendering</tabstop>
   <tabstop>mRefreshLayerCheckBox</tabstop>
   <tabstop>mRefreshLayerIntervalSpinBox</tabstop>
-  <tabstop>scrollArea_6</tabstop>
   <tabstop>scrollArea_5</tabstop>
   <tabstop>tePyramidDescription</tabstop>
   <tabstop>lbxPyramidResolutions</tabstop>
@@ -2775,22 +2405,10 @@ p, li { white-space: pre-wrap; }
   <tabstop>mWMSPrintLayerLineEdit</tabstop>
   <tabstop>mPublishDataSourceUrlCheckBox</tabstop>
   <tabstop>mBackgroundLayerCheckBox</tabstop>
-  <tabstop>scrollArea_3</tabstop>
-  <tabstop>mWmstGroup</tabstop>
-  <tabstop>mFetchModeComboBox</tabstop>
-  <tabstop>mDisableTime</tabstop>
-  <tabstop>mReferenceDateTimeEdit</tabstop>
-  <tabstop>mReferenceTime</tabstop>
-  <tabstop>mStaticTemporalRange</tabstop>
-  <tabstop>mSetEndAsStartStaticButton</tabstop>
-  <tabstop>mEndStaticDateTimeEdit</tabstop>
-  <tabstop>mStartStaticDateTimeEdit</tabstop>
-  <tabstop>mProjectTemporalRange</tabstop>
-  <tabstop>mPostgresRasterTemporalGroup</tabstop>
-  <tabstop>mPostgresRasterTemporalFieldComboBox</tabstop>
-  <tabstop>mPostgresRasterDefaultTime</tabstop>
+  <tabstop>mInvertColorsCheck</tabstop>
  </tabstops>
  <resources>
+  <include location="../../images/images.qrc"/>
   <include location="../../images/images.qrc"/>
  </resources>
  <connections>

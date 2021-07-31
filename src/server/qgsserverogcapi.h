@@ -24,7 +24,7 @@ class QgsServerOgcApiHandler;
 
 /**
  * \ingroup server
- * QGIS Server OGC API endpoint. QgsServerOgcApi provides the foundation for
+ * \brief QGIS Server OGC API endpoint. QgsServerOgcApi provides the foundation for
  * the new generation of REST-API based OGC services (e.g. WFS3).
  *
  * This class can be used directly and configured by registering handlers
@@ -120,7 +120,7 @@ class SERVER_EXPORT QgsServerOgcApi : public QgsServerApi
     static const QMap<QgsServerOgcApi::ContentType, QStringList> contentTypeMimes() SIP_SKIP;
 
     /**
-     * Returns contenType specializations (e.g. JSON => [GEOJSON, OPENAPI3], XML => [GML])
+     * Returns contentType specializations (e.g. JSON => [GEOJSON, OPENAPI3], XML => [GML])
      * \note not available in Python bindings
      */
     static const QHash<QgsServerOgcApi::ContentType, QList<QgsServerOgcApi::ContentType> > contentTypeAliases() SIP_SKIP;

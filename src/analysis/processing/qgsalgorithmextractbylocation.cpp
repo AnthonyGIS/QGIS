@@ -112,7 +112,7 @@ void QgsLocationBasedAlgorithm::processByIteratingOverTargetSource( const QgsPro
     QgsProcessingFeedback *feedback )
 {
   if ( intersectSource->hasSpatialIndex() == QgsFeatureSource::SpatialIndexNotPresent )
-    feedback->reportError( QObject::tr( "No spatial index exists for intersect layer, performance will be severely degraded" ) );
+    feedback->pushWarning( QObject::tr( "No spatial index exists for intersect layer, performance will be severely degraded" ) );
 
   QgsFeatureIds foundSet;
   QgsFeatureRequest request = QgsFeatureRequest();
@@ -215,7 +215,7 @@ void QgsLocationBasedAlgorithm::processByIteratingOverIntersectSource( const Qgs
     QgsProcessingFeedback *feedback )
 {
   if ( targetSource->hasSpatialIndex() == QgsFeatureSource::SpatialIndexNotPresent )
-    feedback->reportError( QObject::tr( "No spatial index exists for input layer, performance will be severely degraded" ) );
+    feedback->pushWarning( QObject::tr( "No spatial index exists for input layer, performance will be severely degraded" ) );
 
   // build a list of 'reversed' predicates, because in this function
   // we actually test the reverse of what the user wants (allowing us
@@ -277,9 +277,10 @@ void QgsLocationBasedAlgorithm::processByIteratingOverIntersectSource( const Qgs
         engine->prepareGeometry();
       }
 
-      for ( Predicate predicate : qgis::as_const( predicates ) )
+      bool isMatch = false;
+
+      for ( Predicate predicate : std::as_const( predicates ) )
       {
-        bool isMatch = false;
         switch ( predicate )
         {
           case Intersects:
@@ -311,10 +312,13 @@ void QgsLocationBasedAlgorithm::processByIteratingOverIntersectSource( const Qgs
             break;
         }
         if ( isMatch )
-        {
-          foundSet.insert( testFeature.id() );
-          handleFeatureFunction( testFeature );
-        }
+          break;
+      }
+
+      if ( isMatch )
+      {
+        foundSet.insert( testFeature.id() );
+        handleFeatureFunction( testFeature );
       }
 
     }
@@ -369,7 +373,7 @@ QString QgsSelectByLocationAlgorithm::name() const
 
 QgsProcessingAlgorithm::Flags QgsSelectByLocationAlgorithm::flags() const
 {
-  return QgsProcessingAlgorithm::flags() | QgsProcessingAlgorithm::FlagNoThreading;
+  return QgsProcessingAlgorithm::flags() | QgsProcessingAlgorithm::FlagNoThreading | QgsProcessingAlgorithm::FlagNotAvailableInStandaloneTool;
 }
 
 QString QgsSelectByLocationAlgorithm::displayName() const
@@ -409,7 +413,7 @@ QVariantMap QgsSelectByLocationAlgorithm::processAlgorithm( const QVariantMap &p
   if ( !selectLayer )
     throw QgsProcessingException( QObject::tr( "Could not load source layer for INPUT" ) );
 
-  QgsVectorLayer::SelectBehavior method = static_cast< QgsVectorLayer::SelectBehavior >( parameterAsEnum( parameters, QStringLiteral( "METHOD" ), context ) );
+  Qgis::SelectBehavior method = static_cast< Qgis::SelectBehavior >( parameterAsEnum( parameters, QStringLiteral( "METHOD" ), context ) );
   std::unique_ptr< QgsFeatureSource > intersectSource( parameterAsSource( parameters, QStringLiteral( "INTERSECT" ), context ) );
   if ( !intersectSource )
     throw QgsProcessingException( invalidSourceError( parameters, QStringLiteral( "INTERSECT" ) ) );
@@ -436,7 +440,8 @@ QVariantMap QgsSelectByLocationAlgorithm::processAlgorithm( const QVariantMap &p
 
 void QgsExtractByLocationAlgorithm::initAlgorithm( const QVariantMap & )
 {
-  addParameter( new QgsProcessingParameterVectorLayer( QStringLiteral( "INPUT" ), QObject::tr( "Extract features from" ),
+  addParameter( new QgsProcessingParameterFeatureSource( QStringLiteral( "INPUT" ),
+                QObject::tr( "Extract features from" ),
                 QList< int >() << QgsProcessing::TypeVectorAnyGeometry ) );
   addPredicateParameter();
   addParameter( new QgsProcessingParameterFeatureSource( QStringLiteral( "INTERSECT" ),
@@ -502,7 +507,8 @@ QVariantMap QgsExtractByLocationAlgorithm::processAlgorithm( const QVariantMap &
   auto addToSink = [&]( const QgsFeature & feature )
   {
     QgsFeature f = feature;
-    sink->addFeature( f, QgsFeatureSink::FastInsert );
+    if ( !sink->addFeature( f, QgsFeatureSink::FastInsert ) )
+      throw QgsProcessingException( writeFeatureError( sink.get(), parameters, QStringLiteral( "OUTPUT" ) ) );
   };
   process( context, input.get(), intersectSource.get(), selectedPredicates, addToSink, false, feedback );
 
@@ -512,6 +518,5 @@ QVariantMap QgsExtractByLocationAlgorithm::processAlgorithm( const QVariantMap &
 }
 
 ///@endcond
-
 
 

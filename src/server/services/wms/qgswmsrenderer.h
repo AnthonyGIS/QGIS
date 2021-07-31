@@ -25,6 +25,7 @@
 #include "qgswmsrendercontext.h"
 #include "qgsfeaturefilter.h"
 #include "qgslayertreemodellegendnode.h"
+#include "qgseditformconfig.h"
 #include <QDomDocument>
 #include <QMap>
 #include <QString>
@@ -45,6 +46,8 @@ class QgsDxfExport;
 class QgsLayerTreeModel;
 class QgsLayerTree;
 class QgsServerInterface;
+class QgsAttributeEditorElement;
+class QgsEditFormConfig;
 
 class QImage;
 class QPaintDevice;
@@ -128,7 +131,8 @@ namespace QgsWms
 
       /**
        * Returns printed page as binary
-        \returns printed page as binary or 0 in case of error*/
+       * \returns printed page as binary or 0 in case of error
+      */
       QByteArray getPrint();
 
       /**
@@ -148,14 +152,11 @@ namespace QgsWms
       // Build and returns highlight layers
       QList<QgsMapLayer *> highlightLayers( QList<QgsWmsParametersHighlightLayer> params );
 
-      // Build and returns external layers
-      QList<QgsMapLayer *> externalLayers( const QList<QgsWmsParametersExternalLayer> &params );
-
       // Rendering step for layers
       QPainter *layersRendering( const QgsMapSettings &mapSettings, QImage &image ) const;
 
       // Rendering step for annotations
-      void annotationsRendering( QPainter *painter ) const;
+      void annotationsRendering( QPainter *painter, const QgsMapSettings &mapSettings ) const;
 
       // Set layer opacity
       void setLayerOpacity( QgsMapLayer *layer, int opacity ) const;
@@ -223,6 +224,45 @@ namespace QgsWms
                                        QgsRectangle *featureBBox = nullptr,
                                        QgsGeometry *filterGeom = nullptr ) const;
 
+      /**
+       * Recursively called to write tab layout groups to XML
+       * \param group the tab layout group
+       * \param layer The vector layer
+       * \param fields attribute fields
+       * \param featureAttributes the feature attributes
+       * \param doc Feature info XML document
+       * \param featureElem the feature XML element
+       * \param renderContext Context to use for feature rendering
+       * \param attributes attributes for access control
+       */
+      void writeAttributesTabGroup( const QgsAttributeEditorElement *group, QgsVectorLayer *layer, const QgsFields &fields, QgsAttributes &featureAttributes, QDomDocument &doc, QDomElement &featureElem, QgsRenderContext &renderContext, QStringList *attributes = nullptr ) const;
+
+      /**
+       * Writes attributes to XML document using the group/attribute layout defined in the tab layout
+       * \param config editor config object
+       * \param layer The vector layer
+       * \param fields attribute fields
+       * \param featureAttributes the feature attributes
+       * \param doc Feature info XML document
+       * \param featureElem the feature XML element
+       * \param renderContext Context to use for feature rendering
+       * \param attributes attributes for access control
+       */
+      void writeAttributesTabLayout( QgsEditFormConfig &config, QgsVectorLayer *layer, const QgsFields &fields, QgsAttributes &featureAttributes, QDomDocument &doc, QDomElement &featureElem, QgsRenderContext &renderContext, QStringList *attributes = nullptr ) const;
+
+      /**
+       * Writes a vectorlayer attribute into the XML document
+       * \param attributeIndex of attribute to be written
+       * \param layer The vector layer
+       * \param fields attribute fields
+       * \param featureAttributes the feature attributes
+       * \param doc Feature info XML document
+       * \param featureElem the feature XML element
+       * \param renderContext Context to use for feature rendering
+       * \param attributes attributes for access control
+       */
+      void writeVectorLayerAttribute( int attributeIndex, QgsVectorLayer *layer, const QgsFields &fields, QgsAttributes &featureAttributes, QDomDocument &doc, QDomElement &featureElem, QgsRenderContext &renderContext, QStringList *attributes = nullptr ) const;
+
       //! Appends feature info xml for the layer to the layer element of the dom document
       bool featureInfoFromRasterLayer( QgsRasterLayer *layer,
                                        const QgsMapSettings &mapSettings,
@@ -238,7 +278,8 @@ namespace QgsWms
 
       /**
        * Tests if a filter sql string is allowed (safe)
-        \returns true in case of success, false if string seems unsafe*/
+       * \returns true in case of success, false if string seems unsafe
+      */
       bool testFilterStringSafety( const QString &filter ) const;
       //! Helper function for filter safety test. Groups stringlist to merge entries starting/ending with quotes
       static void groupStringList( QStringList &list, const QString &groupString );
@@ -294,7 +335,7 @@ namespace QgsWms
 
       const QgsProject *mProject = nullptr;
       QList<QgsMapLayer *> mTemporaryLayers;
-      QgsWmsRenderContext mContext;
+      const QgsWmsRenderContext &mContext;
   };
 
 } // namespace QgsWms

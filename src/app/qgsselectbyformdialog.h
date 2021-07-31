@@ -28,7 +28,7 @@ class QgsMapCanvas;
 /**
  * \ingroup app
  * \class QgsSelectByFormDialog
- * A dialog for selecting features from a layer, using a form based off the layer's editor widgets.
+ * \brief A dialog for selecting features from a layer, using a form based off the layer's editor widgets.
  * \since QGIS 2.16
  */
 
@@ -47,7 +47,7 @@ class APP_EXPORT QgsSelectByFormDialog : public QDialog
      */
     QgsSelectByFormDialog( QgsVectorLayer *layer,
                            const QgsAttributeEditorContext &context = QgsAttributeEditorContext(),
-                           QWidget *parent = nullptr, Qt::WindowFlags fl = nullptr );
+                           QWidget *parent = nullptr, Qt::WindowFlags fl = Qt::WindowFlags() );
 
     /**
      * Sets the message bar to display feedback from the form in. This is used in the search/filter

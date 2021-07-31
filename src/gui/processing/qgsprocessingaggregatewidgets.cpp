@@ -257,6 +257,9 @@ bool QgsAggregateMappingModel::moveUpOrDown( const QModelIndex &index, bool up )
 void QgsAggregateMappingModel::setSourceFields( const QgsFields &sourceFields )
 {
   mSourceFields = sourceFields;
+  if ( mExpressionContextGenerator )
+    mExpressionContextGenerator->setSourceFields( mSourceFields );
+
   QStringList usedFields;
   beginResetModel();
   mMapping.clear();
@@ -356,7 +359,7 @@ QgsAggregateMappingWidget::QgsAggregateMappingWidget( QWidget *parent,
 
   mModel = new QgsAggregateMappingModel( sourceFields, this );
   mTableView->setModel( mModel );
-  mTableView->setItemDelegateForColumn( static_cast<int>( QgsAggregateMappingModel::ColumnDataIndex::SourceExpression ), new QgsFieldMappingWidget::ExpressionDelegate( mTableView ) );
+  mTableView->setItemDelegateForColumn( static_cast<int>( QgsAggregateMappingModel::ColumnDataIndex::SourceExpression ), new QgsFieldMappingWidget::ExpressionDelegate( this ) );
   mTableView->setItemDelegateForColumn( static_cast<int>( QgsAggregateMappingModel::ColumnDataIndex::Aggregate ), new QgsAggregateMappingWidget::AggregateDelegate( mTableView ) );
   mTableView->setItemDelegateForColumn( static_cast<int>( QgsAggregateMappingModel::ColumnDataIndex::DestinationType ), new QgsFieldMappingWidget::TypeDelegate( mTableView ) );
   updateColumns();
@@ -392,6 +395,16 @@ QItemSelectionModel *QgsAggregateMappingWidget::selectionModel()
 void QgsAggregateMappingWidget::setSourceFields( const QgsFields &sourceFields )
 {
   model()->setSourceFields( sourceFields );
+}
+
+void QgsAggregateMappingWidget::setSourceLayer( QgsVectorLayer *layer )
+{
+  mSourceLayer = layer;
+}
+
+QgsVectorLayer *QgsAggregateMappingWidget::sourceLayer()
+{
+  return mSourceLayer;
 }
 
 void QgsAggregateMappingWidget::scrollTo( const QModelIndex &index ) const
@@ -516,7 +529,7 @@ QWidget *QgsAggregateMappingWidget::AggregateDelegate::createEditor( QWidget *pa
   }
 
   connect( editor,
-           qgis::overload<int >::of( &QComboBox::currentIndexChanged ),
+           qOverload<int >( &QComboBox::currentIndexChanged ),
            this,
            [ = ]( int currentIndex )
   {
@@ -533,7 +546,7 @@ void QgsAggregateMappingWidget::AggregateDelegate::setEditorData( QWidget *edito
   if ( ! editorWidget )
     return;
 
-  const QVariant value { index.model()->data( index, Qt::EditRole ) };
+  const QVariant value = index.model()->data( index, Qt::EditRole );
   editorWidget->setCurrentIndex( editorWidget->findData( value ) );
 }
 
@@ -543,7 +556,7 @@ void QgsAggregateMappingWidget::AggregateDelegate::setModelData( QWidget *editor
   if ( ! editorWidget )
     return;
 
-  const QVariant currentValue { editorWidget->currentData( ) };
+  const QVariant currentValue = editorWidget->currentData( );
   model->setData( index, currentValue, Qt::EditRole );
 }
 
@@ -553,7 +566,8 @@ const QStringList QgsAggregateMappingWidget::AggregateDelegate::aggregates()
   static std::once_flag initialized;
   std::call_once( initialized, [ = ]( )
   {
-    sAggregates << QStringLiteral( "first_value" );
+    sAggregates << QStringLiteral( "first_value" )
+                << QStringLiteral( "last_value" );
 
     const QList<QgsExpressionFunction *> functions = QgsExpression::Functions();
     for ( const QgsExpressionFunction *function : functions )

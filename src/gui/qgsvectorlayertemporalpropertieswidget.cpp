@@ -39,7 +39,7 @@ QgsVectorLayerTemporalPropertiesWidget::QgsVectorLayerTemporalPropertiesWidget( 
   mModeComboBox->addItem( tr( "Start and End Date/Time from Expressions" ), QgsVectorLayerTemporalProperties::ModeFeatureDateTimeStartAndEndFromExpressions );
   mModeComboBox->addItem( tr( "Redraw Layer Only" ), QgsVectorLayerTemporalProperties::ModeRedrawLayerOnly );
 
-  connect( mModeComboBox, qgis::overload<int>::of( &QComboBox::currentIndexChanged ), mStackedWidget, &QStackedWidget::setCurrentIndex );
+  connect( mModeComboBox, qOverload<int>( &QComboBox::currentIndexChanged ), mStackedWidget, &QStackedWidget::setCurrentIndex );
 
   mStartTemporalDateTimeEdit->setDisplayFormat( "yyyy-MM-dd HH:mm:ss" );
   mEndTemporalDateTimeEdit->setDisplayFormat( "yyyy-MM-dd HH:mm:ss" );
@@ -159,16 +159,10 @@ void QgsVectorLayerTemporalPropertiesWidget::syncToLayer()
 
   mFixedDurationSpinBox->setValue( properties->fixedDuration() );
 
-  if ( !properties->startField().isEmpty() )
-  {
-    mSingleFieldComboBox->setField( properties->startField() );
-    mStartFieldComboBox->setField( properties->startField() );
-    mDurationStartFieldComboBox->setField( properties->startField() );
-  }
-  if ( !properties->endField().isEmpty() )
-  {
-    mEndFieldComboBox->setField( properties->endField() );
-  }
+  mSingleFieldComboBox->setField( properties->startField() );
+  mStartFieldComboBox->setField( properties->startField() );
+  mDurationStartFieldComboBox->setField( properties->startField() );
+  mEndFieldComboBox->setField( properties->endField() );
   mDurationFieldComboBox->setField( properties->durationField() );
   mDurationUnitsComboBox->setCurrentIndex( mDurationUnitsComboBox->findData( properties->durationUnits() ) );
   mFixedDurationUnitsComboBox->setCurrentIndex( mDurationUnitsComboBox->findData( properties->durationUnits() ) );

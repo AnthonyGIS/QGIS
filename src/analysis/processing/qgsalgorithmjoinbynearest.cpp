@@ -19,6 +19,8 @@
 #include "qgsprocessingoutputs.h"
 #include "qgslinestring.h"
 
+#include <algorithm>
+
 ///@cond PRIVATE
 
 QString QgsJoinByNearestAlgorithm::name() const
@@ -73,7 +75,7 @@ void QgsJoinByNearestAlgorithm::initAlgorithm( const QVariantMap & )
 
   addParameter( new QgsProcessingParameterFeatureSink( QStringLiteral( "OUTPUT" ), QObject::tr( "Joined layer" ), QgsProcessing::TypeVectorAnyGeometry, QVariant(), true, true ) );
 
-  std::unique_ptr< QgsProcessingParameterFeatureSink > nonMatchingSink = qgis::make_unique< QgsProcessingParameterFeatureSink >(
+  std::unique_ptr< QgsProcessingParameterFeatureSink > nonMatchingSink = std::make_unique< QgsProcessingParameterFeatureSink >(
         QStringLiteral( "NON_MATCHING" ), QObject::tr( "Unjoinable features from first layer" ), QgsProcessing::TypeVectorAnyGeometry, QVariant(), true, false );
   // TODO GUI doesn't support advanced outputs yet
   //nonMatchingSink->setFlags(nonMatchingSink->flags() | QgsProcessingParameterDefinition::FlagAdvanced );
@@ -245,20 +247,26 @@ QVariantMap QgsJoinByNearestAlgorithm::processAlgorithm( const QVariantMap &para
       unjoinedCount++;
       if ( sinkNonMatching1 )
       {
-        sinkNonMatching1->addFeature( f, QgsFeatureSink::FastInsert );
+        if ( !sinkNonMatching1->addFeature( f, QgsFeatureSink::FastInsert ) )
+          throw QgsProcessingException( writeFeatureError( sinkNonMatching1.get(), parameters, QStringLiteral( "NON_MATCHING" ) ) );
       }
       if ( sink && !discardNonMatching )
       {
         QgsAttributes attr = f.attributes();
         attr.append( nullMatch );
         f.setAttributes( attr );
-        sink->addFeature( f, QgsFeatureSink::FastInsert );
+        if ( !sink->addFeature( f, QgsFeatureSink::FastInsert ) )
+          throw QgsProcessingException( writeFeatureError( sink.get(), parameters, QStringLiteral( "OUTPUT" ) ) );
       }
     }
     else
     {
       // note - if using same source as target, we have to get one extra neighbor, since the first match will be the input feature
-      const QList< QgsFeatureId > nearest = index.nearestNeighbor( f.geometry(), neighbors + ( sameSourceAndTarget ? 1 : 0 ), std::isnan( maxDistance ) ? 0 : maxDistance );
+
+      // if the user didn't specify a distance (isnan), then use 0 for nearestNeighbor() parameter
+      // if the user specified 0 exactly, then use the smallest positive double value instead
+      const double searchDistance = std::isnan( maxDistance ) ? 0 : std::max( std::numeric_limits<double>::min(), maxDistance );
+      const QList< QgsFeatureId > nearest = index.nearestNeighbor( f.geometry(), neighbors + ( sameSourceAndTarget ? 1 : 0 ), searchDistance );
 
       if ( nearest.count() > neighbors + ( sameSourceAndTarget ? 1 : 0 ) )
       {
@@ -296,7 +304,8 @@ QVariantMap QgsJoinByNearestAlgorithm::processAlgorithm( const QVariantMap &para
             attr.append( QVariant() ); //end y
           }
           out.setAttributes( attr );
-          sink->addFeature( out, QgsFeatureSink::FastInsert );
+          if ( !sink->addFeature( out, QgsFeatureSink::FastInsert ) )
+            throw QgsProcessingException( writeFeatureError( sink.get(), parameters, QStringLiteral( "OUTPUT" ) ) );
         }
       }
       if ( j > 0 )
@@ -305,14 +314,16 @@ QVariantMap QgsJoinByNearestAlgorithm::processAlgorithm( const QVariantMap &para
       {
         if ( sinkNonMatching1 )
         {
-          sinkNonMatching1->addFeature( f, QgsFeatureSink::FastInsert );
+          if ( !sinkNonMatching1->addFeature( f, QgsFeatureSink::FastInsert ) )
+            throw QgsProcessingException( writeFeatureError( sinkNonMatching1.get(), parameters, QStringLiteral( "NON_MATCHING" ) ) );
         }
         if ( !discardNonMatching && sink )
         {
           QgsAttributes attr = f.attributes();
           attr.append( nullMatch );
           f.setAttributes( attr );
-          sink->addFeature( f, QgsFeatureSink::FastInsert );
+          if ( !sink->addFeature( f, QgsFeatureSink::FastInsert ) )
+            throw QgsProcessingException( writeFeatureError( sink.get(), parameters, QStringLiteral( "OUTPUT" ) ) );
         }
         unjoinedCount++;
       }

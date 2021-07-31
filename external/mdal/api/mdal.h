@@ -112,6 +112,18 @@ MDAL_EXPORT const char *MDAL_Version();
 MDAL_EXPORT MDAL_Status MDAL_LastStatus();
 
 /**
+ * Resets the last status message
+ * \since MDAL 0.9.0
+ */
+MDAL_EXPORT void MDAL_ResetStatus();
+
+/*
+ * Sets the last status message
+ * \since MDAL 0.9.0
+ */
+MDAL_EXPORT void MDAL_SetStatus( MDAL_LogLevel Level, MDAL_Status status, const char *message );
+
+/**
  * Sets custom callback for logging output
  *
  * By default standard stdout is used as output.
@@ -170,6 +182,14 @@ MDAL_EXPORT bool MDAL_DR_writeDatasetsCapability( MDAL_DriverH driver, MDAL_Data
  * \since MDAL 0.7.0
  */
 MDAL_EXPORT const char *MDAL_DR_writeDatasetsSuffix( MDAL_DriverH driver );
+
+/**
+ * Returns the file suffix used to save mesh frame on file
+ * not thread-safe and valid only till next call
+ *
+ * \since MDAL 0.9.0
+ */
+MDAL_EXPORT const char *MDAL_DR_saveMeshSuffix( MDAL_DriverH driver );
 
 /**
  * Returns whether driver has capability to save mesh
@@ -232,6 +252,16 @@ MDAL_EXPORT const char *MDAL_MeshNames( const char *uri );
 MDAL_EXPORT void MDAL_CloseMesh( MDAL_MeshH mesh );
 
 /**
+ * Creates a empty mesh in memory
+ *
+ * \note the mesh is editable (vertices and faces can be added, see MDAL_M_addVertices() and MDAL_M_addFaces()),
+ * and can be saved with MDAL_SaveMesh()
+ *
+ * \since MDAL 0.7
+ */
+MDAL_EXPORT MDAL_MeshH MDAL_CreateMesh( MDAL_DriverH driver );
+
+/**
  * Saves mesh (only mesh structure) on a file with the specified driver. On error see MDAL_LastStatus for error type.
  */
 MDAL_EXPORT void MDAL_SaveMesh( MDAL_MeshH mesh, const char *meshFile, const char *driver );
@@ -243,10 +273,46 @@ MDAL_EXPORT void MDAL_SaveMesh( MDAL_MeshH mesh, const char *meshFile, const cha
 MDAL_EXPORT const char *MDAL_M_projection( MDAL_MeshH mesh );
 
 /**
+ * Sets mesh projection
+ * not thread-safe and valid only till next call
+ *
+ * \since MDAL 0.7
+ */
+MDAL_EXPORT void MDAL_M_setProjection( MDAL_MeshH mesh, const char *projection );
+
+/**
  * Returns mesh extent in native projection
  * Returns NaN on error
  */
 MDAL_EXPORT void MDAL_M_extent( MDAL_MeshH mesh, double *minX, double *maxX, double *minY, double *maxY );
+
+/**
+ * Adds vertices to the mesh
+ * \param mesh the mesh which the vertices are added
+ * \param vertexCount the count of vertices
+ * \param coordinates coordinates of vertices (x0,y0,z0,x1,y1,z1,...,xn,yn,zn)
+ *
+ * \note to avoid incompatible datasets, adding faces removes all the existing dataset group
+ *
+ * \since MDAL 0.7
+ */
+MDAL_EXPORT void MDAL_M_addVertices( MDAL_MeshH mesh, int vertexCount, double *coordinates );
+
+/**
+ * Adds faces to the mesh
+ * \param mesh the mesh which the faces are added
+ * \param faceCount the count of faces
+ * \param faceSizes a pointer to an array of integer containing the number of vertices per each faces
+ * \param vertexIndices a pointer to an array of integer containing the indices of vertices of each faces
+ *
+ * \note to avoid incompatible datasets, adding faces removes all the existing dataset group
+ *
+ * \since MDAL 0.7
+ */
+MDAL_EXPORT void MDAL_M_addFaces( MDAL_MeshH mesh,
+                                  int faceCount,
+                                  int *faceSizes,
+                                  int *vertexIndices );
 
 /**
  * Returns vertex count for the mesh
@@ -532,6 +598,11 @@ MDAL_EXPORT void MDAL_G_closeEditMode( MDAL_DatasetGroupH group );
  * Returns reference time for dataset group expressed in date with ISO8601 format, return "" if reference time is not defined
  */
 MDAL_EXPORT const char *MDAL_G_referenceTime( MDAL_DatasetGroupH group );
+
+/**
+ * Sets reference time for dataset group expressed in date with ISO8601 format
+ */
+MDAL_EXPORT void MDAL_G_setReferenceTime( MDAL_DatasetGroupH group, const char *referenceTimeISO8601 );
 
 /**
  * Returns whether the dataset group is temporal, i.e. has time-related datasets

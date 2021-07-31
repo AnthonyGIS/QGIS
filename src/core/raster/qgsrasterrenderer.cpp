@@ -19,6 +19,7 @@
 #include "qgsrastertransparency.h"
 
 #include "qgssymbollayerutils.h"
+#include "qgslayertreemodellegendnode.h"
 
 #include <QCoreApplication>
 #include <QDomDocument>
@@ -53,11 +54,11 @@ Qgis::DataType QgsRasterRenderer::dataType( int bandNo ) const
 {
   QgsDebugMsgLevel( QStringLiteral( "Entered" ), 4 );
 
-  if ( mOn ) return Qgis::ARGB32_Premultiplied;
+  if ( mOn ) return Qgis::DataType::ARGB32_Premultiplied;
 
   if ( mInput ) return mInput->dataType( bandNo );
 
-  return Qgis::UnknownDataType;
+  return Qgis::DataType::UnknownDataType;
 }
 
 bool QgsRasterRenderer::setInput( QgsRasterInterface *input )
@@ -77,7 +78,7 @@ bool QgsRasterRenderer::setInput( QgsRasterInterface *input )
     const Qgis::DataType bandType = input->dataType( i );
     // we always allow unknown data types to connect - otherwise invalid layers cannot setup
     // their original rendering pipe and this information is lost
-    if ( bandType != Qgis::UnknownDataType && !QgsRasterBlock::typeIsNumeric( bandType ) )
+    if ( bandType != Qgis::DataType::UnknownDataType && !QgsRasterBlock::typeIsNumeric( bandType ) )
     {
       return false;
     }
@@ -99,6 +100,39 @@ void QgsRasterRenderer::setRasterTransparency( QgsRasterTransparency *t )
 {
   delete mRasterTransparency;
   mRasterTransparency = t;
+}
+
+QList< QPair< QString, QColor > > QgsRasterRenderer::legendSymbologyItems() const
+{
+  return QList< QPair< QString, QColor > >();
+}
+
+QList<QgsLayerTreeModelLegendNode *> QgsRasterRenderer::createLegendNodes( QgsLayerTreeLayer *nodeLayer )
+{
+  QList<QgsLayerTreeModelLegendNode *> nodes;
+
+  QList< QPair< QString, QColor > > rasterItemList = legendSymbologyItems();
+  if ( rasterItemList.isEmpty() )
+    return nodes;
+
+  // Paletted raster may have many colors, for example UInt16 may have 65536 colors
+  // and it is very slow, so we limit max count
+  int count = 0;
+  int max_count = 1000;
+
+  for ( auto itemIt = rasterItemList.constBegin(); itemIt != rasterItemList.constEnd(); ++itemIt, ++count )
+  {
+    nodes << new QgsRasterSymbolLegendNode( nodeLayer, itemIt->second, itemIt->first );
+
+    if ( count == max_count )
+    {
+      QString label = tr( "following %1 items\nnot displayed" ).arg( rasterItemList.size() - max_count );
+      nodes << new QgsSimpleLegendNode( nodeLayer, label );
+      break;
+    }
+  }
+
+  return nodes;
 }
 
 void QgsRasterRenderer::_writeXml( QDomDocument &doc, QDomElement &rasterRendererElem ) const
@@ -172,7 +206,7 @@ void QgsRasterRenderer::copyCommonProperties( const QgsRasterRenderer *other, bo
     setMinMaxOrigin( other->minMaxOrigin() );
 }
 
-void QgsRasterRenderer::toSld( QDomDocument &doc, QDomElement &element, const QgsStringMap & ) const
+void QgsRasterRenderer::toSld( QDomDocument &doc, QDomElement &element, const QVariantMap & ) const
 {
   QDomElement rasterSymbolizerElem = doc.createElement( QStringLiteral( "sld:RasterSymbolizer" ) );
   element.appendChild( rasterSymbolizerElem );

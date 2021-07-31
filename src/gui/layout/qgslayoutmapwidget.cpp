@@ -35,9 +35,11 @@
 #include "qgsreferencedgeometry.h"
 #include "qgsprojectviewsettings.h"
 #include "qgsmaplayermodel.h"
+#include "qgsfillsymbol.h"
 
 #include <QMenu>
 #include <QMessageBox>
+#include <QStringListModel>
 
 QgsLayoutMapWidget::QgsLayoutMapWidget( QgsLayoutItemMap *item, QgsMapCanvas *mapCanvas )
   : QgsLayoutItemBaseWidget( nullptr, item )
@@ -92,8 +94,8 @@ QgsLayoutMapWidget::QgsLayoutMapWidget( QgsLayoutItemMap *item, QgsMapCanvas *ma
   connect( mStartDateTime, &QDateTimeEdit::dateTimeChanged, this, &QgsLayoutMapWidget::updateTemporalExtent );
   connect( mEndDateTime, &QDateTimeEdit::dateTimeChanged, this, &QgsLayoutMapWidget::updateTemporalExtent );
 
-  mStartDateTime->setDateTimeRange( QDateTime( QDate( 1, 1, 1 ) ), mStartDateTime->maximumDateTime() );
-  mEndDateTime->setDateTimeRange( QDateTime( QDate( 1, 1, 1 ) ), mStartDateTime->maximumDateTime() );
+  mStartDateTime->setDateTimeRange( QDateTime( QDate( 1, 1, 1 ), QTime( 0, 0, 0 ) ), mStartDateTime->maximumDateTime() );
+  mEndDateTime->setDateTimeRange( QDateTime( QDate( 1, 1, 1 ), QTime( 0, 0, 0 ) ), mStartDateTime->maximumDateTime() );
   mStartDateTime->setDisplayFormat( "yyyy-MM-dd HH:mm:ss" );
   mEndDateTime->setDisplayFormat( "yyyy-MM-dd HH:mm:ss" );
 
@@ -136,7 +138,7 @@ QgsLayoutMapWidget::QgsLayoutMapWidget( QgsLayoutItemMap *item, QgsMapCanvas *ma
   mCrsSelector->setOptionVisible( QgsProjectionSelectionWidget::CrsNotSet, true );
   mCrsSelector->setNotSetText( tr( "Use Project CRS" ) );
 
-  mOverviewFrameStyleButton->setSymbolType( QgsSymbol::Fill );
+  mOverviewFrameStyleButton->setSymbolType( Qgis::SymbolType::Fill );
 
   // follow preset combo
   mFollowVisibilityPresetCombo->setModel( new QStringListModel( mFollowVisibilityPresetCombo ) );
@@ -314,6 +316,9 @@ void QgsLayoutMapWidget::followVisibilityPresetSelected( int currentIndex )
   if ( !mMapItem )
     return;
 
+  if ( mBlockThemeComboChanges != 0 )
+    return;
+
   if ( currentIndex == -1 )
     return;  // doing combo box model reset
 
@@ -361,6 +366,7 @@ void QgsLayoutMapWidget::onMapThemesChanged()
 {
   if ( QStringListModel *model = qobject_cast<QStringListModel *>( mFollowVisibilityPresetCombo->model() ) )
   {
+    mBlockThemeComboChanges++;
     QStringList lst;
     lst.append( tr( "(none)" ) );
     lst += QgsProject::instance()->mapThemeCollection()->mapThemes();
@@ -371,6 +377,7 @@ void QgsLayoutMapWidget::onMapThemesChanged()
     mFollowVisibilityPresetCombo->blockSignals( true );
     mFollowVisibilityPresetCombo->setCurrentIndex( presetModelIndex != -1 ? presetModelIndex : 0 ); // 0 == none
     mFollowVisibilityPresetCombo->blockSignals( false );
+    mBlockThemeComboChanges--;
   }
 }
 
@@ -519,9 +526,6 @@ void QgsLayoutMapWidget::mTemporalCheckBox_toggled( bool checked )
     return;
   }
 
-  mStartDateTime->setEnabled( checked );
-  mEndDateTime->setEnabled( checked );
-
   mMapItem->layout()->undoStack()->beginCommand( mMapItem, tr( "Toggle Temporal Range" ) );
   mMapItem->setIsTemporal( checked );
   mMapItem->layout()->undoStack()->endCommand();
@@ -542,7 +546,9 @@ void QgsLayoutMapWidget::updateTemporalExtent()
     return;
   }
 
-  QgsDateTimeRange range = QgsDateTimeRange( mStartDateTime->dateTime(), mEndDateTime->dateTime() );
+  const QDateTime begin = mStartDateTime->dateTime();
+  const QDateTime end = mEndDateTime->dateTime();
+  QgsDateTimeRange range = QgsDateTimeRange( begin, end, true, begin == end );
 
   mMapItem->layout()->undoStack()->beginCommand( mMapItem, tr( "Set Temporal Range" ) );
   mMapItem->setTemporalRange( range );
@@ -1458,7 +1464,7 @@ void QgsLayoutMapWidget::mOverviewListWidget_itemChanged( QListWidgetItem *item 
   if ( item->isSelected() )
   {
     //update checkbox title if item is current item
-    mOverviewCheckBox->setTitle( QString( tr( "Draw \"%1\" overview" ) ).arg( overview->name() ) );
+    mOverviewCheckBox->setTitle( tr( "Draw \"%1\" overview" ).arg( overview->name() ) );
   }
 }
 
@@ -1498,7 +1504,7 @@ void QgsLayoutMapWidget::setOverviewItems( QgsLayoutItemMapOverview *overview )
 
   blockOverviewItemsSignals( true );
 
-  mOverviewCheckBox->setTitle( QString( tr( "Draw \"%1\" overview" ) ).arg( overview->name() ) );
+  mOverviewCheckBox->setTitle( tr( "Draw \"%1\" overview" ).arg( overview->name() ) );
   mOverviewCheckBox->setChecked( overview->enabled() );
 
   //overview frame
@@ -1970,6 +1976,14 @@ QgsLayoutMapClippingWidget::QgsLayoutMapClippingWidget( QgsLayoutItemMap *map )
   mAtlasClippingTypeComboBox->addItem( tr( "Clip Feature Before Render" ), static_cast< int >( QgsMapClippingRegion::FeatureClippingType::ClipToIntersection ) );
   mAtlasClippingTypeComboBox->addItem( tr( "Render Intersecting Features Unchanged" ), static_cast< int >( QgsMapClippingRegion::FeatureClippingType::NoClipping ) );
 
+  for ( int i = 0; i < mAtlasClippingTypeComboBox->count(); ++i )
+  {
+    mItemClippingTypeComboBox->addItem( mAtlasClippingTypeComboBox->itemText( i ), mAtlasClippingTypeComboBox->itemData( i ) );
+  }
+
+  mClipItemComboBox->setCurrentLayout( map->layout() );
+  mClipItemComboBox->setItemFlags( QgsLayoutItem::FlagProvidesClipPath );
+
   connect( mRadioClipSelectedLayers, &QRadioButton::toggled, mLayersTreeView, &QWidget::setEnabled );
   mLayersTreeView->setEnabled( false );
   mRadioClipAllLayers->setChecked( true );
@@ -1992,7 +2006,7 @@ QgsLayoutMapClippingWidget::QgsLayoutMapClippingWidget( QgsLayoutItemMap *map )
       mMapItem->endCommand();
     }
   } );
-  connect( mAtlasClippingTypeComboBox, qgis::overload<int>::of( &QComboBox::currentIndexChanged ), this, [ = ]
+  connect( mAtlasClippingTypeComboBox, qOverload<int>( &QComboBox::currentIndexChanged ), this, [ = ]
   {
     if ( !mBlockUpdates )
     {
@@ -2008,7 +2022,7 @@ QgsLayoutMapClippingWidget::QgsLayoutMapClippingWidget( QgsLayoutItemMap *map )
     {
       mBlockUpdates = true;
       mMapItem->beginCommand( tr( "Change Atlas Clipping Layers" ) );
-      mMapItem->atlasClippingSettings()->setLayersToClip( mLayerModel->layersChecked( ) );
+      mMapItem->atlasClippingSettings()->setRestrictToLayers( true );
       mMapItem->endCommand();
       mBlockUpdates = false;
     }
@@ -2019,7 +2033,7 @@ QgsLayoutMapClippingWidget::QgsLayoutMapClippingWidget( QgsLayoutItemMap *map )
     {
       mBlockUpdates = true;
       mMapItem->beginCommand( tr( "Change Atlas Clipping Layers" ) );
-      mMapItem->atlasClippingSettings()->setLayersToClip( QList< QgsMapLayer * >() );
+      mMapItem->atlasClippingSettings()->setRestrictToLayers( false );
       mMapItem->endCommand();
       mBlockUpdates = false;
     }
@@ -2036,6 +2050,45 @@ QgsLayoutMapClippingWidget::QgsLayoutMapClippingWidget( QgsLayoutItemMap *map )
       mMapItem->atlasClippingSettings()->setLayersToClip( mLayerModel->layersChecked() );
       mMapItem->endCommand();
       mBlockUpdates = false;
+    }
+  } );
+
+  // item clipping widgets
+
+  connect( mClipToItemCheckBox, &QGroupBox::toggled, this, [ = ]( bool active )
+  {
+    if ( !mBlockUpdates )
+    {
+      mMapItem->beginCommand( tr( "Toggle Map Clipping" ) );
+      mMapItem->itemClippingSettings()->setEnabled( active );
+      mMapItem->endCommand();
+    }
+  } );
+  connect( mItemClippingTypeComboBox, qOverload<int>( &QComboBox::currentIndexChanged ), this, [ = ]
+  {
+    if ( !mBlockUpdates )
+    {
+      mMapItem->beginCommand( tr( "Change Map Clipping Behavior" ) );
+      mMapItem->itemClippingSettings()->setFeatureClippingType( static_cast< QgsMapClippingRegion::FeatureClippingType >( mItemClippingTypeComboBox->currentData().toInt() ) );
+      mMapItem->endCommand();
+    }
+  } );
+  connect( mForceLabelsInsideItemCheckBox, &QCheckBox::toggled, this, [ = ]( bool active )
+  {
+    if ( !mBlockUpdates )
+    {
+      mMapItem->beginCommand( tr( "Change Map Clipping Label Behavior" ) );
+      mMapItem->itemClippingSettings()->setForceLabelsInsideClipPath( active );
+      mMapItem->endCommand();
+    }
+  } );
+  connect( mClipItemComboBox, &QgsLayoutItemComboBox::itemChanged, this, [ = ]( QgsLayoutItem * item )
+  {
+    if ( !mBlockUpdates )
+    {
+      mMapItem->beginCommand( tr( "Change Map Clipping Item" ) );
+      mMapItem->itemClippingSettings()->setSourceItem( item );
+      mMapItem->endCommand();
     }
   } );
 
@@ -2089,9 +2142,14 @@ void QgsLayoutMapClippingWidget::updateGuiElements()
   mAtlasClippingTypeComboBox->setCurrentIndex( mAtlasClippingTypeComboBox->findData( static_cast< int >( mMapItem->atlasClippingSettings()->featureClippingType() ) ) );
   mForceLabelsInsideCheckBox->setChecked( mMapItem->atlasClippingSettings()->forceLabelsInsideFeature() );
 
-  mRadioClipAllLayers->setChecked( mMapItem->atlasClippingSettings()->layersToClip().isEmpty() );
-  mRadioClipSelectedLayers->setChecked( !mMapItem->atlasClippingSettings()->layersToClip().isEmpty() );
+  mRadioClipAllLayers->setChecked( !mMapItem->atlasClippingSettings()->restrictToLayers() );
+  mRadioClipSelectedLayers->setChecked( mMapItem->atlasClippingSettings()->restrictToLayers() );
   mLayerModel->setLayersChecked( mMapItem->atlasClippingSettings()->layersToClip() );
+
+  mClipToItemCheckBox->setChecked( mMapItem->itemClippingSettings()->enabled() );
+  mItemClippingTypeComboBox->setCurrentIndex( mItemClippingTypeComboBox->findData( static_cast< int >( mMapItem->itemClippingSettings()->featureClippingType() ) ) );
+  mForceLabelsInsideItemCheckBox->setChecked( mMapItem->itemClippingSettings()->forceLabelsInsideClipPath() );
+  mClipItemComboBox->setItem( mMapItem->itemClippingSettings()->sourceItem() );
 
   mBlockUpdates = false;
 }

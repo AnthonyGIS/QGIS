@@ -19,6 +19,7 @@
 #include <QWidget>
 #include <QAbstractTableModel>
 #include <QStyledItemDelegate>
+#include <QPointer>
 
 #include "qgis_gui.h"
 #include "qgsfieldmappingmodel.h"
@@ -26,10 +27,11 @@
 
 class QTableView;
 class QItemSelectionModel;
+class QgsVectorLayer;
 
 /**
  * \ingroup gui
- * The QgsFieldMappingWidget class creates a mapping from one set of QgsFields to another,
+ * \brief The QgsFieldMappingWidget class creates a mapping from one set of QgsFields to another,
  * for each set of "destination" fields an expression defines how to obtain the values of the
  * "destination" fields.
  * \since QGIS 3.14
@@ -86,6 +88,22 @@ class GUI_EXPORT QgsFieldMappingWidget : public QgsPanelWidget
     void setSourceFields( const QgsFields &sourceFields );
 
     /**
+     * Sets a source \a layer to use when generating expression previews in the widget.
+     *
+     * \since QGIS 3.16
+     */
+    void setSourceLayer( QgsVectorLayer *layer );
+
+    /**
+     * Returns the source layer for use when generating expression previews.
+     *
+     * Returned value may be NULLPTR.
+     *
+     * \since QGIS 3.16
+     */
+    QgsVectorLayer *sourceLayer();
+
+    /**
      * Set destination fields to \a destinationFields in the underlying model,
      * initial values for the expressions can be optionally specified through
      * \a expressions which is a map from the original field name to the
@@ -130,6 +148,8 @@ class GUI_EXPORT QgsFieldMappingWidget : public QgsPanelWidget
 
     QTableView *mTableView = nullptr;
     QAbstractTableModel *mModel = nullptr;
+
+    QPointer< QgsVectorLayer > mSourceLayer;
     void updateColumns();
     //! Returns selected row indexes in ascending order
     std::list<int> selectedRows( );

@@ -28,7 +28,7 @@
 #include "qgsapplication.h"
 #include "qgsdataprovider.h"
 #include "qgsinterval.h"
-
+#include "qgstemporalutils.h"
 
 class QNetworkReply;
 
@@ -204,6 +204,15 @@ struct QgsWmsDimensionProperty
 
     return QgsDateTimeRange();
   }
+
+  bool operator== ( const QgsWmsDimensionProperty &other ) const
+  {
+    return name == other.name && units == other.units &&
+           unitSymbol == other.unitSymbol && defaultValue == other.defaultValue &&
+           extent == other.extent && multipleValues == other.multipleValues &&
+           nearestValue == other.nearestValue && current == other.current;
+  }
+
 };
 
 //! Logo URL Property structure
@@ -347,6 +356,8 @@ struct QgsWmsLayerProperty
       return false;
     if ( !( abstract == layerProperty.abstract ) )
       return false;
+    if ( !( dimensions == layerProperty.dimensions ) )
+      return false;
 
     return true;
   }
@@ -359,13 +370,31 @@ struct QgsWmsLayerProperty
     if ( dimensions.isEmpty() )
       return false;
 
-    for ( const QgsWmsDimensionProperty &dimension : qgis::as_const( dimensions ) )
+    for ( const QgsWmsDimensionProperty &dimension : std::as_const( dimensions ) )
     {
       if ( dimension.name == dimensionName )
         return true;
     }
 
     return false;
+  }
+
+  /**
+   * Attempts to return a preferred CRS from the list of available CRS definitions.
+   *
+   * Prioritizes the first listed CRS, unless it's a block listed value.
+   */
+  QString preferredAvailableCrs() const
+  {
+    static QSet< QString > sSkipList { QStringLiteral( "EPSG:900913" ) };
+    for ( const QString &candidate : crs )
+    {
+      if ( sSkipList.contains( candidate ) )
+        continue;
+
+      return candidate;
+    }
+    return crs.value( 0 );
   }
 };
 
@@ -393,101 +422,6 @@ struct QgsWmstDates
 };
 
 /**
- * Stores resolution part of the WMS-T dimension extent.
- *
- * If resolution does not exist, active() will return false;
- */
-struct QgsWmstResolution
-{
-  int year = -1;
-  int month = -1;
-  int day = -1;
-
-  int hour = -1;
-  int minutes = -1;
-  int seconds = -1;
-
-  long long interval()
-  {
-    long long secs = 0.0;
-
-    if ( year != -1 )
-      secs += year * QgsInterval::YEARS ;
-    if ( month != -1 )
-      secs += month * QgsInterval::MONTHS;
-    if ( day != -1 )
-      secs += day * QgsInterval::DAY;
-    if ( hour != -1 )
-      secs += hour * QgsInterval::HOUR;
-    if ( minutes != -1 )
-      secs += minutes * QgsInterval::MINUTE;
-    if ( seconds != -1 )
-      secs += seconds;
-
-    return secs;
-  }
-
-  bool active()
-  {
-    return year != -1 || month != -1 || day != -1 ||
-           hour != -1 || minutes != -1 || seconds != -1;
-  }
-
-  QString text()
-  {
-    QString text( "P" );
-
-    if ( year != -1 )
-    {
-      text.append( QString::number( year ) );
-      text.append( 'Y' );
-    }
-    if ( month != -1 )
-    {
-      text.append( QString::number( month ) );
-      text.append( 'M' );
-    }
-    if ( day != -1 )
-    {
-      text.append( QString::number( day ) );
-      text.append( 'D' );
-    }
-
-    if ( hour != -1 )
-    {
-      if ( !text.contains( 'T' ) )
-        text.append( 'T' );
-      text.append( QString::number( hour ) );
-      text.append( 'H' );
-    }
-    if ( minutes != -1 )
-    {
-      if ( !text.contains( 'T' ) )
-        text.append( 'T' );
-      text.append( QString::number( minutes ) );
-      text.append( 'M' );
-    }
-    if ( seconds != -1 )
-    {
-      if ( !text.contains( 'T' ) )
-        text.append( 'T' );
-      text.append( QString::number( seconds ) );
-      text.append( 'S' );
-    }
-    return text;
-  }
-
-  bool operator== ( const QgsWmstResolution &other )
-  {
-    return year == other.year && month == other.month &&
-           day == other.day && hour == other.hour &&
-           minutes == other.minutes && seconds == other.seconds;
-  }
-
-};
-
-
-/**
  * Stores dates and resolution structure pair.
  */
 struct QgsWmstExtentPair
@@ -496,10 +430,10 @@ struct QgsWmstExtentPair
   {
   }
 
-  QgsWmstExtentPair( QgsWmstDates otherDates, QgsWmstResolution otherResolution )
+  QgsWmstExtentPair( QgsWmstDates dates, QgsTimeDuration resolution )
+    : dates( dates )
+    , resolution( resolution )
   {
-    dates = otherDates;
-    resolution = otherResolution;
   }
 
   bool operator ==( const QgsWmstExtentPair &other )
@@ -509,7 +443,8 @@ struct QgsWmstExtentPair
   }
 
   QgsWmstDates dates;
-  QgsWmstResolution resolution;
+  QgsTimeDuration resolution;
+
 };
 
 
@@ -540,7 +475,7 @@ struct QgsWmtsTileMatrix
   QString identifier;
   QString title, abstract;
   QStringList keywords;
-  double scaleDenom;
+  double scaleDenom = 0;
   QgsPointXY topLeft;  //!< Top-left corner of the tile matrix in map units
   int tileWidth;     //!< Width of a tile in pixels
   int tileHeight;    //!< Height of a tile in pixels
@@ -614,7 +549,7 @@ struct QgsWmtsStyle
   QString identifier;
   QString title, abstract;
   QStringList keywords;
-  bool isDefault;
+  bool isDefault = false;
   QList<QgsWmtsLegendURL> legendURLs;
 };
 
@@ -735,12 +670,12 @@ struct QgsWmsAuthorization
     }
     else if ( !mUserName.isEmpty() || !mPassword.isEmpty() )
     {
-      request.setRawHeader( "Authorization", "Basic " + QStringLiteral( "%1:%2" ).arg( mUserName, mPassword ).toLatin1().toBase64() );
+      request.setRawHeader( "Authorization", "Basic " + QStringLiteral( "%1:%2" ).arg( mUserName, mPassword ).toUtf8().toBase64() );
     }
 
     if ( !mReferer.isEmpty() )
     {
-      request.setRawHeader( "Referer", QStringLiteral( "%1" ).arg( mReferer ).toLatin1() );
+      request.setRawHeader( "Referer", mReferer.toLatin1() );
     }
     return true;
   }
@@ -786,7 +721,7 @@ class QgsWmsSettings
      *
      * \since QGIS 3.14
      */
-    QgsWmstDimensionExtent parseTemporalExtent( QString extent );
+    QgsWmstDimensionExtent parseTemporalExtent( const QString &extent );
 
     /**
      * Sets the dimension extent property
@@ -794,7 +729,7 @@ class QgsWmsSettings
      * \see timeDimensionExtent()
      * \since QGIS 3.14
      */
-    void setTimeDimensionExtent( QgsWmstDimensionExtent timeDimensionExtent );
+    void setTimeDimensionExtent( const QgsWmstDimensionExtent &timeDimensionExtent );
 
     /**
      * Returns the dimension extent property.
@@ -809,21 +744,14 @@ class QgsWmsSettings
      *
      * \since QGIS 3.14
      */
-    QgsWmstResolution parseWmstResolution( QString item );
+    QgsTimeDuration parseWmstResolution( const QString &item );
 
     /**
      * Parse the given string item into QDateTime instant.
      *
      * \since QGIS 3.14
      */
-    QDateTime parseWmstDateTimes( QString item );
-
-    /**
-     * Returns the datetime with the sum of passed \a dateTime and the \a resolution time.
-     *
-     * \since QGIS 3.14
-     */
-    QDateTime addTime( QDateTime dateTime, QgsWmstResolution resolution );
+    QDateTime parseWmstDateTimes( const QString &item );
 
     /**
      * Finds the least closest datetime from list of available dimension temporal ranges
@@ -833,7 +761,7 @@ class QgsWmsSettings
      *
      * \since QGIS 3.14
      */
-    QDateTime findLeastClosestDateTime( QDateTime dateTime, bool dateOnly = false ) const;
+    QDateTime findLeastClosestDateTime( const QDateTime &dateTime, bool dateOnly = false ) const;
 
   protected:
     QgsWmsParserSettings    mParserSettings;
@@ -854,6 +782,11 @@ class QgsWmsSettings
 
     //! Fixed temporal range for the data provider
     QgsDateTimeRange mFixedRange;
+
+    //! All available temporal ranges
+    QList< QgsDateTimeRange > mAllRanges;
+
+    QgsInterval mDefaultInterval;
 
     //! Fixed reference temporal range for the data provider
     QgsDateTimeRange mFixedReferenceRange;
@@ -903,6 +836,9 @@ class QgsWmsSettings
      */
     QStringList mActiveSubLayers;
     QStringList mActiveSubStyles;
+
+    //! Opacities for wms layers. Same ordering as mActiveSubLayers/mActiveSubStyles
+    QStringList mOpacities;
 
     /**
      * Visibility status of the given active sublayer

@@ -28,7 +28,7 @@
 
 /**
  * \ingroup gui
- * A widget for configuring layout map grid items.
+ * \brief A widget for configuring layout map grid items.
  *
  * \note This class is not a part of public API
  * \since QGIS 3.12
@@ -50,6 +50,14 @@ class GUI_EXPORT QgsLayoutMapGridWidget: public QgsLayoutItemBaseWidget, private
     void mOffsetYSpinBox_valueChanged( double value );
     void mCrossWidthSpinBox_valueChanged( double val );
     void mFrameWidthSpinBox_valueChanged( double val );
+    void mRotatedTicksGroupBox_toggled( bool checked );
+    void mRotatedTicksLengthModeComboBox_currentIndexChanged( int );
+    void mRotatedTicksThresholdSpinBox_valueChanged( double val );
+    void mRotatedTicksMarginToCornerSpinBox_valueChanged( double val );
+    void mRotatedAnnotationsGroupBox_toggled( bool checked );
+    void mRotatedAnnotationsLengthModeComboBox_currentIndexChanged( int );
+    void mRotatedAnnotationsThresholdSpinBox_valueChanged( double val );
+    void mRotatedAnnotationsMarginToCornerSpinBox_valueChanged( double val );
     void mGridFrameMarginSpinBox_valueChanged( double val );
     void mFrameStyleComboBox_currentIndexChanged( int );
     void mGridFramePenSizeSpinBox_valueChanged( double d );
@@ -57,7 +65,7 @@ class GUI_EXPORT QgsLayoutMapGridWidget: public QgsLayoutItemBaseWidget, private
     void mGridFrameFill1ColorButton_colorChanged( const QColor &newColor );
     void mGridFrameFill2ColorButton_colorChanged( const QColor &newColor );
     void mGridTypeComboBox_currentIndexChanged( int );
-    void mMapGridCRSButton_clicked();
+    void mapGridCrsChanged( const QgsCoordinateReferenceSystem &crs );
     void mGridBlendComboBox_currentIndexChanged( int index );
     void mCheckGridLeftSide_toggled( bool checked );
     void mCheckGridRightSide_toggled( bool checked );
@@ -97,6 +105,7 @@ class GUI_EXPORT QgsLayoutMapGridWidget: public QgsLayoutItemBaseWidget, private
 
   protected:
 
+
     //! Sets the current composer map values to the GUI elements
     virtual void updateGuiElements();
 
@@ -115,10 +124,12 @@ class GUI_EXPORT QgsLayoutMapGridWidget: public QgsLayoutItemBaseWidget, private
     void minIntervalChanged( double interval );
     void maxIntervalChanged( double interval );
     void annotationTextFormatChanged();
+    void onCrsChanged();
 
   private:
     QPointer< QgsLayoutItemMap > mMap;
     QPointer< QgsLayoutItemMapGrid > mMapGrid;
+    int mBlockAnnotationFormatUpdates = 0;
 
     //! Blocks / unblocks the signals of all GUI elements
     void blockAllSignals( bool b );
@@ -138,7 +149,7 @@ class GUI_EXPORT QgsLayoutMapGridWidget: public QgsLayoutItemBaseWidget, private
     void initAnnotationDirectionBox( QComboBox *c, QgsLayoutItemMapGrid::AnnotationDirection dir );
 
     //! Enables/disables grid frame related controls
-    void toggleFrameControls( bool frameEnabled, bool frameFillEnabled, bool frameSizeEnabled );
+    void toggleFrameControls( bool frameEnabled, bool frameFillEnabled, bool frameSizeEnabled, bool ticksRotationEnabled );
 
     //! Is there some predefined scales, globally or as project's options ?
     bool hasPredefinedScales() const;

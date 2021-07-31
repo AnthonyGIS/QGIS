@@ -18,9 +18,12 @@
 #include "qgsprocessingregistry.h"
 #include "qgsvectorfilewriter.h"
 #include "qgsprocessingparametertypeimpl.h"
+#include "qgsprocessingparametermeshdataset.h"
 #include "qgsprocessingparametervectortilewriterlayers.h"
+#include "qgsprocessingparametertininputlayers.h"
 #include "qgsprocessingparameterfieldmap.h"
 #include "qgsprocessingparameteraggregate.h"
+#include "qgsprocessingparameterdxflayers.h"
 
 QgsProcessingRegistry::QgsProcessingRegistry( QObject *parent SIP_TRANSFERTHIS )
   : QObject( parent )
@@ -34,6 +37,7 @@ QgsProcessingRegistry::QgsProcessingRegistry( QObject *parent SIP_TRANSFERTHIS )
   addParameterType( new QgsProcessingParameterTypeCrs() );
   addParameterType( new QgsProcessingParameterTypeRange() );
   addParameterType( new QgsProcessingParameterTypePoint() );
+  addParameterType( new QgsProcessingParameterTypeGeometry() );
   addParameterType( new QgsProcessingParameterTypeEnum() );
   addParameterType( new QgsProcessingParameterTypeExtent() );
   addParameterType( new QgsProcessingParameterTypeMatrix() );
@@ -49,15 +53,14 @@ QgsProcessingRegistry::QgsProcessingRegistry( QObject *parent SIP_TRANSFERTHIS )
   addParameterType( new QgsProcessingParameterTypeFeatureSource() );
   addParameterType( new QgsProcessingParameterTypeNumber() );
   addParameterType( new QgsProcessingParameterTypeDistance() );
+  addParameterType( new QgsProcessingParameterTypeDuration() );
   addParameterType( new QgsProcessingParameterTypeScale() );
   addParameterType( new QgsProcessingParameterTypeBand() );
   addParameterType( new QgsProcessingParameterTypeFeatureSink() );
   addParameterType( new QgsProcessingParameterTypeLayout() );
   addParameterType( new QgsProcessingParameterTypeLayoutItem() );
   addParameterType( new QgsProcessingParameterTypeColor() );
-#if PROJ_VERSION_MAJOR>=6
   addParameterType( new QgsProcessingParameterTypeCoordinateOperation() );
-#endif
   addParameterType( new QgsProcessingParameterTypeMapTheme() );
   addParameterType( new QgsProcessingParameterTypeDateTime() );
   addParameterType( new QgsProcessingParameterTypeProviderConnection() );
@@ -66,6 +69,10 @@ QgsProcessingRegistry::QgsProcessingRegistry( QObject *parent SIP_TRANSFERTHIS )
   addParameterType( new QgsProcessingParameterTypeVectorTileWriterLayers() );
   addParameterType( new QgsProcessingParameterTypeFieldMapping() );
   addParameterType( new QgsProcessingParameterTypeAggregate() );
+  addParameterType( new QgsProcessingParameterTypeTinInputLayers() );
+  addParameterType( new QgsProcessingParameterTypeDxfLayers() );
+  addParameterType( new QgsProcessingParameterTypeMeshDatasetGroups() );
+  addParameterType( new QgsProcessingParameterTypeMeshDatasetTime() );
 }
 
 QgsProcessingRegistry::~QgsProcessingRegistry()

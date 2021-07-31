@@ -40,7 +40,7 @@ class QgsMeshLayer;
 
 /**
  * \ingroup core
- * Misc utility functions used for mesh layer/data provider support
+ * \brief Misc utility functions used for mesh layer/data provider support
  *
  * \note not available in Python bindings
  * \since QGIS 3.4
@@ -115,16 +115,29 @@ class CORE_EXPORT QgsMeshLayerUtils
      * \param mtp actual renderer map to pixel
      * \param outputSize actual renderer output size
      * \param bbox bounding box in map coordinates
-     * \param leftLim minimum x coordinate in pixel
-     * \param rightLim maximum x coordinate in pixel
-     * \param topLim minimum y coordinate in pixel
-     * \param bottomLim maximum y coordinate in pixel
+     * \param leftLim minimum x coordinate in pixel, clipped by 0
+     * \param rightLim maximum x coordinate in pixel, clipped by outputSize width
+     * \param bottomLim minimum y coordinate in pixel, clipped by 0
+     * \param topLim maximum y coordinate in pixel, clipped by outputSize height
      */
     static void boundingBoxToScreenRectangle(
       const QgsMapToPixel &mtp,
       const QSize &outputSize,
       const QgsRectangle &bbox,
-      int &leftLim, int &rightLim, int &topLim, int &bottomLim );
+      int &leftLim,
+      int &rightLim,
+      int &bottomLim,
+      int &topLim );
+
+    /**
+     * Transformes the bounding box to rectangle in screen coordinates (in pixels)
+     * \param mtp actual renderer map to pixel
+     * \param bbox bounding box in map coordinates
+     */
+    static QgsRectangle boundingBoxToScreenRectangle(
+      const QgsMapToPixel &mtp,
+      const QgsRectangle &bbox
+    );
 
     /**
     * Interpolates value based on known values on the vertices of a edge
@@ -223,6 +236,30 @@ class CORE_EXPORT QgsMeshLayerUtils
     );
 
     /**
+    * Interpolate values on vertices from values on faces
+    *
+    * \since QGIS 3.18
+    */
+    static QVector<double> interpolateFromFacesData(
+      const QVector<double> &valuesOnFaces,
+      const QgsMesh &nativeMesh,
+      QgsMeshDataBlock *active,
+      QgsMeshRendererScalarSettings::DataResamplingMethod method
+    );
+
+    /**
+    * Interpolate values on vertices from values on faces
+    *
+    * \since QGIS 3.20
+    */
+    static QVector<double> interpolateFromFacesData(
+      const QVector<double> &valuesOnFaces,
+      const QgsMesh &nativeMesh,
+      const QgsMeshDataBlock &active,
+      QgsMeshRendererScalarSettings::DataResamplingMethod method
+    );
+
+    /**
     * Resamples values on vertices to values on faces
     *
     * \since QGIS 3.14
@@ -237,11 +274,11 @@ class CORE_EXPORT QgsMeshLayerUtils
 
     /**
      * Calculates magnitude values ont vertices from the given QgsMeshDataBlock.
-     * If the values are defined on faces,
+     * If the values are defined on faces, the values are interpolated with the given method
      * \param meshLayer the mesh layer
      * \param index the dataset index that contains the data
      * \param activeFaceFlagValues pointer to the QVector containing active face flag values
-     * \param method used to inteprolate the values on vertices if needed
+     * \param method used to interpolate the values on vertices if needed
      * \returns magnitude values of the dataset on all the vertices
      * \since QGIS 3.14
      */
@@ -250,6 +287,27 @@ class CORE_EXPORT QgsMeshLayerUtils
       const QgsMeshDatasetIndex index,
       QgsMeshDataBlock *activeFaceFlagValues,
       const QgsMeshRendererScalarSettings::DataResamplingMethod method = QgsMeshRendererScalarSettings::NeighbourAverage );
+
+    /**
+     * Calculates magnitude values on vertices from the given QgsMeshDataBlock.
+     * If the values are defined on faces, the values are interpolated with the given method
+     * This method is thread safe.
+     * \param nativeMesh the native mesh
+     * \param groupMetadata the metadata of the group where come from the dataset values
+     * \param datasetValues block containing the dataset values
+     * \param activeFaceFlagValues block containing active face flag values
+     * \param method used to interpolate the values on vertices if needed
+     * \returns magnitude values of the dataset on all the vertices
+     * \since QGIS 3.18
+     */
+    static QVector<double> calculateMagnitudeOnVertices(
+      const QgsMesh &nativeMesh,
+      const QgsMeshDatasetGroupMetadata &groupMetadata,
+      const QgsMeshDataBlock &datasetValues,
+      const QgsMeshDataBlock &activeFaceFlagValues,
+      const QgsMeshRendererScalarSettings::DataResamplingMethod method = QgsMeshRendererScalarSettings::NeighbourAverage );
+
+
 
     /**
      * Calculates the bounding box of the triangle
@@ -274,7 +332,7 @@ class CORE_EXPORT QgsMeshLayerUtils
      * Calculates the normals on the vertices using vertical magnitudes instead Z value of vertices
      * \param triangularMesh the triangular mesh
      * \param verticalMagnitude the vertical magnitude values used instead Z value of vertices
-     * \param isRelative true if the vertical magnitude is relative to the Z value of vertices
+     * \param isRelative TRUE if the vertical magnitude is relative to the Z value of vertices
      * \returns normales (3D vector) on all the vertices
      * \since QGIS 3.14
      */

@@ -17,6 +17,7 @@
 #include "qgsexternalresourcewidget.h"
 #include "qgspixmaplabel.h"
 #include "qgsproject.h"
+#include "qgsapplication.h"
 
 #include <QDir>
 #include <QGridLayout>
@@ -35,7 +36,7 @@ QgsExternalResourceWidget::QgsExternalResourceWidget( QWidget *parent )
   setAutoFillBackground( true );
 
   QGridLayout *layout = new QGridLayout();
-  layout->setMargin( 0 );
+  layout->setContentsMargins( 0, 0, 0, 0 );
 
   mFileWidget = new QgsFileWidget( this );
   layout->addWidget( mFileWidget, 0, 0 );
@@ -60,7 +61,7 @@ QgsExternalResourceWidget::QgsExternalResourceWidget( QWidget *parent )
 QVariant QgsExternalResourceWidget::documentPath( QVariant::Type type ) const
 {
   QString path = mFileWidget->filePath();
-  if ( path.isEmpty() )
+  if ( path.isEmpty() || path == QgsApplication::nullRepresentation() )
   {
     return QVariant( type );
   }
@@ -99,7 +100,9 @@ QgsExternalResourceWidget::DocumentViewerContent QgsExternalResourceWidget::docu
 void QgsExternalResourceWidget::setDocumentViewerContent( QgsExternalResourceWidget::DocumentViewerContent content )
 {
   mDocumentViewerContent = content;
-  updateDocumentViewer();
+  if ( mDocumentViewerContent != Image )
+    updateDocumentViewer();
+  loadDocument( mFileWidget->filePath() );
 }
 
 int QgsExternalResourceWidget::documentViewerHeight() const
@@ -139,9 +142,13 @@ void QgsExternalResourceWidget::updateDocumentViewer()
 
   if ( mDocumentViewerContent == Image )
   {
-    const QPixmap *pm = mPixmapLabel->pixmap();
+#if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
+    const QPixmap pm = mPixmapLabel->pixmap() ? *mPixmapLabel->pixmap() : QPixmap();
+#else
+    const QPixmap pm = mPixmapLabel->pixmap();
+#endif
 
-    if ( !pm || pm->isNull() )
+    if ( !pm || pm.isNull() )
     {
       mPixmapLabel->setMinimumSize( QSize( 0, 0 ) );
     }
@@ -150,11 +157,11 @@ void QgsExternalResourceWidget::updateDocumentViewer()
       QSize size( mDocumentViewerWidth, mDocumentViewerHeight );
       if ( size.width() == 0 && size.height() > 0 )
       {
-        size.setWidth( size.height() * pm->size().width() / pm->size().height() );
+        size.setWidth( size.height() * pm.size().width() / pm.size().height() );
       }
       else if ( size.width() > 0 && size.height() == 0 )
       {
-        size.setHeight( size.width() * pm->size().height() / pm->size().width() );
+        size.setHeight( size.width() * pm.size().height() / pm.size().width() );
       }
 
       if ( size.width() != 0 || size.height() != 0 )
@@ -242,9 +249,13 @@ void QgsExternalResourceWidget::loadDocument( const QString &path )
       ir.setAutoTransform( true );
       QPixmap pm = QPixmap::fromImage( ir.read() );
       if ( !pm.isNull() )
+      {
         mPixmapLabel->setPixmap( pm );
+      }
       else
+      {
         mPixmapLabel->clear();
+      }
       updateDocumentViewer();
     }
   }

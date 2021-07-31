@@ -12,7 +12,7 @@
 
 class QgsLayoutItemPolygon: QgsLayoutNodesItem
 {
-%Docstring
+%Docstring(signature="appended")
 Layout item for node based polygon shapes.
 
 .. versionadded:: 3.0
@@ -34,6 +34,8 @@ Constructor for QgsLayoutItemPolygon for the specified ``polygon``
 and ``layout``.
 %End
 
+    ~QgsLayoutItemPolygon();
+
     static QgsLayoutItemPolygon *create( QgsLayout *layout ) /Factory/;
 %Docstring
 Returns a new polygon item for the specified ``layout``.
@@ -48,6 +50,10 @@ The caller takes responsibility for deleting the returned object.
     virtual QString displayName() const;
 
     virtual bool accept( QgsStyleEntityVisitorInterface *visitor ) const;
+
+    virtual QgsLayoutItem::Flags itemFlags() const;
+
+    virtual QgsGeometry clipPath() const;
 
 
     QgsFillSymbol *symbol();

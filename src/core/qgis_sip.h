@@ -152,6 +152,11 @@
 #define SIP_RELEASEGIL
 
 /*
+ * https://www.riverbankcomputing.com/static/Docs/sip/annotations.html?highlight=keepreference#function-annotation-HoldGIL
+ */
+#define SIP_HOLDGIL
+
+/*
  * Will insert a `%Feature feature` directive in sip files
  */
 #define SIP_FEATURE(feature)
@@ -250,6 +255,7 @@
  */
 #define SIP_MONKEYPATCH_SCOPEENUM
 #define SIP_MONKEYPATCH_SCOPEENUM_UNNEST(OUTSIDE_CLASS,FORMERNAME)
+#define SIP_MONKEYPATCH_COMPAT_NAME(FORMERNAME)
 
 /*
  * Directive to define a Python property;

@@ -9,6 +9,7 @@
 
 
 
+
 class QgsSymbolLayerWidget : QWidget, protected QgsExpressionContextGenerator
 {
 
@@ -109,6 +110,8 @@ Constructor for QgsSimpleLineSymbolLayerWidget.
 :param parent: parent widget
 %End
 
+    ~QgsSimpleLineSymbolLayerWidget();
+
     static QgsSymbolLayerWidget *create( QgsVectorLayer *vl ) /Factory/;
 %Docstring
 Creates a new QgsSimpleLineSymbolLayerWidget.
@@ -119,6 +122,8 @@ Creates a new QgsSimpleLineSymbolLayerWidget.
     virtual void setSymbolLayer( QgsSymbolLayer *layer );
 
     virtual QgsSymbolLayer *symbolLayer();
+
+    virtual void setContext( const QgsSymbolWidgetContext &context );
 
 
   protected:
@@ -148,6 +153,7 @@ Constructor for QgsSimpleMarkerSymbolLayerWidget.
 :param vl: associated vector layer
 :param parent: parent widget
 %End
+    ~QgsSimpleMarkerSymbolLayerWidget();
 
     static QgsSymbolLayerWidget *create( QgsVectorLayer *vl ) /Factory/;
 %Docstring
@@ -215,8 +221,8 @@ Creates a new QgsSimpleFillSymbolLayerWidget.
 
 class QgsFilledMarkerSymbolLayerWidget : QgsSymbolLayerWidget
 {
-%Docstring
-Widget for configuring QgsFilledMarkerSymbolLayer symbol layers.
+%Docstring(signature="appended")
+Widget for configuring :py:class:`QgsFilledMarkerSymbolLayer` symbol layers.
 
 .. versionadded:: 2.16
 %End
@@ -233,6 +239,7 @@ Constructor for QgsFilledMarkerSymbolLayerWidget.
 :param vl: associated vector layer
 :param parent: parent widget
 %End
+    ~QgsFilledMarkerSymbolLayerWidget();
 
     static QgsSymbolLayerWidget *create( QgsVectorLayer *vl ) /Factory/;
 %Docstring
@@ -366,6 +373,8 @@ Creates a new QgsMarkerLineSymbolLayerWidget.
 
     virtual QgsSymbolLayer *symbolLayer();
 
+    virtual void setContext( const QgsSymbolWidgetContext &context );
+
 
   public slots:
 
@@ -382,7 +391,7 @@ Creates a new QgsMarkerLineSymbolLayerWidget.
 
 class QgsHashedLineSymbolLayerWidget : QgsSymbolLayerWidget
 {
-%Docstring
+%Docstring(signature="appended")
 Widget for controlling the properties of a :py:class:`QgsHashedLineSymbolLayer`.
 
 .. versionadded:: 3.8
@@ -412,6 +421,8 @@ Creates a new QgsHashedLineSymbolLayerWidget.
 
     virtual QgsSymbolLayer *symbolLayer();
 
+    virtual void setContext( const QgsSymbolWidgetContext &context );
+
 
 };
 
@@ -433,6 +444,7 @@ Constructor for QgsSvgMarkerSymbolLayerWidget.
 :param vl: associated vector layer
 :param parent: parent widget
 %End
+    ~QgsSvgMarkerSymbolLayerWidget();
 
     static QgsSymbolLayerWidget *create( QgsVectorLayer *vl ) /Factory/;
 %Docstring
@@ -449,10 +461,34 @@ Creates a new QgsSvgMarkerSymbolLayerWidget.
     virtual void setContext( const QgsSymbolWidgetContext &context );
 
 
+  public slots:
+    void setSvgPath( const QString &name );
+%Docstring
+Sets the SVG path
+%End
+    void setSvgParameters( const QMap<QString, QgsProperty> &parameters );
+%Docstring
+Sets the dynamic SVG parameters
+%End
+
+
   protected:
 
-    void populateList();
-    void setGuiForSvg( const QgsSvgMarkerSymbolLayer *layer );
+ void populateList() /Deprecated/;
+%Docstring
+This method does nothing anymore, the loading is automatic
+
+.. deprecated:: QGIS 3.16
+%End
+
+    void setGuiForSvg( const QgsSvgMarkerSymbolLayer *layer, bool skipDefaultColors = false );
+%Docstring
+Updates the GUI to reflect the SVG marker symbol ``layer``.
+
+:param layer: SVG marker symbol layer
+:param skipDefaultColors: if ``True``, the default fill and outline colors of the SVG file will not overwrite
+                          the ones from the symbol layer
+%End
 
 
 };
@@ -462,8 +498,8 @@ Creates a new QgsSvgMarkerSymbolLayerWidget.
 
 class QgsRasterMarkerSymbolLayerWidget : QgsSymbolLayerWidget
 {
-%Docstring
-Widget for configuring QgsRasterMarkerSymbolLayer symbol layers.
+%Docstring(signature="appended")
+Widget for configuring :py:class:`QgsRasterMarkerSymbolLayer` symbol layers.
 
 .. versionadded:: 3.6
 %End
@@ -569,7 +605,6 @@ Creates a new QgsSVGFillSymbolLayerWidget.
 
 
   protected:
-    void insertIcons();
 
     void updateParamGui( bool resetValues = true );
 %Docstring
@@ -658,7 +693,7 @@ Creates a new QgsPointPatternFillSymbolLayerWidget.
 
 class QgsRandomMarkerFillSymbolLayerWidget: QgsSymbolLayerWidget
 {
-%Docstring
+%Docstring(signature="appended")
 
 Widget for controlling the properties of a :py:class:`QgsRandomMarkerFillSymbolLayer`.
 
@@ -710,6 +745,7 @@ Constructor for QgsFontMarkerSymbolLayerWidget.
 :param vl: associated vector layer
 :param parent: parent widget
 %End
+    ~QgsFontMarkerSymbolLayerWidget();
 
     static QgsSymbolLayerWidget *create( QgsVectorLayer *vl ) /Factory/;
 %Docstring

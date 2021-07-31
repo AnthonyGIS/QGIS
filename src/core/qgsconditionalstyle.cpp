@@ -19,6 +19,7 @@
 #include "qgsfontutils.h"
 #include "qgssymbollayerutils.h"
 #include "qgsmarkersymbollayer.h"
+#include "qgsmarkersymbol.h"
 
 QgsConditionalLayerStyles::QgsConditionalLayerStyles( QObject *parent )
   : QObject( parent )
@@ -131,6 +132,8 @@ QgsConditionalStyle::QgsConditionalStyle( const QString &rule )
   setRule( rule );
 }
 
+QgsConditionalStyle::~QgsConditionalStyle() = default;
+
 QgsConditionalStyle::QgsConditionalStyle( const QgsConditionalStyle &other )
   : mValid( other.mValid )
   , mName( other.mName )
@@ -218,7 +221,6 @@ QPixmap QgsConditionalStyle::renderPreview( const QSize &size ) const
     painter.setPen( Qt::black );
 
   painter.setRenderHint( QPainter::Antialiasing );
-  painter.setRenderHint( QPainter::HighQualityAntialiasing );
   painter.setFont( font() );
   rect = QRect( pixmap.width() / 3, 0, 2 * pixmap.width() / 3, pixmap.height() );
   painter.drawText( rect, Qt::AlignCenter, QStringLiteral( "abc\n123" ) );
@@ -272,8 +274,8 @@ QgsConditionalStyle QgsConditionalStyle::compressStyles( const QList<QgsConditio
       style.setBackgroundColor( s.backgroundColor() );
     if ( s.textColor().isValid() && s.textColor().alpha() != 0 )
       style.setTextColor( s.textColor() );
-    if ( s.symbol() )
-      style.setSymbol( s.symbol() );
+    if ( auto *lSymbol = s.symbol() )
+      style.setSymbol( lSymbol );
   }
   return style;
 }

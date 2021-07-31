@@ -16,10 +16,28 @@
 #ifndef QGSPOSTGRESPROVIDERCONNECTION_H
 #define QGSPOSTGRESPROVIDERCONNECTION_H
 #include "qgsabstractdatabaseproviderconnection.h"
+#include "qgspostgresconnpool.h"
 
+struct QgsPostgresProviderResultIterator: public QgsAbstractDatabaseProviderConnection::QueryResult::QueryResultIterator
+{
+    QgsPostgresProviderResultIterator( bool resolveTypes )
+      : mResolveTypes( resolveTypes )
+    {}
+
+    QMap<int, QVariant::Type> typeMap;
+    std::unique_ptr<QgsPostgresResult> result;
+
+  private:
+
+    QVariantList nextRowPrivate() override;
+    bool hasNextRowPrivate() const override;
+    long long rowCountPrivate() const override;
+
+    bool mResolveTypes = true;
+    long long mRowIndex = 0;
+};
 
 class QgsPostgresProviderConnection : public QgsAbstractDatabaseProviderConnection
-
 {
   public:
 
@@ -38,6 +56,7 @@ class QgsPostgresProviderConnection : public QgsAbstractDatabaseProviderConnecti
                             const QMap<QString, QVariant> *options ) const override;
 
     QString tableUri( const QString &schema, const QString &name ) const override;
+    QgsFields fields( const QString &schema, const QString &table ) const override;
     void dropVectorTable( const QString &schema, const QString &name ) const override;
     void dropRasterTable( const QString &schema, const QString &name ) const override;
     void renameVectorTable( const QString &schema, const QString &name, const QString &newName ) const override;
@@ -45,24 +64,31 @@ class QgsPostgresProviderConnection : public QgsAbstractDatabaseProviderConnecti
     void createSchema( const QString &name ) const override;
     void dropSchema( const QString &name, bool force = false ) const override;
     void renameSchema( const QString &name, const QString &newName ) const override;
-    QList<QVariantList> executeSql( const QString &sql ) const override;
+    QgsAbstractDatabaseProviderConnection::QueryResult execSql( const QString &sql, QgsFeedback *feedback = nullptr ) const override;
     void vacuum( const QString &schema, const QString &name ) const override;
     void createSpatialIndex( const QString &schema, const QString &name, const QgsAbstractDatabaseProviderConnection::SpatialIndexOptions &options = QgsAbstractDatabaseProviderConnection::SpatialIndexOptions() ) const override;
     bool spatialIndexExists( const QString &schema, const QString &name, const QString &geometryColumn ) const override;
     void deleteSpatialIndex( const QString &schema, const QString &name, const QString &geometryColumn ) const override;
     QList<QgsAbstractDatabaseProviderConnection::TableProperty> tables( const QString &schema,
-        const TableFlags &flags = nullptr ) const override;
+        const TableFlags &flags = TableFlags() ) const override;
     QStringList schemas( ) const override;
     void store( const QString &name ) const override;
     void remove( const QString &name ) const override;
     QIcon icon() const override;
+    QList<QgsVectorDataProvider::NativeType> nativeTypes() const override;
+    QgsVectorLayer *createSqlVectorLayer( const SqlVectorLayerOptions &options ) const override;
+    QMultiMap<Qgis::SqlKeywordCategory, QStringList> sqlDictionary() override;
+    SqlVectorLayerOptions sqlOptions( const QString &layerSource ) override;
 
   private:
 
-    QList<QVariantList> executeSqlPrivate( const QString &sql, bool resolveTypes = true ) const;
+    QList<QVariantList> executeSqlPrivate( const QString &sql, bool resolveTypes = true, QgsFeedback *feedback = nullptr, std::shared_ptr< class QgsPoolPostgresConn > pgconn = nullptr ) const;
+    QgsAbstractDatabaseProviderConnection::QueryResult execSqlPrivate( const QString &sql, bool resolveTypes = true, QgsFeedback *feedback = nullptr, std::shared_ptr< class QgsPoolPostgresConn > pgconn = nullptr ) const;
     void setDefaultCapabilities();
     void dropTablePrivate( const QString &schema, const QString &name ) const;
     void renameTablePrivate( const QString &schema, const QString &name, const QString &newName ) const;
+
 };
+
 
 #endif // QGSPOSTGRESPROVIDERCONNECTION_H

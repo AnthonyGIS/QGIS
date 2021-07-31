@@ -1,67 +1,53 @@
 
-SET (GEONODE_SRCS
+set (GEONODE_SRCS
   qgsgeonodeprovider.cpp
   qgsgeonodedataitems.cpp
 )
 
-IF (WITH_GUI)
-  SET(GEONODE_SRCS ${GEONODE_SRCS}
+if (WITH_GUI)
+  set(GEONODE_SRCS ${GEONODE_SRCS}
     qgsgeonodeprovidergui.cpp
     qgsgeonodedataitemguiprovider.cpp
     qgsgeonodenewconnection.cpp
     qgsgeonodesourceselect.cpp
   )
-ENDIF ()
+endif()
 
 ########################################################
 # Build
 
-INCLUDE_DIRECTORIES(
-  ${CMAKE_SOURCE_DIR}/src/core
-  ${CMAKE_SOURCE_DIR}/src/core/raster
-  ${CMAKE_SOURCE_DIR}/src/core/auth
-  ${CMAKE_SOURCE_DIR}/src/core/geocms/geonode
-  ${CMAKE_SOURCE_DIR}/src/core/geometry
-  ${CMAKE_SOURCE_DIR}/src/core/metadata
-  ${CMAKE_SOURCE_DIR}/src/core/symbology
-  ${CMAKE_SOURCE_DIR}/src/core/effects
-  ${CMAKE_SOURCE_DIR}/src/core/expression
-  ${CMAKE_SOURCE_DIR}/src/gui
-  ${CMAKE_SOURCE_DIR}/src/gui/auth
-  ${CMAKE_SOURCE_DIR}/external
-  ${CMAKE_SOURCE_DIR}/external/nlohmann
+include_directories(
 
-  ${CMAKE_BINARY_DIR}/src/core
-  ${CMAKE_BINARY_DIR}/src/gui
   ${CMAKE_BINARY_DIR}/src/ui
 )
-INCLUDE_DIRECTORIES(SYSTEM
-)
 
-ADD_LIBRARY(geonodeprovider MODULE ${GEONODE_SRCS})
+add_library(provider_geonode MODULE ${GEONODE_SRCS})
 
-TARGET_LINK_LIBRARIES(geonodeprovider
+# require c++17
+target_compile_features(provider_geonode PRIVATE cxx_std_17)
+
+target_link_libraries(provider_geonode
   qgis_core
 )
 
-IF (WITH_GUI)
-  TARGET_LINK_LIBRARIES (geonodeprovider
+if (WITH_GUI)
+  target_link_libraries (provider_geonode
     qgis_gui
   )
-  ADD_DEPENDENCIES(geonodeprovider ui)
-ENDIF ()
+  add_dependencies(provider_geonode ui)
+endif()
 
-TARGET_COMPILE_DEFINITIONS(geonodeprovider PRIVATE "-DQT_NO_FOREACH")
+target_compile_definitions(provider_geonode PRIVATE "-DQT_NO_FOREACH")
 
 # clang-tidy
-IF(CLANG_TIDY_EXE)
-  SET_TARGET_PROPERTIES(
-    geonodeprovider PROPERTIES
+if(CLANG_TIDY_EXE)
+  set_target_properties(
+    provider_geonode PROPERTIES
     CXX_CLANG_TIDY "${DO_CLANG_TIDY}"
   )
-ENDIF(CLANG_TIDY_EXE)
+endif()
 
-INSTALL (TARGETS geonodeprovider
+install (TARGETS provider_geonode
   RUNTIME DESTINATION ${QGIS_PLUGIN_DIR}
   LIBRARY DESTINATION ${QGIS_PLUGIN_DIR})
 

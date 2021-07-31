@@ -95,7 +95,7 @@ QString QgsTriangle::geometryType() const
 
 QgsTriangle *QgsTriangle::createEmptyWithSameType() const
 {
-  auto result = qgis::make_unique< QgsTriangle >();
+  auto result = std::make_unique< QgsTriangle >();
   result->mWkbType = mWkbType;
   return result.release();
 }
@@ -159,7 +159,6 @@ bool QgsTriangle::fromWkb( QgsConstWkbPtr &wkbPtr )
 
 bool QgsTriangle::fromWkt( const QString &wkt )
 {
-
   clear();
 
   QPair<QgsWkbTypes::Type, QString> parts = QgsGeometryUtils::wktReadBlock( wkt );
@@ -169,7 +168,10 @@ bool QgsTriangle::fromWkt( const QString &wkt )
 
   mWkbType = parts.first;
 
-  if ( parts.second.compare( QLatin1String( "EMPTY" ), Qt::CaseInsensitive ) == 0 )
+  QString secondWithoutParentheses = parts.second;
+  secondWithoutParentheses = secondWithoutParentheses.simplified().remove( ' ' );
+  if ( ( parts.second.compare( QLatin1String( "EMPTY" ), Qt::CaseInsensitive ) == 0 ) ||
+       secondWithoutParentheses.isEmpty() )
     return true;
 
   QString defaultChildWkbType = QStringLiteral( "LineString%1%2" ).arg( is3D() ? QStringLiteral( "Z" ) : QString(), isMeasure() ? QStringLiteral( "M" ) : QString() );
@@ -180,6 +182,7 @@ bool QgsTriangle::fromWkt( const QString &wkt )
     QPair<QgsWkbTypes::Type, QString> childParts = QgsGeometryUtils::wktReadBlock( childWkt );
 
     QgsWkbTypes::Type flatCurveType = QgsWkbTypes::flatType( childParts.first );
+
     if ( flatCurveType == QgsWkbTypes::LineString )
       mInteriorRings.append( new QgsLineString() );
     else
@@ -194,12 +197,12 @@ bool QgsTriangle::fromWkt( const QString &wkt )
     }
   }
 
-  if ( mInteriorRings.isEmpty() )
+  mExteriorRing.reset( mInteriorRings.takeFirst() );
+  if ( ( mExteriorRing->numPoints() < 3 ) || ( mExteriorRing->numPoints() > 4 ) || ( mExteriorRing->numPoints() == 4 && mExteriorRing->startPoint() != mExteriorRing->endPoint() ) )
   {
     clear();
     return false;
   }
-  mExteriorRing.reset( mInteriorRings.takeFirst() );
 
   //scan through rings and check if dimensionality of rings is different to CurvePolygon.
   //if so, update the type dimensionality of the CurvePolygon to match
@@ -585,7 +588,7 @@ QgsPoint QgsTriangle::inscribedCenter() const
 
   QgsPointSequence points;
   points << vertexAt( 0 ) << vertexAt( 1 ) << vertexAt( 2 );
-  QgsGeometryUtils::setZValueFromPoints( points, center );
+  QgsGeometryUtils::transferFirstZOrMValueToPoint( points, center );
 
   return center;
 }

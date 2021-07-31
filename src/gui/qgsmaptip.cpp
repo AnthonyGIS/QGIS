@@ -23,7 +23,10 @@
 #include "qgswebview.h"
 #include "qgswebframe.h"
 #include "qgsapplication.h"
+#include "qgsrenderer.h"
 #include "qgsexpressioncontextutils.h"
+#include "qgsmaplayertemporalproperties.h"
+#include "qgsvectorlayertemporalproperties.h"
 
 // Qt includes
 #include <QPoint>
@@ -133,7 +136,7 @@ void QgsMapTip::showMapTip( QgsMapLayer *pLayer,
                 "background-color: %1;"
                 "margin: 0;"
                 "font: %2pt \"%3\";"
-                "color: %4;" ).arg( backgroundColor ).arg( mFontSize ).arg( mFontFamily ).arg( textColor );
+                "color: %4;" ).arg( backgroundColor ).arg( mFontSize ).arg( mFontFamily, textColor );
 
   containerStyle = QString(
                      "display: inline-block;"
@@ -186,8 +189,13 @@ void QgsMapTip::clear( QgsMapCanvas * )
 QString QgsMapTip::fetchFeature( QgsMapLayer *layer, QgsPointXY &mapPosition, QgsMapCanvas *mapCanvas )
 {
   QgsVectorLayer *vlayer = qobject_cast<QgsVectorLayer *>( layer );
-  if ( !vlayer )
+  if ( !vlayer || !vlayer->isSpatial() )
     return QString();
+
+  if ( !layer->isInScaleRange( mapCanvas->mapSettings().scale() ) )
+  {
+    return QString();
+  }
 
   double searchRadius = QgsMapTool::searchRadiusMU( mapCanvas );
 
@@ -202,22 +210,67 @@ QString QgsMapTip::fetchFeature( QgsMapLayer *layer, QgsPointXY &mapPosition, Qg
   QgsExpressionContext context( QgsExpressionContextUtils::globalProjectLayerScopes( vlayer ) );
   context.appendScope( QgsExpressionContextUtils::mapSettingsScope( mapCanvas->mapSettings() ) );
 
+  QString temporalFilter;
+  if ( mapCanvas->mapSettings().isTemporal() )
+  {
+    if ( !layer->temporalProperties()->isVisibleInTemporalRange( mapCanvas->temporalRange() ) )
+      return QString();
+
+    QgsVectorLayerTemporalContext temporalContext;
+    temporalContext.setLayer( vlayer );
+    temporalFilter = qobject_cast< const QgsVectorLayerTemporalProperties * >( layer->temporalProperties() )->createFilterString( temporalContext, mapCanvas->temporalRange() );
+  }
+
   QString mapTip = vlayer->mapTipTemplate();
   QString tipString;
   QgsExpression exp( vlayer->displayExpression() );
   QgsFeature feature;
-  QgsFeatureRequest request = QgsFeatureRequest().setFilterRect( r ).setFlags( QgsFeatureRequest::ExactIntersect );
+
+  QgsFeatureRequest request;
+  request.setFilterRect( r );
+  request.setFlags( QgsFeatureRequest::ExactIntersect );
+  if ( !temporalFilter.isEmpty() )
+    request.setFilterExpression( temporalFilter );
+
   if ( mapTip.isEmpty() )
   {
     exp.prepare( &context );
     request.setSubsetOfAttributes( exp.referencedColumns(), vlayer->fields() );
   }
+
+  QgsRenderContext renderCtx = QgsRenderContext::fromMapSettings( mapCanvas->mapSettings() );
+  renderCtx.setExpressionContext( mapCanvas->createExpressionContext() );
+  renderCtx.expressionContext() << QgsExpressionContextUtils::layerScope( vlayer );
+
+  bool filter = false;
+  std::unique_ptr< QgsFeatureRenderer > renderer;
+  if ( vlayer->renderer() )
+  {
+    renderer.reset( vlayer->renderer()->clone() );
+    renderer->startRender( renderCtx, vlayer->fields() );
+    filter = renderer->capabilities() & QgsFeatureRenderer::Filter;
+
+    const QString filterExpression = renderer->filter( vlayer->fields() );
+    if ( ! filterExpression.isEmpty() )
+    {
+      request.combineFilterExpression( filterExpression );
+    }
+  }
+  request.setExpressionContext( renderCtx.expressionContext() );
+
   QgsFeatureIterator it = vlayer->getFeatures( request );
   QElapsedTimer timer;
   timer.start();
   while ( it.nextFeature( feature ) )
   {
     context.setFeature( feature );
+
+    renderCtx.expressionContext().setFeature( feature );
+    if ( filter && renderer && !renderer->willRenderFeature( feature, renderCtx ) )
+    {
+      continue;
+    }
+
     if ( !mapTip.isEmpty() )
     {
       tipString = QgsExpression::replaceExpressionText( mapTip, &context );
@@ -232,6 +285,9 @@ QString QgsMapTip::fetchFeature( QgsMapLayer *layer, QgsPointXY &mapPosition, Qg
       break;
     }
   }
+
+  if ( renderer )
+    renderer->stopRender( renderCtx );
 
   return tipString;
 }

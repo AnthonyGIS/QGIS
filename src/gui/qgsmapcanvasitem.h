@@ -27,7 +27,7 @@ class QPainter;
 
 /**
  * \ingroup gui
- * An abstract class for items that can be placed on the
+ * \brief An abstract class for items that can be placed on the
  * map canvas.
  */
 class GUI_EXPORT QgsMapCanvasItem : public QGraphicsItem
@@ -51,9 +51,9 @@ class GUI_EXPORT QgsMapCanvasItem : public QGraphicsItem
 
     /**
      * Sets render context parameters
-    \param p painter for rendering
-    \param context out: configured context
-    \returns true in case of success
+     * \param p painter for rendering
+     * \param context out: configured context
+     * \returns TRUE in case of success
     */
     bool setRenderContextVariables( QPainter *p, QgsRenderContext &context ) const;
 

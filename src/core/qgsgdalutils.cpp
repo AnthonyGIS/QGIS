@@ -26,6 +26,28 @@
 #include <QNetworkProxy>
 #include <QString>
 #include <QImage>
+#include <QFileInfo>
+
+// File extensions for formats supported by GDAL which may contain multiple layers
+// and should be treated as a potential layer container
+const QStringList QgsGdalUtils::SUPPORTED_DB_LAYERS_EXTENSIONS
+{
+  QStringLiteral( "gpkg" ),
+  QStringLiteral( "sqlite" ),
+  QStringLiteral( "db" ),
+  QStringLiteral( "gdb" ),
+  QStringLiteral( "kml" ),
+  QStringLiteral( "kmz" ),
+  QStringLiteral( "osm" ),
+  QStringLiteral( "mdb" ),
+  QStringLiteral( "accdb" ),
+  QStringLiteral( "xls" ),
+  QStringLiteral( "xlsx" ),
+  QStringLiteral( "gpx" ),
+  QStringLiteral( "pdf" ),
+  QStringLiteral( "pbf" ),
+  QStringLiteral( "nc" ),
+  QStringLiteral( "shp.zip" ) };
 
 bool QgsGdalUtils::supportsRasterCreate( GDALDriverH driver )
 {
@@ -145,7 +167,7 @@ gdal::dataset_unique_ptr QgsGdalUtils::imageToMemoryDataset( const QImage &image
   return hSrcDS;
 }
 
-void QgsGdalUtils::resampleSingleBandRaster( GDALDatasetH hSrcDS, GDALDatasetH hDstDS, GDALResampleAlg resampleAlg )
+bool QgsGdalUtils::resampleSingleBandRaster( GDALDatasetH hSrcDS, GDALDatasetH hDstDS, GDALResampleAlg resampleAlg, const char *pszCoordinateOperation )
 {
   gdal::warp_options_unique_ptr psWarpOptions( GDALCreateWarpOptions() );
   psWarpOptions->hSrcDS = hSrcDS;
@@ -160,19 +182,26 @@ void QgsGdalUtils::resampleSingleBandRaster( GDALDatasetH hSrcDS, GDALDatasetH h
   psWarpOptions->eResampleAlg = resampleAlg;
 
   // Establish reprojection transformer.
-  psWarpOptions->pTransformerArg =
-    GDALCreateGenImgProjTransformer( hSrcDS, GDALGetProjectionRef( hSrcDS ),
-                                     hDstDS, GDALGetProjectionRef( hDstDS ),
-                                     FALSE, 0.0, 1 );
+  char **papszOptions = nullptr;
+  if ( pszCoordinateOperation != nullptr )
+    papszOptions = CSLSetNameValue( papszOptions, "COORDINATE_OPERATION", pszCoordinateOperation );
+  psWarpOptions->pTransformerArg = GDALCreateGenImgProjTransformer2( hSrcDS, hDstDS, papszOptions );
+  CSLDestroy( papszOptions );
+
+  if ( ! psWarpOptions->pTransformerArg )
+  {
+    return false;
+  }
+
   psWarpOptions->pfnTransformer = GDALGenImgProjTransform;
 
   // Initialize and execute the warp operation.
   GDALWarpOperation oOperation;
   oOperation.Initialize( psWarpOptions.get() );
 
-  oOperation.ChunkAndWarpImage( 0, 0, GDALGetRasterXSize( hDstDS ), GDALGetRasterYSize( hDstDS ) );
-
+  const bool retVal { oOperation.ChunkAndWarpImage( 0, 0, GDALGetRasterXSize( hDstDS ), GDALGetRasterYSize( hDstDS ) ) == CE_None };
   GDALDestroyGenImgProjTransformer( psWarpOptions->pTransformerArg );
+  return retVal;
 }
 
 QImage QgsGdalUtils::resampleImage( const QImage &image, QSize outputSize, GDALRIOResampleAlg resampleAlg )
@@ -281,52 +310,6 @@ QString QgsGdalUtils::validateCreationOptionsFormat( const QStringList &createOp
     return QStringLiteral( "Failed GDALValidateCreationOptions() test" );
   return QString();
 }
-
-#if GDAL_VERSION_NUM < GDAL_COMPUTE_VERSION(2,3,0)
-// GDAL < 2.3 does not come with GDALWarpInitDefaultBandMapping and GDALWarpInitNoDataReal
-// in the public API so we define them here for rpcAwareAutoCreateWarpedVrt()
-
-static void GDALWarpInitDefaultBandMapping( GDALWarpOptions *psOptionsIn, int nBandCount )
-{
-  if ( psOptionsIn->nBandCount != 0 ) { return; }
-
-  psOptionsIn->nBandCount = nBandCount;
-
-  psOptionsIn->panSrcBands = static_cast<int *>(
-                               CPLMalloc( sizeof( int ) * psOptionsIn->nBandCount ) );
-  psOptionsIn->panDstBands = static_cast<int *>(
-                               CPLMalloc( sizeof( int ) * psOptionsIn->nBandCount ) );
-
-  for ( int i = 0; i < psOptionsIn->nBandCount; i++ )
-  {
-    psOptionsIn->panSrcBands[i] = i + 1;
-    psOptionsIn->panDstBands[i] = i + 1;
-  }
-}
-
-static void InitNoData( int nBandCount, double **ppdNoDataReal, double dDataReal )
-{
-  if ( nBandCount <= 0 ) { return; }
-  if ( *ppdNoDataReal != nullptr ) { return; }
-
-  *ppdNoDataReal = static_cast<double *>(
-                     CPLMalloc( sizeof( double ) * nBandCount ) );
-
-  for ( int i = 0; i < nBandCount; ++i )
-  {
-    ( *ppdNoDataReal )[i] = dDataReal;
-  }
-}
-
-static void GDALWarpInitNoDataReal( GDALWarpOptions *psOptionsIn, double  dNoDataReal )
-{
-  InitNoData( psOptionsIn->nBandCount, &psOptionsIn->padfDstNoDataReal, dNoDataReal );
-  InitNoData( psOptionsIn->nBandCount, &psOptionsIn->padfSrcNoDataReal, dNoDataReal );
-  // older GDAL also requires imaginary values to be set
-  InitNoData( psOptionsIn->nBandCount, &psOptionsIn->padfDstNoDataImag, 0 );
-  InitNoData( psOptionsIn->nBandCount, &psOptionsIn->padfSrcNoDataImag, 0 );
-}
-#endif
 
 #if GDAL_VERSION_NUM < GDAL_COMPUTE_VERSION(3,2,0)
 
@@ -490,6 +473,21 @@ GDALDatasetH QgsGdalUtils::rpcAwareAutoCreateWarpedVrt(
   return GDALAutoCreateWarpedVRTEx( hSrcDS, pszSrcWKT, pszDstWKT, eResampleAlg, dfMaxError, psOptionsIn, opts );
 }
 
+void *QgsGdalUtils::rpcAwareCreateTransformer( GDALDatasetH hSrcDS, GDALDatasetH hDstDS, char **papszOptions )
+{
+  char **opts = CSLDuplicate( papszOptions );
+  if ( GDALGetMetadata( hSrcDS, "RPC" ) )
+  {
+    // well-behaved RPC should have height offset a good value for RPC_HEIGHT
+    const char *heightOffStr = GDALGetMetadataItem( hSrcDS, "HEIGHT_OFF", "RPC" );
+    if ( heightOffStr )
+      opts = CSLAddNameValue( opts, "RPC_HEIGHT", heightOffStr );
+  }
+  void *transformer = GDALCreateGenImgProjTransformer2( hSrcDS, hDstDS, opts );
+  CSLDestroy( opts );
+  return transformer;
+}
+
 #ifndef QT_NO_NETWORKPROXY
 void QgsGdalUtils::setupProxy()
 {
@@ -537,5 +535,60 @@ void QgsGdalUtils::setupProxy()
       }
     }
   }
+}
+
+bool QgsGdalUtils::pathIsCheapToOpen( const QString &path, int smallFileSizeLimit )
+{
+  const QFileInfo info( path );
+  const long long size = info.size();
+
+  // if size could not be determined, safest to flag path as expensive
+  if ( size == 0 )
+    return false;
+
+  const QString suffix = info.suffix().toLower();
+  static QStringList sFileSizeDependentExtensions
+  {
+    QStringLiteral( "xlsx" ),
+    QStringLiteral( "ods" ),
+    QStringLiteral( "csv" )
+  };
+  if ( sFileSizeDependentExtensions.contains( suffix ) )
+  {
+    // path corresponds to a file type which is only cheap to open for small files
+    return size < smallFileSizeLimit;
+  }
+
+  // treat all other formats as expensive.
+  // TODO -- flag formats which only require a quick header parse as cheap
+  return false;
+}
+
+bool QgsGdalUtils::vrtMatchesLayerType( const QString &vrtPath, QgsMapLayerType type )
+{
+  CPLPushErrorHandler( CPLQuietErrorHandler );
+  CPLErrorReset();
+  GDALDriverH hDriver = nullptr;
+
+  switch ( type )
+  {
+    case QgsMapLayerType::VectorLayer:
+      hDriver = GDALIdentifyDriverEx( vrtPath.toUtf8().constData(), GDAL_OF_VECTOR, nullptr, nullptr );
+      break;
+
+    case QgsMapLayerType::RasterLayer:
+      hDriver = GDALIdentifyDriverEx( vrtPath.toUtf8().constData(), GDAL_OF_RASTER, nullptr, nullptr );
+      break;
+
+    case QgsMapLayerType::PluginLayer:
+    case QgsMapLayerType::MeshLayer:
+    case QgsMapLayerType::VectorTileLayer:
+    case QgsMapLayerType::AnnotationLayer:
+    case QgsMapLayerType::PointCloudLayer:
+      break;
+  }
+
+  CPLPopErrorHandler();
+  return static_cast< bool >( hDriver );
 }
 #endif

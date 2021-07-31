@@ -25,6 +25,9 @@
 #include "qgssymbollayerutils.h"
 #include "qgsproject.h"
 #include "qgsannotationmanager.h"
+#include "qgsfillsymbol.h"
+#include "qgsmarkersymbol.h"
+
 #include <QPainter>
 
 
@@ -47,7 +50,7 @@ QgsMapCanvasAnnotationItem::QgsMapCanvasAnnotationItem( QgsAnnotation *annotatio
   connect( mAnnotation, &QgsAnnotation::mapLayerChanged, this, &QgsMapCanvasAnnotationItem::onCanvasLayersChanged );
 
   //lifetime is tied to annotation!
-  connect( mAnnotation, &QgsAnnotation::destroyed, this, &QgsMapCanvasAnnotationItem::deleteLater );
+  connect( mAnnotation, &QgsAnnotation::destroyed, this, &QgsMapCanvasAnnotationItem::annotationDeleted );
 
   updatePosition();
   setFeatureForMapPosition();
@@ -126,6 +129,8 @@ void QgsMapCanvasAnnotationItem::updateBoundingRect()
 
 void QgsMapCanvasAnnotationItem::onCanvasLayersChanged()
 {
+  if ( !mAnnotation )
+    return;
   if ( !mMapCanvas->annotationsVisible() )
   {
     setVisible( false );
@@ -172,6 +177,12 @@ void QgsMapCanvasAnnotationItem::setFeatureForMapPosition()
   QgsFeature currentFeature;
   ( void )fit.nextFeature( currentFeature );
   mAnnotation->setAssociatedFeature( currentFeature );
+}
+
+void QgsMapCanvasAnnotationItem::annotationDeleted()
+{
+  mAnnotation = nullptr;
+  deleteLater();
 }
 
 void QgsMapCanvasAnnotationItem::drawSelectionBoxes( QPainter *p ) const

@@ -121,7 +121,7 @@ class GUI_EXPORT QgsProcessingToolboxModelNode : public QObject
 
   private:
 
-    NodeType mNodeType;
+    NodeType mNodeType = NodeProvider;
     QgsProcessingToolboxModelNode *mParent = nullptr;
     QList<QgsProcessingToolboxModelNode *> mChildren;
 
@@ -499,7 +499,7 @@ class GUI_EXPORT QgsProcessingToolboxProxyModel: public QSortFilterProxyModel
   private:
 
     QgsProcessingToolboxModel *mModel = nullptr;
-    Filters mFilters = nullptr;
+    Filters mFilters = Filters();
     QString mFilterString;
     QPointer<QgsVectorLayer> mInPlaceLayer;
 };

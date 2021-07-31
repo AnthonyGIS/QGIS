@@ -22,7 +22,7 @@
 
 
 /**
- * A parameter for processing algorithms that need a list of input vector layers for writing
+ * \brief A parameter for processing algorithms that need a list of input vector layers for writing
  * of vector tiles - this parameter provides processing framework's adapter for QList<QgsVectorTileWriter::Layer>.
  *
  * A valid value for this parameter is a list (QVariantList), where each item is a map (QVariantMap) in this form:
@@ -39,7 +39,6 @@
  * QgsVectorTileWriter::Layer representation and QVariant representation.
  *
  * \ingroup core
- * \note This class is not a part of public API.
  * \since QGIS 3.14
  */
 class CORE_EXPORT QgsProcessingParameterVectorTileWriterLayers : public QgsProcessingParameterDefinition
@@ -66,9 +65,11 @@ class CORE_EXPORT QgsProcessingParameterVectorTileWriterLayers : public QgsProce
 
 };
 
+#ifndef SIP_RUN
+///@cond PRIVATE
 
 /**
- * Parameter type definition for QgsProcessingParameterVectorTileWriterLayers.
+ * \brief Parameter type definition for QgsProcessingParameterVectorTileWriterLayers.
  *
  * \ingroup core
  * \note This class is not a part of public API.
@@ -113,5 +114,7 @@ class CORE_EXPORT QgsProcessingParameterTypeVectorTileWriterLayers : public QgsP
     }
 };
 
+///@endcond
+#endif
 
 #endif // QGSPROCESSINGPARAMETERVECTORTILEWRITERLAYERS_H

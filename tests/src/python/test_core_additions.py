@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 """QGIS Unit tests for core additions
 
+From build dir, run: ctest -R PyCoreAdditions -V
+
 .. note:: This program is free software; you can redistribute it and/or modify
 it under the terms of the GNU General Public License as published by
 the Free Software Foundation; either version 2 of the License, or
@@ -27,10 +29,10 @@ class TestCoreAdditions(unittest.TestCase):
         self.assertIsNotNone(me)
         self.assertEqual(me.valueToKey(QgsTolerance.Pixels), 'Pixels')
 
-        # if using same variable twice (e.g. me = me2), this seg faults
-        me2 = metaEnumFromValue(QgsTolerance.Pixels, QgsTolerance)
+        # check that using same variable twice doesn't segfault
+        me = metaEnumFromValue(QgsTolerance.Pixels, QgsTolerance)
         self.assertIsNotNone(me)
-        self.assertEqual(me2.valueToKey(QgsTolerance.Pixels), 'Pixels')
+        self.assertEqual(me.valueToKey(QgsTolerance.Pixels), 'Pixels')
 
         # do not raise error
         self.assertIsNone(metaEnumFromValue(1, QgsTolerance, False))

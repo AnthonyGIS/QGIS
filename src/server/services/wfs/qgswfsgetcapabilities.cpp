@@ -96,7 +96,7 @@ namespace QgsWfs
     wfsCapabilitiesElement.appendChild( getServiceProviderElement( doc, project ) );
 
     //wfs:OperationsMetadata
-    wfsCapabilitiesElement.appendChild( getOperationsMetadataElement( doc, project, request ) );
+    wfsCapabilitiesElement.appendChild( getOperationsMetadataElement( doc, project, request, serverIface->serverSettings() ) );
 
     //wfs:FeatureTypeList
     wfsCapabilitiesElement.appendChild( getFeatureTypeListElement( doc, serverIface, project ) );
@@ -187,7 +187,7 @@ namespace QgsWfs
     }
 
     QStringList keywords = QgsServerProjectUtils::owsServiceKeywords( *project );
-    if ( !keywords.isEmpty() && !keywords.join( QStringLiteral( ", " ) ).isEmpty() )
+    if ( !keywords.isEmpty() && !keywords.join( QLatin1String( ", " ) ).isEmpty() )
     {
       QDomElement keywordsElem = doc.createElement( QStringLiteral( "ows:Keywords" ) );
       for ( const QString &keyword : keywords )
@@ -344,12 +344,12 @@ namespace QgsWfs
     return parameterElement;
   }
 
-  QDomElement getOperationsMetadataElement( QDomDocument &doc, const QgsProject *project, const QgsServerRequest &request )
+  QDomElement getOperationsMetadataElement( QDomDocument &doc, const QgsProject *project, const QgsServerRequest &request, const QgsServerSettings *settings )
   {
     QDomElement oprationsElement = doc.createElement( QStringLiteral( "ows:OperationsMetadata" ) );
 
-    //Prepare url
-    QString hrefString = serviceUrl( request, project );
+    // Prepare url
+    QString hrefString = serviceUrl( request, project, *settings );
 
     QDomElement operationElement = doc.createElement( QStringLiteral( "ows:Operation" ) );
     QDomElement dcpElement = doc.createElement( QStringLiteral( "ows:DCP" ) );

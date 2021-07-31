@@ -61,20 +61,22 @@ QgsRuleBasedRendererWidget::QgsRuleBasedRendererWidget( QgsVectorLayer *layer, Q
 
   if ( renderer )
   {
-    mRenderer = QgsRuleBasedRenderer::convertFromRenderer( renderer );
+    mRenderer.reset( QgsRuleBasedRenderer::convertFromRenderer( renderer, layer ) );
   }
   if ( !mRenderer )
   {
     // some default options
     QgsSymbol *symbol = QgsSymbol::defaultSymbol( mLayer->geometryType() );
 
-    mRenderer = new QgsRuleBasedRenderer( symbol );
+    mRenderer = std::make_unique< QgsRuleBasedRenderer >( symbol );
+    if ( renderer )
+      renderer->copyRendererData( mRenderer.get() );
   }
 
   setupUi( this );
   this->layout()->setContentsMargins( 0, 0, 0, 0 );
 
-  mModel = new QgsRuleBasedRendererModel( mRenderer, viewRules );
+  mModel = new QgsRuleBasedRendererModel( mRenderer.get(), viewRules );
 #ifdef ENABLE_MODELTEST
   new ModelTest( mModel, this ); // for model validity checking
 #endif
@@ -135,12 +137,11 @@ QgsRuleBasedRendererWidget::QgsRuleBasedRendererWidget( QgsVectorLayer *layer, Q
 QgsRuleBasedRendererWidget::~QgsRuleBasedRendererWidget()
 {
   qDeleteAll( mCopyBuffer );
-  delete mRenderer;
 }
 
 QgsFeatureRenderer *QgsRuleBasedRendererWidget::renderer()
 {
-  return mRenderer;
+  return mRenderer.get();
 }
 
 void QgsRuleBasedRendererWidget::setDockMode( bool dockMode )
@@ -337,7 +338,7 @@ void QgsRuleBasedRendererWidget::refineRuleScalesGui( const QModelIndexList &ind
     if ( ok )
       scales.append( scale );
     else
-      QMessageBox::information( this, tr( "Scale Refinement" ), QString( tr( "\"%1\" is not valid scale denominator, ignoring it." ) ).arg( item ) );
+      QMessageBox::information( this, tr( "Scale Refinement" ), tr( "\"%1\" is not valid scale denominator, ignoring it." ).arg( item ) );
   }
 
   for ( const QModelIndex &index : indexList )
@@ -347,6 +348,23 @@ void QgsRuleBasedRendererWidget::refineRuleScalesGui( const QModelIndexList &ind
     QgsRuleBasedRenderer::refineRuleScales( initialRule, scales );
   }
   mModel->finishedAddingRules();
+}
+
+void QgsRuleBasedRendererWidget::setSymbolLevels( const QList<QgsLegendSymbolItem> &levels, bool )
+{
+  if ( !mRenderer )
+    return;
+
+  for ( const QgsLegendSymbolItem &legendSymbol : std::as_const( levels ) )
+  {
+    QgsSymbol *sym = legendSymbol.symbol();
+    for ( int layer = 0; layer < sym->symbolLayerCount(); layer++ )
+    {
+      mRenderer->setLegendSymbolItem( legendSymbol.ruleKey(), sym->clone() );
+    }
+  }
+
+  emit widgetChanged();
 }
 
 QList<QgsSymbol *> QgsRuleBasedRendererWidget::selectedSymbols()
@@ -435,20 +453,23 @@ void QgsRuleBasedRendererWidget::setRenderingOrder()
   QgsPanelWidget *panel = QgsPanelWidget::findParentPanel( this );
   if ( panel && panel->dockMode() )
   {
-    QgsSymbolLevelsWidget *widget = new QgsSymbolLevelsWidget( mRenderer, true, panel );
+    QgsSymbolLevelsWidget *widget = new QgsSymbolLevelsWidget( mRenderer.get(), true, panel );
     widget->setForceOrderingEnabled( true );
     widget->setPanelTitle( tr( "Symbol Levels" ) );
-    connect( widget, &QgsPanelWidget::widgetChanged, widget, &QgsSymbolLevelsWidget::apply );
-    connect( widget, &QgsPanelWidget::widgetChanged, this, &QgsPanelWidget::widgetChanged );
+    connect( widget, &QgsPanelWidget::widgetChanged, this, [ = ]()
+    {
+      setSymbolLevels( widget->symbolLevels(), widget->usingLevels() );
+    } );
     panel->openPanel( widget );
-    return;
   }
-
-  QgsSymbolLevelsDialog dlg( mRenderer, true, panel );
-  dlg.setForceOrderingEnabled( true );
-  if ( dlg.exec() )
+  else
   {
-    emit widgetChanged();
+    QgsSymbolLevelsDialog dlg( mRenderer.get(), true, panel );
+    dlg.setForceOrderingEnabled( true );
+    if ( dlg.exec() )
+    {
+      setSymbolLevels( dlg.symbolLevels(), dlg.usingLevels() );
+    }
   }
 }
 
@@ -479,7 +500,7 @@ void QgsRuleBasedRendererWidget::restoreSectionWidths()
 void QgsRuleBasedRendererWidget::copy()
 {
   QModelIndexList indexlist = viewRules->selectionModel()->selectedRows();
-  QgsDebugMsg( QStringLiteral( "%1" ).arg( indexlist.count() ) );
+  QgsDebugMsgLevel( QString::number( indexlist.count() ), 2 );
 
   if ( indexlist.isEmpty() )
     return;
@@ -628,10 +649,10 @@ void QgsRuleBasedRendererWidget::countFeatures()
   req.setSubsetOfAttributes( mRenderer->usedAttributes( renderContext ), mLayer->fields() );
   QgsFeatureIterator fit = mLayer->getFeatures( req );
 
-  int nFeatures = mLayer->featureCount();
-  QProgressDialog p( tr( "Calculating feature count." ), tr( "Abort" ), 0, nFeatures );
+  long long nFeatures = mLayer->featureCount();
+  QProgressDialog p( tr( "Calculating feature count." ), tr( "Abort" ), 0, 100 );
   p.setWindowModality( Qt::WindowModal );
-  int featuresCounted = 0;
+  long long featuresCounted = 0;
 
   QgsFeature f;
   while ( fit.nextFeature( f ) )
@@ -661,7 +682,7 @@ void QgsRuleBasedRendererWidget::countFeatures()
       {
         p.setMaximum( 0 );
       }
-      p.setValue( featuresCounted );
+      p.setValue( static_cast< double >( featuresCounted ) / nFeatures * 100.0 );
       if ( p.wasCanceled() )
       {
         return;
@@ -699,7 +720,6 @@ QgsRendererRulePropsWidget::QgsRendererRulePropsWidget( QgsRuleBasedRenderer::Ru
   , mContext( context )
 {
   setupUi( this );
-  layout()->setMargin( 0 );
   layout()->setContentsMargins( 0, 0, 0, 0 );
 
   mElseRadio->setChecked( mRule->isElse() );

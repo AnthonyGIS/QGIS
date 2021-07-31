@@ -17,6 +17,7 @@
 
 #include "qgstest.h"
 #include <QObject>
+#include "qgsgeometry.h"
 #include "qgsgeometryutils.h"
 #include "qgslinestring.h"
 #include "qgspolygon.h"
@@ -81,6 +82,14 @@ class TestQgsGeometryUtils: public QObject
     void testWeightedPointInTriangle_data();
     void testWeightedPointInTriangle();
     void testPointContinuesArc();
+    void testBisector();
+    void testAngleBisector();
+    void testPerpendicularOffsetPoint();
+    void testClosestSideOfRectangle();
+    void transferFirstZValueToPoint();
+    void transferFirstMValueToPoint();
+    void transferFirstZOrMValueToPoint_qgspointsequence();
+    void transferFirstZOrMValueToPoint_qgsgeometry();
 };
 
 
@@ -1495,6 +1504,379 @@ void TestQgsGeometryUtils::testPointContinuesArc()
   QVERIFY( QgsGeometryUtils::pointContinuesArc( QgsPoint( 0, 0 ), QgsPoint( 1, 1 ), QgsPoint( 2, 0 ), QgsPoint( 1.01, -1 ), 0.1, 0.05 ) );
   QVERIFY( !QgsGeometryUtils::pointContinuesArc( QgsPoint( 0, 0 ), QgsPoint( 1, 1 ), QgsPoint( 2, 0 ), QgsPoint( 1.01, -1 ), 0.1, 0.000001 ) );
   QVERIFY( !QgsGeometryUtils::pointContinuesArc( QgsPoint( 0, 0 ), QgsPoint( 1, 1 ), QgsPoint( 2, 0 ), QgsPoint( 1.01, -1 ), 0.000000001, 0.05 ) );
+}
+
+void TestQgsGeometryUtils::testBisector()
+{
+  double x, y;
+  QVERIFY( QgsGeometryUtils::bisector( 5, 5, 0, 0, -7, 11, x, y ) );
+  QGSCOMPARENEAR( x, -2.416, 10e-3 );
+  QGSCOMPARENEAR( y, 3.797, 10e-3 );
+
+  QVERIFY( QgsGeometryUtils::bisector( 2.5, 2, 0, 0, 5, 0, x, y ) );
+  QGSCOMPARENEAR( x, 2.5, 10e-3 );
+  QGSCOMPARENEAR( y, 0, 10e-3 );
+
+  // collinear
+  QVERIFY( !QgsGeometryUtils::bisector( 5, 5, 0, 0, 1, 1, x, y ) );
+}
+
+void TestQgsGeometryUtils::testAngleBisector()
+{
+  double x, y, angle;
+  QVERIFY( QgsGeometryUtils::angleBisector( 0, 0, 0, 5, 0, 0, 5, 0, x, y, angle ) );
+  QGSCOMPARENEAR( x, 0.0, 10e-3 );
+  QGSCOMPARENEAR( y, 0.0, 10e-3 );
+  QGSCOMPARENEAR( angle, 45.0, 10e-3 );
+
+  QVERIFY( QgsGeometryUtils::angleBisector( 0, 0, 5, 0, 2.5, 0, 7.5, 5, x, y, angle ) );
+  QGSCOMPARENEAR( x, 2.5, 10e-3 );
+  QGSCOMPARENEAR( y, 0.0, 10e-3 );
+  QGSCOMPARENEAR( angle, 67.5, 10e-3 );
+
+  QVERIFY( QgsGeometryUtils::angleBisector( 0, 0, 5, 0, 15, -5, 7.5, 5, x, y, angle ) );
+  QGSCOMPARENEAR( x, 11.25, 10e-3 );
+  QGSCOMPARENEAR( y, 0.0, 10e-3 );
+  QGSCOMPARENEAR( angle, 26.565, 10e-3 );
+
+  // collinear
+  QVERIFY( !QgsGeometryUtils::angleBisector( 0, 0, 5, 0, 5, 5, 10, 5, x, y, angle ) );
+  QVERIFY( !QgsGeometryUtils::angleBisector( 0, 0, 5, 0, 6, 0, 10, 0, x, y, angle ) );
+}
+
+void TestQgsGeometryUtils::testPerpendicularOffsetPoint()
+{
+  double x, y;
+  QgsGeometryUtils::perpendicularOffsetPointAlongSegment( 1, 5, 11, 5, 0.5, 2, &x, &y );
+  QGSCOMPARENEAR( x, 6.0, 10e-3 );
+  QGSCOMPARENEAR( y, 3.0, 10e-3 );
+  QgsGeometryUtils::perpendicularOffsetPointAlongSegment( 1, 5, 11, 5, 0.5, -2, &x, &y );
+  QGSCOMPARENEAR( x, 6.0, 10e-3 );
+  QGSCOMPARENEAR( y, 7.0, 10e-3 );
+  QgsGeometryUtils::perpendicularOffsetPointAlongSegment( 1, 5, 11, 5, 0.1, 2, &x, &y );
+  QGSCOMPARENEAR( x, 2.0, 10e-3 );
+  QGSCOMPARENEAR( y, 3.0, 10e-3 );
+  QgsGeometryUtils::perpendicularOffsetPointAlongSegment( 1, 5, 11, 5, 0.9, 2, &x, &y );
+  QGSCOMPARENEAR( x, 10.0, 10e-3 );
+  QGSCOMPARENEAR( y, 3.0, 10e-3 );
+  QgsGeometryUtils::perpendicularOffsetPointAlongSegment( 1, 5, 11, 5, 0.0, 2, &x, &y );
+  QGSCOMPARENEAR( x, 1.0, 10e-3 );
+  QGSCOMPARENEAR( y, 3.0, 10e-3 );
+  QgsGeometryUtils::perpendicularOffsetPointAlongSegment( 1, 5, 11, 5, 1.0, 2, &x, &y );
+  QGSCOMPARENEAR( x, 11.0, 10e-3 );
+  QGSCOMPARENEAR( y, 3.0, 10e-3 );
+  QgsGeometryUtils::perpendicularOffsetPointAlongSegment( 5, 1, 5, 11, 0.5, 2, &x, &y );
+  QGSCOMPARENEAR( x, 7.0, 10e-3 );
+  QGSCOMPARENEAR( y, 6.0, 10e-3 );
+  QgsGeometryUtils::perpendicularOffsetPointAlongSegment( 5, 1, 5, 11, 0.5, -2, &x, &y );
+  QGSCOMPARENEAR( x, 3.0, 10e-3 );
+  QGSCOMPARENEAR( y, 6.0, 10e-3 );
+}
+
+void TestQgsGeometryUtils::testClosestSideOfRectangle()
+{
+  // outside rect
+  QCOMPARE( QgsGeometryUtils::closestSideOfRectangle( 16, -20, 10, -18, 1, -19 ), 7 );
+
+  QCOMPARE( QgsGeometryUtils::closestSideOfRectangle( 16, -20, 10, -18, 1, -17 ), 7 );
+  QCOMPARE( QgsGeometryUtils::closestSideOfRectangle( 16, -20, 10, -18, 9, -17 ), 8 );
+  QCOMPARE( QgsGeometryUtils::closestSideOfRectangle( 16, -20, 10, -18, 9, -1 ), 1 );
+
+  QCOMPARE( QgsGeometryUtils::closestSideOfRectangle( 16, -20, 10, -18, 1, -21 ), 7 );
+  QCOMPARE( QgsGeometryUtils::closestSideOfRectangle( 16, -20, 10, -18, 9, -21 ), 6 );
+  QCOMPARE( QgsGeometryUtils::closestSideOfRectangle( 16, -20, 10, -18, 9, -22 ), 5 );
+
+  QCOMPARE( QgsGeometryUtils::closestSideOfRectangle( 16, -20, 10, -18, 14, -1 ), 1 );
+
+  QCOMPARE( QgsGeometryUtils::closestSideOfRectangle( 16, -20, 10, -18, 18, -1 ), 1 );
+  QCOMPARE( QgsGeometryUtils::closestSideOfRectangle( 16, -20, 10, -18, 17, -17 ), 2 );
+  QCOMPARE( QgsGeometryUtils::closestSideOfRectangle( 16, -20, 10, -18, 20, -17 ), 3 );
+
+  QCOMPARE( QgsGeometryUtils::closestSideOfRectangle( 16, -20, 10, -18, 18, -19 ), 3 );
+
+  QCOMPARE( QgsGeometryUtils::closestSideOfRectangle( 16, -20, 10, -18, 18, -21 ), 3 );
+  QCOMPARE( QgsGeometryUtils::closestSideOfRectangle( 16, -20, 10, -18, 17, -21 ), 4 );
+  QCOMPARE( QgsGeometryUtils::closestSideOfRectangle( 16, -20, 10, -18, 17, -25 ), 5 );
+
+  QCOMPARE( QgsGeometryUtils::closestSideOfRectangle( 16, -20, 10, -18, 14, -21 ), 5 );
+
+  // inside rect
+  QCOMPARE( QgsGeometryUtils::closestSideOfRectangle( 16, -20, 10, -18, 10.5, -19 ), 7 );
+  QCOMPARE( QgsGeometryUtils::closestSideOfRectangle( 16, -20, 10, -18, 16.5, -19 ), 3 );
+  QCOMPARE( QgsGeometryUtils::closestSideOfRectangle( 16, -20, 10, -18, 14, -18.5 ), 1 );
+  QCOMPARE( QgsGeometryUtils::closestSideOfRectangle( 16, -20, 10, -18, 14, -19.5 ), 5 );
+}
+
+void TestQgsGeometryUtils::transferFirstZValueToPoint()
+{
+  QgsPoint point( 1, 2 );
+
+  // Type: Point
+  bool ret = QgsGeometryUtils::transferFirstZValueToPoint( QgsPointSequence() << QgsPoint( 0, 2 ), point );
+  QCOMPARE( ret, false );
+
+  // Type: PointM
+  ret = QgsGeometryUtils::transferFirstZValueToPoint( QgsPointSequence() << QgsPoint( QgsWkbTypes::PointM, 0, 2, 0, 4 ), point );
+  QCOMPARE( ret, false );
+
+  // Type: PointZ
+  ret = QgsGeometryUtils::transferFirstZValueToPoint( QgsPointSequence() << QgsPoint( 0, 2, 4 ), point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.wkbType(), QgsWkbTypes::PointZ );
+  QCOMPARE( point.z(), 4.0 );
+
+  // Type: PointZ
+  ret = QgsGeometryUtils::transferFirstZValueToPoint( QgsPointSequence() << QgsPoint( 0, 2, 5 ), point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.wkbType(), QgsWkbTypes::PointZ );
+  QCOMPARE( point.z(), 5.0 ); // now point.z == 5.
+
+  // Add Z to a PointM
+  QgsPoint pointM( QgsWkbTypes::PointM, 1, 2, 0, 3 );
+  // Type: PointZ
+  ret = QgsGeometryUtils::transferFirstZValueToPoint( QgsPointSequence() << QgsPoint( 0, 2, 4 ), pointM );
+  QCOMPARE( ret, true );
+  QCOMPARE( pointM.wkbType(), QgsWkbTypes::PointZM );
+  QCOMPARE( pointM.z(), 4.0 );
+}
+
+void TestQgsGeometryUtils::transferFirstMValueToPoint()
+{
+  QgsPoint point( 1, 2 );
+
+  // Type: Point
+  bool ret = QgsGeometryUtils::transferFirstMValueToPoint( QgsPointSequence() << QgsPoint( 0, 2 ), point );
+  QCOMPARE( ret, false );
+
+  // Type: PointZ
+  ret = QgsGeometryUtils::transferFirstMValueToPoint( QgsPointSequence() << QgsPoint( 0, 2, 4 ), point );
+  QCOMPARE( ret, false );
+
+  // Type: PointM
+  ret = QgsGeometryUtils::transferFirstMValueToPoint( QgsPointSequence() << QgsPoint( QgsWkbTypes::PointM, 0, 2, 0, 4 ), point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.wkbType(), QgsWkbTypes::PointM );
+  QCOMPARE( point.m(), 4.0 );
+
+  // Type: PointM
+  ret = QgsGeometryUtils::transferFirstMValueToPoint( QgsPointSequence() << QgsPoint( QgsWkbTypes::PointM, 0, 2, 0, 5 ), point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.wkbType(), QgsWkbTypes::PointM );
+  QCOMPARE( point.m(), 5.0 ); // now point.m == 5
+
+  // Add M to a PointZ
+  QgsPoint pointZ( 1, 2, 4 );
+  // Type: PointM
+  ret = QgsGeometryUtils::transferFirstMValueToPoint( QgsPointSequence() << QgsPoint( QgsWkbTypes::PointM, 0, 2, 0, 5 ), pointZ );
+  QCOMPARE( ret, true );
+  QCOMPARE( pointZ.wkbType(), QgsWkbTypes::PointZM );
+  QCOMPARE( pointZ.m(), 5.0 );
+}
+
+void TestQgsGeometryUtils::transferFirstZOrMValueToPoint_qgspointsequence()
+{
+  QgsPoint point( 1, 2 );
+  QgsPointSequence points;
+
+  // Type: Point
+  points.clear();
+  points << QgsPoint( 0, 2 );
+  // iterator
+  bool ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( points, point );
+  QCOMPARE( ret, false );
+  // QgsPointSequence
+  point = QgsPoint( 1, 2 );
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( points.constBegin(), points.constEnd(), point );
+  QCOMPARE( ret, false );
+
+  // Type: PointZ
+  point = QgsPoint( 1, 2 );
+  points.clear();
+  points << QgsPoint( 0, 2, 4 );
+  // iterator
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( points, point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.wkbType(), QgsWkbTypes::PointZ );
+  QCOMPARE( point.z(), 4.0 );
+  // QgsPointSequence
+  point = QgsPoint( 1, 2 );
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( points.constBegin(), points.constEnd(), point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.wkbType(), QgsWkbTypes::PointZ );
+  QCOMPARE( point.z(), 4.0 );
+
+  // Type: PointM
+  point = QgsPoint( 1, 2 );
+  points.clear();
+  points << QgsPoint( QgsWkbTypes::PointM, 0, 2, 0, 4 );
+  // iterator
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( points, point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.wkbType(), QgsWkbTypes::PointM );
+  QCOMPARE( point.m(), 4.0 );
+  // QgsPointSequence
+  point = QgsPoint( 1, 2 );
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( points.constBegin(), points.constEnd(), point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.wkbType(), QgsWkbTypes::PointM );
+  QCOMPARE( point.m(), 4.0 );
+
+  // Type: PointM
+  points.clear();
+  points << QgsPoint( QgsWkbTypes::PointM, 0, 2, 0, 5 );
+  // iterator
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( points, point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.wkbType(), QgsWkbTypes::PointM );
+  QCOMPARE( point.m(), 5.0 ); // now point.m == 5
+  // QgsPointSequence
+  point = QgsPoint( 1, 2 );
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( points.constBegin(), points.constEnd(), point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.wkbType(), QgsWkbTypes::PointM );
+  QCOMPARE( point.m(), 5.0 ); // now point.m == 5
+
+  // Add M to a PointZ
+  point = QgsPoint( 1, 2, 4 );
+  // Type: PointM
+  points.clear();
+  points << QgsPoint( QgsWkbTypes::PointM, 0, 2, 0, 5 );
+  // iterator
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( points, point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.wkbType(), QgsWkbTypes::PointZM );
+  QCOMPARE( point.m(), 5.0 );
+  // QgsPointSequence
+  point = QgsPoint( 1, 2, 4 );
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( points.constBegin(), points.constEnd(), point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.wkbType(), QgsWkbTypes::PointZM );
+  QCOMPARE( point.m(), 5.0 );
+
+  // Add Z from point1 and M from point2
+  point = QgsPoint( 1, 2 );
+  points.clear();
+  points << QgsPoint( 7, 8, 9 ) << QgsPoint( QgsWkbTypes::PointM, 0, 2, 0, 5 );
+  // iterator
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( points, point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.wkbType(), QgsWkbTypes::PointZM );
+  QCOMPARE( point.z(), 9.0 );
+  QCOMPARE( point.m(), 5.0 );
+  // QgsPointSequence
+  point = QgsPoint( 1, 2 );
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( points.constBegin(), points.constEnd(), point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.wkbType(), QgsWkbTypes::PointZM );
+  QCOMPARE( point.z(), 9.0 );
+  QCOMPARE( point.m(), 5.0 );
+
+}
+
+void TestQgsGeometryUtils::transferFirstZOrMValueToPoint_qgsgeometry()
+{
+  QgsPoint point( 1, 2 );
+  QgsGeometry geom;
+
+  geom = QgsGeometry::fromWkt( "LineString( 0 2, 2 3)" );
+  // iterator
+  bool ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( geom.vertices_begin(), geom.vertices_end(), point );
+  QCOMPARE( ret, false );
+  // QgsGeometry
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( geom, point );
+  QCOMPARE( ret, false );
+
+  // Z
+  geom = QgsGeometry::fromWkt( "LineStringZ( 0 2 3, 2 3 4)" );
+  // iterator
+  point = QgsPoint( 1, 2 );
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( geom.vertices_begin(), geom.vertices_end(), point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.z(), 3.0 );
+
+  // QgsGeometry
+  point = QgsPoint( 1, 2 );
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( geom, point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.z(), 3.0 );
+
+  // M
+  geom = QgsGeometry::fromWkt( "LineStringM( 0 2 3, 2 3 4)" );
+  // iterator
+  point = QgsPoint( 1, 2 );
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( geom.vertices_begin(), geom.vertices_end(), point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.m(), 3.0 );
+
+  // QgsGeometry
+  point = QgsPoint( 1, 2 );
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( geom, point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.m(), 3.0 );
+
+  // ZM
+  geom = QgsGeometry::fromWkt( "LineStringZM( 0 2 3 5, 2 3 4 6)" );
+  // iterator
+  point = QgsPoint( 1, 2 );
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( geom.vertices_begin(), geom.vertices_end(), point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.z(), 3.0 );
+  QCOMPARE( point.m(), 5.0 );
+
+  // QgsGeometry
+  point = QgsPoint( 1, 2 );
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( geom, point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.z(), 3.0 );
+  QCOMPARE( point.m(), 5.0 );
+
+  // point is Z and linestring ZM
+  geom = QgsGeometry::fromWkt( "LineStringZM( 0 2 3 5, 2 3 4 6)" );
+  // iterator
+  point = QgsPoint( 1, 2, 4 );
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( geom.vertices_begin(), geom.vertices_end(), point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.z(), 3.0 );
+  QCOMPARE( point.m(), 5.0 );
+
+  // QgsGeometry
+  point = QgsPoint( 1, 2, 4 );
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( geom, point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.z(), 3.0 );
+  QCOMPARE( point.m(), 5.0 );
+
+  // point is M and linestring ZM
+  geom = QgsGeometry::fromWkt( "LineStringZM( 0 2 3 5, 2 3 4 6)" );
+  // iterator
+  point = QgsPoint( QgsWkbTypes::PointM, 1, 2, 0, 4 );
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( geom.vertices_begin(), geom.vertices_end(), point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.z(), 3.0 );
+  QCOMPARE( point.m(), 5.0 );
+
+  // QgsGeometry
+  point = QgsPoint( QgsWkbTypes::PointM, 1, 2, 0, 4 );
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( geom, point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.z(), 3.0 );
+  QCOMPARE( point.m(), 5.0 );
+
+  // point is ZM and linestring ZM
+  geom = QgsGeometry::fromWkt( "LineStringZM( 0 2 3 5, 2 3 4 6)" );
+  // iterator
+  point = QgsPoint( 1, 2, 5, 4 );
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( geom.vertices_begin(), geom.vertices_end(), point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.z(), 3.0 );
+  QCOMPARE( point.m(), 5.0 );
+
+  // QgsGeometry
+  point = QgsPoint( 1, 2, 5, 4 );
+  ret = QgsGeometryUtils::transferFirstZOrMValueToPoint( geom, point );
+  QCOMPARE( ret, true );
+  QCOMPARE( point.z(), 3.0 );
+  QCOMPARE( point.m(), 5.0 );
 }
 
 QGSTEST_MAIN( TestQgsGeometryUtils )

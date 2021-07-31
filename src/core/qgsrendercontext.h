@@ -34,7 +34,6 @@
 #include "qgsdistancearea.h"
 #include "qgscoordinatetransformcontext.h"
 #include "qgspathresolver.h"
-#include "qgssymbollayerreference.h"
 #include "qgstemporalrangeobject.h"
 
 class QPainter;
@@ -49,7 +48,8 @@ class QgsMapClippingRegion;
 
 /**
  * \ingroup core
- * Contains information about the context of a rendering operation.
+ * \brief Contains information about the context of a rendering operation.
+ *
  * The context of a rendering operation defines properties such as
  * the conversion ratio between screen and map units, the extents
  * to be rendered etc.
@@ -83,6 +83,8 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
       RenderSymbolPreview      = 0x800, //!< The render is for a symbol preview only and map based properties may not be available, so care should be taken to handle map unit based sizes in an appropriate way.
       LosslessImageRendering   = 0x1000, //!< Render images losslessly whenever possible, instead of the default lossy jpeg rendering used for some destination devices (e.g. PDF). This flag only works with builds based on Qt 5.13 or later.
       ApplyScalingWorkaroundForTextRendering = 0x2000, //!< Whether a scaling workaround designed to stablise the rendering of small font sizes (or for painters scaled out by a large amount) when rendering text. Generally this is recommended, but it may incur some performance cost.
+      Render3DMap              = 0x4000, //!< Render is for a 3D map
+      ApplyClipAfterReprojection = 0x8000, //!< Feature geometry clipping to mapExtent() must be performed after the geometries are transformed using coordinateTransform(). Usually feature geometry clipping occurs using the extent() in the layer's CRS prior to geometry transformation, but in some cases when extent() could not be accurately calculated it is necessary to clip geometries to mapExtent() AFTER transforming them using coordinateTransform().
     };
     Q_DECLARE_FLAGS( Flags, Flag )
 
@@ -331,6 +333,14 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
     double scaleFactor() const {return mScaleFactor;}
 
     /**
+     * Returns the targeted DPI for rendering.
+     *
+     * \see setDpiTarget()
+     * \since QGIS 3.20
+     */
+    double dpiTarget() const {return mDpiTarget;}
+
+    /**
      * Returns TRUE if the rendering operation has been stopped and any ongoing
      * rendering should be canceled immediately.
      *
@@ -373,6 +383,24 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      * \see setRendererScale()
      */
     double rendererScale() const {return mRendererScale;}
+
+
+    /**
+     * Returns the symbology reference scale.
+     *
+     * This represents the desired scale denominator for the rendered map, eg 1000.0 for a 1:1000 map render.
+     * A value of -1 indicates that symbology scaling by reference scale is disabled.
+     *
+     * The symbology reference scale is an optional property which specifies the reference
+     * scale at which symbology in paper units (such a millimeters or points) is fixed
+     * to. For instance, if the scale is 1000 then a 2mm thick line will be rendered at
+     * exactly 2mm thick when a map is rendered at 1:1000, or 1mm thick when rendered at 1:2000, or 4mm thick at 1:500.
+     *
+     * \see setSymbologyReferenceScale()
+     * \see rendererScale()
+     * \since QGIS 3.22
+     */
+    double symbologyReferenceScale() const { return mSymbologyReferenceScale; }
 
     /**
      * Gets access to new labeling engine (may be NULLPTR)
@@ -474,11 +502,36 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
     void setScaleFactor( double factor ) {mScaleFactor = factor;}
 
     /**
+     * Sets the targeted \a dpi for rendering.
+     *
+     * \see dpiTarget()
+     * \since QGIS 3.20
+     */
+    void setDpiTarget( double dpi ) {mDpiTarget = dpi;}
+
+    /**
      * Sets the renderer map scale. This should match the desired scale denominator
      * for the rendered map, eg 1000.0 for a 1:1000 map render.
      * \see rendererScale()
      */
     void setRendererScale( double scale ) {mRendererScale = scale;}
+
+    /**
+     * Sets the symbology reference \a scale.
+     *
+     * This should match the desired scale denominator for the rendered map, eg 1000.0 for a 1:1000 map render.
+     * Set to -1 to disable symbology scaling by reference scale.
+     *
+     * The symbology reference scale is an optional property which specifies the reference
+     * scale at which symbology in paper units (such a millimeters or points) is fixed
+     * to. For instance, if \a scale is set to 1000 then a 2mm thick line will be rendered at
+     * exactly 2mm thick when a map is rendered at 1:1000, or 1mm thick when rendered at 1:2000, or 4mm thick at 1:500.
+     *
+     * \see symbologyReferenceScale()
+     * \see rendererScale()
+     * \since QGIS 3.22
+     */
+    void setSymbologyReferenceScale( double scale ) { mSymbologyReferenceScale = scale; }
 
     /**
      * Sets the destination QPainter for the render operation. Ownership of the painter
@@ -854,6 +907,22 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
      */
     void setTextureOrigin( const QPointF &origin );
 
+    /**
+     * Returns the range of z-values which should be rendered.
+     *
+     * \see setZRange()
+     * \since QGIS 3.18
+     */
+    QgsDoubleRange zRange() const;
+
+    /**
+     * Sets the \a range of z-values which should be rendered.
+     *
+     * \see zRange()
+     * \since QGIS 3.18
+     */
+    void setZRange( const QgsDoubleRange &range );
+
   private:
 
     Flags mFlags;
@@ -909,8 +978,13 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
     //! Factor to scale line widths and point marker sizes
     double mScaleFactor = 1.0;
 
+    //! Targeted DPI
+    double mDpiTarget = -1.0;
+
     //! Map scale
     double mRendererScale = 1.0;
+
+    double mSymbologyReferenceScale = -1;
 
     //! Newer labeling engine implementation (can be NULLPTR)
     QgsLabelingEngine *mLabelingEngine = nullptr;
@@ -950,6 +1024,8 @@ class CORE_EXPORT QgsRenderContext : public QgsTemporalRangeObject
 
     QPointF mTextureOrigin;
 
+    QgsDoubleRange mZRange;
+
 #ifdef QGISDEBUG
     bool mHasTransformContext = false;
 #endif
@@ -962,7 +1038,7 @@ Q_DECLARE_OPERATORS_FOR_FLAGS( QgsRenderContext::Flags )
 /**
  * \ingroup core
  *
- * Scoped object for temporary replacement of a QgsRenderContext destination painter.
+ * \brief Scoped object for temporary replacement of a QgsRenderContext destination painter.
  *
  * Temporarily swaps out the destination QPainter object for a QgsRenderContext for the lifetime of the object,
  * before replacing it to the original painter on destruction.
@@ -1018,7 +1094,7 @@ class QgsScopedRenderContextPainterSwap
 /**
  * \ingroup core
  *
- * Scoped object for temporary scaling of a QgsRenderContext for millimeter based rendering.
+ * \brief Scoped object for temporary scaling of a QgsRenderContext for millimeter based rendering.
  *
  * Temporarily scales the destination QPainter for a QgsRenderContext to use millimeter based units for the lifetime of the object,
  * before returning it to pixel based units on destruction.
@@ -1062,7 +1138,7 @@ class QgsScopedRenderContextScaleToMm
 /**
  * \ingroup core
  *
- * Scoped object for temporary scaling of a QgsRenderContext for pixel based rendering.
+ * \brief Scoped object for temporary scaling of a QgsRenderContext for pixel based rendering.
  *
  * Temporarily scales the destination QPainter for a QgsRenderContext to use pixel based units for the lifetime of the object,
  * before returning it to millimeter based units on destruction.
@@ -1106,7 +1182,7 @@ class QgsScopedRenderContextScaleToPixels
 /**
  * \ingroup core
  *
- * Scoped object for saving and restoring a QPainter object's state.
+ * \brief Scoped object for saving and restoring a QPainter object's state.
  *
  * Temporarily saves the QPainter state for the lifetime of the object, before restoring it
  * on destruction.
@@ -1141,6 +1217,59 @@ class QgsScopedQPainterState
 
     QPainter *mPainter = nullptr;
 };
+
+
+/**
+ * \ingroup core
+ *
+ * \brief Scoped object for temporary override of the symbologyReferenceScale property of a QgsRenderContext.
+ *
+ * Temporarily changes the symbologyReferenceScale, before returning it to the original value on destruction.
+ *
+ * \note Not available in Python bindings
+ * \since QGIS 3.22
+ */
+class QgsScopedRenderContextReferenceScaleOverride
+{
+  public:
+
+    /**
+     * Constructor for QgsScopedRenderContextReferenceScaleOverride.
+     *
+     * Temporarily sets the render \a context symbologyReferenceScale to \a scale for the lifetime of this object.
+     */
+    QgsScopedRenderContextReferenceScaleOverride( QgsRenderContext &context, double scale )
+      : mContext( &context )
+      , mOriginalScale( context.symbologyReferenceScale() )
+    {
+      mContext->setSymbologyReferenceScale( scale );
+    }
+
+    /**
+     * Move constructor.
+     */
+    QgsScopedRenderContextReferenceScaleOverride( QgsScopedRenderContextReferenceScaleOverride &&o ) noexcept
+      : mContext( o.mContext )
+      , mOriginalScale( o.mOriginalScale )
+    {
+      o.mContext = nullptr;
+    }
+
+    /**
+     * Returns the render context back to the original reference scale.
+     */
+    ~QgsScopedRenderContextReferenceScaleOverride()
+    {
+      if ( mContext )
+        mContext->setSymbologyReferenceScale( mOriginalScale );
+    }
+
+  private:
+
+    QgsRenderContext *mContext = nullptr;
+    double mOriginalScale = 0;
+};
+
 
 #endif
 

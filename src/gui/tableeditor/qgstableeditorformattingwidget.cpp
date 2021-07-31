@@ -18,6 +18,7 @@
 #include "qgsnumericformat.h"
 #include "qgis.h"
 #include "qgsproperty.h"
+#include <QPointer>
 
 QgsTableEditorFormattingWidget::QgsTableEditorFormattingWidget( QWidget *parent )
   : QgsPanelWidget( parent )
@@ -30,12 +31,8 @@ QgsTableEditorFormattingWidget::QgsTableEditorFormattingWidget( QWidget *parent 
   mFontButton->setShowNullFormat( true );
   mFontButton->setNoFormatString( tr( "Clear Formatting" ) );
 
-  mTextColorButton->setAllowOpacity( true );
-  mTextColorButton->setColorDialogTitle( tr( "Text Color" ) );
-  mTextColorButton->setDefaultColor( QColor( 0, 0, 0 ) );
-  mTextColorButton->setShowNull( true );
   mBackgroundColorButton->setAllowOpacity( true );
-  mBackgroundColorButton->setColorDialogTitle( tr( "Text Color" ) );
+  mBackgroundColorButton->setColorDialogTitle( tr( "Background Color" ) );
   mBackgroundColorButton->setDefaultColor( QColor( 255, 255, 255 ) );
   mBackgroundColorButton->setShowNull( true );
 
@@ -45,16 +42,6 @@ QgsTableEditorFormattingWidget::QgsTableEditorFormattingWidget( QWidget *parent 
   mRowHeightSpinBox->setClearValue( 0, tr( "Automatic" ) );
   mColumnWidthSpinBox->setClearValue( 0, tr( "Automatic" ) );
 
-  connect( mTextColorButton, &QgsColorButton::colorChanged, this, [ = ]
-  {
-    if ( !mBlockSignals )
-      emit foregroundColorChanged( mTextColorButton->color() );
-  } );
-  connect( mTextColorButton, &QgsColorButton::cleared, this, [ = ]
-  {
-    if ( !mBlockSignals )
-      emit foregroundColorChanged( QColor() );
-  } );
   connect( mBackgroundColorButton, &QgsColorButton::colorChanged, this,  [ = ]
   {
     if ( !mBlockSignals )
@@ -95,7 +82,7 @@ QgsTableEditorFormattingWidget::QgsTableEditorFormattingWidget( QWidget *parent 
     openPanel( widget );
   } );
 
-  connect( mRowHeightSpinBox, qgis::overload<double>::of( &QDoubleSpinBox::valueChanged ), this, [ = ]( double height )
+  connect( mRowHeightSpinBox, qOverload<double>( &QDoubleSpinBox::valueChanged ), this, [ = ]( double height )
   {
     if ( !mBlockSignals )
     {
@@ -106,7 +93,7 @@ QgsTableEditorFormattingWidget::QgsTableEditorFormattingWidget( QWidget *parent 
       mBlockSignals--;
     }
   } );
-  connect( mColumnWidthSpinBox, qgis::overload<double>::of( &QDoubleSpinBox::valueChanged ), this, [ = ]( double width )
+  connect( mColumnWidthSpinBox, qOverload<double>( &QDoubleSpinBox::valueChanged ), this, [ = ]( double width )
   {
     if ( !mBlockSignals )
     {
@@ -134,7 +121,7 @@ QgsTableEditorFormattingWidget::QgsTableEditorFormattingWidget( QWidget *parent 
     }
   } );
 
-  connect( mExpressionEdit, qgis::overload<const QString &>::of( &QgsFieldExpressionWidget::fieldChanged ), this, [ = ]( const QString & expression )
+  connect( mExpressionEdit, qOverload<const QString &>( &QgsFieldExpressionWidget::fieldChanged ), this, [ = ]( const QString & expression )
   {
     if ( !mBlockSignals )
     {
@@ -159,13 +146,6 @@ QgsNumericFormat *QgsTableEditorFormattingWidget::numericFormat()
 QgsTextFormat QgsTableEditorFormattingWidget::textFormat() const
 {
   return mFontButton->textFormat();
-}
-
-void QgsTableEditorFormattingWidget::setForegroundColor( const QColor &color )
-{
-  mBlockSignals++;
-  mTextColorButton->setColor( color );
-  mBlockSignals--;
 }
 
 void QgsTableEditorFormattingWidget::setBackgroundColor( const QColor &color )

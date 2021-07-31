@@ -18,6 +18,7 @@
 
 #include <QAbstractTableModel>
 #include <QStyledItemDelegate>
+#include <QPointer>
 
 #include "qgsfields.h"
 #include "qgsexpressioncontextgenerator.h"
@@ -32,7 +33,7 @@ class QTableView;
 
 /**
  * \ingroup gui
- * The QgsAggregateMappingModel holds mapping information for defining sets of aggregates of
+ * \brief The QgsAggregateMappingModel holds mapping information for defining sets of aggregates of
  * fields from a QgsFields object.
  *
  * \since QGIS 3.14
@@ -51,7 +52,7 @@ class GUI_EXPORT QgsAggregateMappingModel: public QAbstractTableModel
     {
       SourceExpression,       //!< Expression
       Aggregate,              //!< Aggregate name
-      Delimiter,              //!< Delimeter
+      Delimiter,              //!< Delimiter
       DestinationName,        //!< Destination field name
       DestinationType,        //!< Destination field QVariant::Type casted to (int)
       DestinationLength,      //!< Destination field length
@@ -141,7 +142,7 @@ class GUI_EXPORT QgsAggregateMappingModel: public QAbstractTableModel
 
 /**
  * \ingroup gui
- * The QgsAggregateMappingWidget class creates a mapping for defining sets of aggregates of
+ * \brief The QgsAggregateMappingWidget class creates a mapping for defining sets of aggregates of
  * fields from a QgsFields object.
  * \since QGIS 3.14
  */
@@ -174,6 +175,22 @@ class GUI_EXPORT QgsAggregateMappingWidget : public QgsPanelWidget
 
     //! Set source fields of the underlying mapping model to \a sourceFields
     void setSourceFields( const QgsFields &sourceFields );
+
+    /**
+     * Sets a source \a layer to use when generating expression previews in the widget.
+     *
+     * \since QGIS 3.16
+     */
+    void setSourceLayer( QgsVectorLayer *layer );
+
+    /**
+     * Returns the source layer for use when generating expression previews.
+     *
+     * Returned value may be NULLPTR.
+     *
+     * \since QGIS 3.16
+     */
+    QgsVectorLayer *sourceLayer();
 
     /**
      * Scroll the fields view to \a index
@@ -211,6 +228,7 @@ class GUI_EXPORT QgsAggregateMappingWidget : public QgsPanelWidget
 
     QTableView *mTableView = nullptr;
     QAbstractTableModel *mModel = nullptr;
+    QPointer< QgsVectorLayer > mSourceLayer;
     void updateColumns();
     //! Returns selected row indexes in ascending order
     std::list<int> selectedRows( );

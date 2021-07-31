@@ -31,6 +31,16 @@ QgsMultiSurface::QgsMultiSurface()
   mWkbType = QgsWkbTypes::MultiSurface;
 }
 
+QgsSurface *QgsMultiSurface::surfaceN( int index )
+{
+  return qgsgeometry_cast< QgsSurface * >( geometryN( index ) );
+}
+
+const QgsSurface *QgsMultiSurface::surfaceN( int index ) const
+{
+  return qgsgeometry_cast< const QgsSurface * >( geometryN( index ) );
+}
+
 QString QgsMultiSurface::geometryType() const
 {
   return QStringLiteral( "MultiSurface" );
@@ -44,7 +54,7 @@ void QgsMultiSurface::clear()
 
 QgsMultiSurface *QgsMultiSurface::createEmptyWithSameType() const
 {
-  auto result = qgis::make_unique< QgsMultiSurface >();
+  auto result = std::make_unique< QgsMultiSurface >();
   result->mWkbType = mWkbType;
   return result.release();
 }
@@ -113,7 +123,7 @@ QDomElement QgsMultiSurface::asGml3( QDomDocument &doc, int precision, const QSt
 json QgsMultiSurface::asJsonObject( int precision ) const
 {
   json polygons( json::array( ) );
-  for ( const QgsAbstractGeometry *geom : qgis::as_const( mGeometries ) )
+  for ( const QgsAbstractGeometry *geom : std::as_const( mGeometries ) )
   {
     if ( qgsgeometry_cast<const QgsSurface *>( geom ) )
     {

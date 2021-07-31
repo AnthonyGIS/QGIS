@@ -43,6 +43,7 @@ class QgsRasterHistogramWidget;
 class QgsMapLayerStyleManagerWidget;
 class QgsVectorLayer3DRendererWidget;
 class QgsMeshLayer3DRendererWidget;
+class QgsPointCloudLayer3DRendererWidget;
 class QgsMessageBar;
 class QgsVectorTileBasicRendererWidget;
 class QgsVectorTileBasicLabelingWidget;
@@ -96,17 +97,17 @@ class APP_EXPORT QgsLayerStylingWidget : public QWidget, private Ui::QgsLayerSty
       Symbology3D,
     };
 
-    QgsLayerStylingWidget( QgsMapCanvas *canvas, QgsMessageBar *messageBar, const QList<QgsMapLayerConfigWidgetFactory *> &pages, QWidget *parent = nullptr );
+    QgsLayerStylingWidget( QgsMapCanvas *canvas, QgsMessageBar *messageBar, const QList<const QgsMapLayerConfigWidgetFactory *> &pages, QWidget *parent = nullptr );
     ~QgsLayerStylingWidget() override;
     QgsMapLayer *layer() { return mCurrentLayer; }
 
-    void setPageFactories( const QList<QgsMapLayerConfigWidgetFactory *> &factories );
+    void setPageFactories( const QList<const QgsMapLayerConfigWidgetFactory *> &factories );
 
     /**
      * Sets whether updates of the styling widget are blocked. This can be called to prevent
      * the widget being refreshed multiple times when a batch of layer style changes are
      * about to be applied
-     * \param blocked set to true to block updates, or false to re-allow updates
+     * \param blocked set to TRUE to block updates, or FALSE to re-allow updates
      */
     void blockUpdates( bool blocked );
 
@@ -153,8 +154,8 @@ class APP_EXPORT QgsLayerStylingWidget : public QWidget, private Ui::QgsLayerSty
     QgsRendererMeshPropertiesWidget *mMeshStyleWidget = nullptr;
     QgsVectorTileBasicRendererWidget *mVectorTileStyleWidget = nullptr;
     QgsVectorTileBasicLabelingWidget *mVectorTileLabelingWidget = nullptr;
-    QList<QgsMapLayerConfigWidgetFactory *> mPageFactories;
-    QMap<int, QgsMapLayerConfigWidgetFactory *> mUserPages;
+    QList<const QgsMapLayerConfigWidgetFactory *> mPageFactories;
+    QMap<int, const QgsMapLayerConfigWidgetFactory *> mUserPages;
     QgsLayerStyleManagerWidgetFactory *mStyleManagerFactory = nullptr;
 };
 

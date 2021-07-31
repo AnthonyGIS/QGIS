@@ -28,6 +28,10 @@
 #include "qgsexpressionbuilderdialog.h"
 #include "qgsvectorlayer.h"
 #include "qgsprojectviewsettings.h"
+#include "qgstextformatwidget.h"
+#include "qgsguiutils.h"
+#include "qgsmarkersymbol.h"
+#include "qgslinesymbol.h"
 
 QgsLayoutMapGridWidget::QgsLayoutMapGridWidget( QgsLayoutItemMapGrid *mapGrid, QgsLayoutItemMap *map )
   : QgsLayoutItemBaseWidget( nullptr, mapGrid )
@@ -45,8 +49,16 @@ QgsLayoutMapGridWidget::QgsLayoutMapGridWidget( QgsLayoutItemMapGrid *mapGrid, Q
   mFrameStyleComboBox->addItem( tr( "Line Border" ), QgsLayoutItemMapGrid::LineBorder );
   mFrameStyleComboBox->addItem( tr( "Line Border (Nautical)" ), QgsLayoutItemMapGrid::LineBorderNautical );
 
+  mRotatedTicksLengthModeComboBox->addItem( tr( "Orthogonal" ), QgsLayoutItemMapGrid::OrthogonalTicks );
+  mRotatedTicksLengthModeComboBox->addItem( tr( "Fixed Length" ), QgsLayoutItemMapGrid::NormalizedTicks );
+  mRotatedAnnotationsLengthModeComboBox->addItem( tr( "Orthogonal" ), QgsLayoutItemMapGrid::OrthogonalTicks );
+  mRotatedAnnotationsLengthModeComboBox->addItem( tr( "Fixed Length" ), QgsLayoutItemMapGrid::NormalizedTicks );
+
   mGridFrameMarginSpinBox->setShowClearButton( true );
   mGridFrameMarginSpinBox->setClearValue( 0 );
+
+  mDistanceToMapFrameSpinBox->setShowClearButton( true );
+  mDistanceToMapFrameSpinBox->setClearValue( 0 );
 
   connect( mIntervalXSpinBox, &QgsDoubleSpinBox::editingFinished, this, &QgsLayoutMapGridWidget::mIntervalXSpinBox_editingFinished );
   connect( mIntervalYSpinBox, &QgsDoubleSpinBox::editingFinished, this, &QgsLayoutMapGridWidget::mIntervalYSpinBox_editingFinished );
@@ -56,12 +68,19 @@ QgsLayoutMapGridWidget::QgsLayoutMapGridWidget( QgsLayoutItemMapGrid *mapGrid, Q
   connect( mFrameWidthSpinBox, static_cast < void ( QDoubleSpinBox::* )( double ) > ( &QDoubleSpinBox::valueChanged ), this, &QgsLayoutMapGridWidget::mFrameWidthSpinBox_valueChanged );
   connect( mGridFrameMarginSpinBox, static_cast < void ( QDoubleSpinBox::* )( double ) > ( &QDoubleSpinBox::valueChanged ), this, &QgsLayoutMapGridWidget::mGridFrameMarginSpinBox_valueChanged );
   connect( mFrameStyleComboBox, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, &QgsLayoutMapGridWidget::mFrameStyleComboBox_currentIndexChanged );
+  connect( mRotatedTicksGroupBox, &QGroupBox::toggled, this, &QgsLayoutMapGridWidget::mRotatedTicksGroupBox_toggled );
+  connect( mRotatedTicksLengthModeComboBox, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, &QgsLayoutMapGridWidget::mRotatedTicksLengthModeComboBox_currentIndexChanged );
+  connect( mRotatedTicksThresholdSpinBox, static_cast < void ( QDoubleSpinBox::* )( double ) > ( &QDoubleSpinBox::valueChanged ), this, &QgsLayoutMapGridWidget::mRotatedTicksThresholdSpinBox_valueChanged );
+  connect( mRotatedTicksMarginToCornerSpinBox, static_cast < void ( QDoubleSpinBox::* )( double ) > ( &QDoubleSpinBox::valueChanged ), this, &QgsLayoutMapGridWidget::mRotatedTicksMarginToCornerSpinBox_valueChanged );
+  connect( mRotatedAnnotationsGroupBox, &QGroupBox::toggled, this, &QgsLayoutMapGridWidget::mRotatedAnnotationsGroupBox_toggled );
+  connect( mRotatedAnnotationsLengthModeComboBox, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, &QgsLayoutMapGridWidget::mRotatedAnnotationsLengthModeComboBox_currentIndexChanged );
+  connect( mRotatedAnnotationsThresholdSpinBox, static_cast < void ( QDoubleSpinBox::* )( double ) > ( &QDoubleSpinBox::valueChanged ), this, &QgsLayoutMapGridWidget::mRotatedAnnotationsThresholdSpinBox_valueChanged );
+  connect( mRotatedAnnotationsMarginToCornerSpinBox, static_cast < void ( QDoubleSpinBox::* )( double ) > ( &QDoubleSpinBox::valueChanged ), this, &QgsLayoutMapGridWidget::mRotatedAnnotationsMarginToCornerSpinBox_valueChanged );
   connect( mGridFramePenSizeSpinBox, static_cast < void ( QDoubleSpinBox::* )( double ) > ( &QDoubleSpinBox::valueChanged ), this, &QgsLayoutMapGridWidget::mGridFramePenSizeSpinBox_valueChanged );
   connect( mGridFramePenColorButton, &QgsColorButton::colorChanged, this, &QgsLayoutMapGridWidget::mGridFramePenColorButton_colorChanged );
   connect( mGridFrameFill1ColorButton, &QgsColorButton::colorChanged, this, &QgsLayoutMapGridWidget::mGridFrameFill1ColorButton_colorChanged );
   connect( mGridFrameFill2ColorButton, &QgsColorButton::colorChanged, this, &QgsLayoutMapGridWidget::mGridFrameFill2ColorButton_colorChanged );
   connect( mGridTypeComboBox, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, &QgsLayoutMapGridWidget::mGridTypeComboBox_currentIndexChanged );
-  connect( mMapGridCRSButton, &QPushButton::clicked, this, &QgsLayoutMapGridWidget::mMapGridCRSButton_clicked );
   connect( mMapGridUnitComboBox, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, &QgsLayoutMapGridWidget::intervalUnitChanged );
   connect( mGridBlendComboBox, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, &QgsLayoutMapGridWidget::mGridBlendComboBox_currentIndexChanged );
   connect( mCheckGridLeftSide, &QCheckBox::toggled, this, &QgsLayoutMapGridWidget::mCheckGridLeftSide_toggled );
@@ -94,14 +113,17 @@ QgsLayoutMapGridWidget::QgsLayoutMapGridWidget( QgsLayoutItemMapGrid *mapGrid, Q
   connect( mEnabledCheckBox, &QCheckBox::toggled, this, &QgsLayoutMapGridWidget::gridEnabledToggled );
   setPanelTitle( tr( "Map Grid Properties" ) );
 
-  mAnnotationFontButton->setMode( QgsFontButton::ModeQFont );
+  mMapGridCrsSelector->setOptionVisible( QgsProjectionSelectionWidget::CrsNotSet, true );
+  mMapGridCrsSelector->setNotSetText( tr( "Use Map CRS" ) );
+
+  connect( mMapGridCrsSelector, &QgsProjectionSelectionWidget::crsChanged, this, &QgsLayoutMapGridWidget::mapGridCrsChanged );
 
   blockAllSignals( true );
 
-  mMapGridUnitComboBox->addItem( tr( "Map Unit" ), QgsLayoutItemMapGrid::MapUnit );
+  mMapGridUnitComboBox->addItem( tr( "Map Units" ), QgsLayoutItemMapGrid::MapUnit );
   mMapGridUnitComboBox->addItem( tr( "Fit Segment Width" ), QgsLayoutItemMapGrid::DynamicPageSizeBased );
-  mMapGridUnitComboBox->addItem( tr( "Millimeter" ), QgsLayoutItemMapGrid::MM );
-  mMapGridUnitComboBox->addItem( tr( "Centimeter" ), QgsLayoutItemMapGrid::CM );
+  mMapGridUnitComboBox->addItem( tr( "Millimeters" ), QgsLayoutItemMapGrid::MM );
+  mMapGridUnitComboBox->addItem( tr( "Centimeters" ), QgsLayoutItemMapGrid::CM );
 
   mGridTypeComboBox->insertItem( 0, tr( "Solid" ), QgsLayoutItemMapGrid::Solid );
   mGridTypeComboBox->insertItem( 1, tr( "Cross" ), QgsLayoutItemMapGrid::Cross );
@@ -112,16 +134,6 @@ QgsLayoutMapGridWidget::QgsLayoutMapGridWidget( QgsLayoutItemMapGrid *mapGrid, Q
   insertFrameDisplayEntries( mFrameDivisionsRightComboBox );
   insertFrameDisplayEntries( mFrameDivisionsTopComboBox );
   insertFrameDisplayEntries( mFrameDivisionsBottomComboBox );
-
-  mAnnotationFormatComboBox->addItem( tr( "Decimal" ), QgsLayoutItemMapGrid::Decimal );
-  mAnnotationFormatComboBox->addItem( tr( "Decimal with Suffix" ), QgsLayoutItemMapGrid::DecimalWithSuffix );
-  mAnnotationFormatComboBox->addItem( tr( "Degree, Minute" ), QgsLayoutItemMapGrid::DegreeMinuteNoSuffix );
-  mAnnotationFormatComboBox->addItem( tr( "Degree, Minute with Suffix" ), QgsLayoutItemMapGrid::DegreeMinute );
-  mAnnotationFormatComboBox->addItem( tr( "Degree, Minute Aligned" ), QgsLayoutItemMapGrid::DegreeMinutePadded );
-  mAnnotationFormatComboBox->addItem( tr( "Degree, Minute, Second" ), QgsLayoutItemMapGrid::DegreeMinuteSecondNoSuffix );
-  mAnnotationFormatComboBox->addItem( tr( "Degree, Minute, Second with Suffix" ), QgsLayoutItemMapGrid::DegreeMinuteSecond );
-  mAnnotationFormatComboBox->addItem( tr( "Degree, Minute, Second Aligned" ), QgsLayoutItemMapGrid::DegreeMinuteSecondPadded );
-  mAnnotationFormatComboBox->addItem( tr( "Custom" ), QgsLayoutItemMapGrid::CustomFormat );
 
   insertAnnotationDisplayEntries( mAnnotationDisplayLeftComboBox );
   insertAnnotationDisplayEntries( mAnnotationDisplayRightComboBox );
@@ -156,11 +168,11 @@ QgsLayoutMapGridWidget::QgsLayoutMapGridWidget( QgsLayoutItemMapGrid *mapGrid, Q
   mGridFrameFill2ColorButton->setNoColorString( tr( "Transparent Fill" ) );
   mGridFrameFill2ColorButton->setShowNoColor( true );
 
-  mGridLineStyleButton->setSymbolType( QgsSymbol::Line );
-  mGridMarkerStyleButton->setSymbolType( QgsSymbol::Marker );
+  mGridLineStyleButton->setSymbolType( Qgis::SymbolType::Line );
+  mGridMarkerStyleButton->setSymbolType( Qgis::SymbolType::Marker );
 
   //set initial state of frame style controls
-  toggleFrameControls( false, false, false );
+  toggleFrameControls( false, false, false, false );
 
   registerDataDefinedButton( mEnabledDDBtn, QgsLayoutObject::MapGridEnabled );
   registerDataDefinedButton( mIntervalXDDBtn, QgsLayoutObject::MapGridIntervalX );
@@ -172,6 +184,17 @@ QgsLayoutMapGridWidget::QgsLayoutMapGridWidget( QgsLayoutItemMapGrid *mapGrid, Q
   registerDataDefinedButton( mLabelDistDDBtn, QgsLayoutObject::MapGridLabelDistance );
   registerDataDefinedButton( mCrossWidthDDBtn, QgsLayoutObject::MapGridCrossSize );
   registerDataDefinedButton( mFrameLineThicknessDDBtn, QgsLayoutObject::MapGridFrameLineThickness );
+  registerDataDefinedButton( mAnnotationDisplayLeftDDBtn, QgsLayoutObject::MapGridAnnotationDisplayLeft );
+  registerDataDefinedButton( mAnnotationDisplayRightDDBtn, QgsLayoutObject::MapGridAnnotationDisplayRight );
+  registerDataDefinedButton( mAnnotationDisplayTopDDBtn, QgsLayoutObject::MapGridAnnotationDisplayTop );
+  registerDataDefinedButton( mAnnotationDisplayBottomDDBtn, QgsLayoutObject::MapGridAnnotationDisplayBottom );
+  registerDataDefinedButton( mFrameDivisionsLeftDDBtn, QgsLayoutObject::MapGridFrameDivisionsLeft );
+  registerDataDefinedButton( mFrameDivisionsRightDDBtn, QgsLayoutObject::MapGridFrameDivisionsRight );
+  registerDataDefinedButton( mFrameDivisionsTopDDBtn, QgsLayoutObject::MapGridFrameDivisionsTop );
+  registerDataDefinedButton( mFrameDivisionsBottomDDBtn, QgsLayoutObject::MapGridFrameDivisionsBottom );
+
+  // call to initially populate mAnnotationFormatComboBox
+  onCrsChanged();
 
   updateGuiElements();
 
@@ -179,8 +202,6 @@ QgsLayoutMapGridWidget::QgsLayoutMapGridWidget( QgsLayoutItemMapGrid *mapGrid, Q
   connect( mAnnotationFontButton, &QgsFontButton::changed, this, &QgsLayoutMapGridWidget::annotationTextFormatChanged );
   connect( mGridLineStyleButton, &QgsSymbolButton::changed, this, &QgsLayoutMapGridWidget::lineSymbolChanged );
   connect( mGridMarkerStyleButton, &QgsSymbolButton::changed, this, &QgsLayoutMapGridWidget::markerSymbolChanged );
-
-  connect( mAnnotationFontButton, &QgsFontButton::changed, this, &QgsLayoutMapGridWidget::annotationTextFormatChanged );
 
   mGridLineStyleButton->registerExpressionContextGenerator( mMapGrid );
   mGridLineStyleButton->setLayer( coverageLayer() );
@@ -194,6 +215,8 @@ QgsLayoutMapGridWidget::QgsLayoutMapGridWidget( QgsLayoutItemMapGrid *mapGrid, Q
   }
   mAnnotationFontButton->setLayer( coverageLayer() );
   mAnnotationFontButton->registerExpressionContextGenerator( mMapGrid );
+
+  connect( mMapGrid, &QgsLayoutItemMapGrid::crsChanged, this, &QgsLayoutMapGridWidget::onCrsChanged );
 }
 
 void QgsLayoutMapGridWidget::populateDataDefinedButtons()
@@ -208,6 +231,14 @@ void QgsLayoutMapGridWidget::populateDataDefinedButtons()
   updateDataDefinedButton( mLabelDistDDBtn );
   updateDataDefinedButton( mCrossWidthDDBtn );
   updateDataDefinedButton( mFrameLineThicknessDDBtn );
+  updateDataDefinedButton( mAnnotationDisplayLeftDDBtn );
+  updateDataDefinedButton( mAnnotationDisplayRightDDBtn );
+  updateDataDefinedButton( mAnnotationDisplayTopDDBtn );
+  updateDataDefinedButton( mAnnotationDisplayBottomDDBtn );
+  updateDataDefinedButton( mFrameDivisionsLeftDDBtn );
+  updateDataDefinedButton( mFrameDivisionsRightDDBtn );
+  updateDataDefinedButton( mFrameDivisionsTopDDBtn );
+  updateDataDefinedButton( mFrameDivisionsBottomDDBtn );
 }
 
 void QgsLayoutMapGridWidget::setGuiElementValues()
@@ -307,7 +338,7 @@ void QgsLayoutMapGridWidget::handleChangedAnnotationDisplay( QgsLayoutItemMapGri
   mMap->endCommand();
 }
 
-void QgsLayoutMapGridWidget::toggleFrameControls( bool frameEnabled, bool frameFillEnabled, bool frameSizeEnabled )
+void QgsLayoutMapGridWidget::toggleFrameControls( bool frameEnabled, bool frameFillEnabled, bool frameSizeEnabled, bool rotationEnabled )
 {
   //set status of frame controls
   mFrameWidthSpinBox->setEnabled( frameSizeEnabled );
@@ -332,6 +363,7 @@ void QgsLayoutMapGridWidget::toggleFrameControls( bool frameEnabled, bool frameF
   mRightDivisionsLabel->setEnabled( frameEnabled );
   mTopDivisionsLabel->setEnabled( frameEnabled );
   mBottomDivisionsLabel->setEnabled( frameEnabled );
+  mRotatedTicksGroupBox->setEnabled( rotationEnabled );
 }
 
 void QgsLayoutMapGridWidget::insertAnnotationPositionEntries( QComboBox *c )
@@ -345,6 +377,11 @@ void QgsLayoutMapGridWidget::insertAnnotationDirectionEntries( QComboBox *c )
   c->addItem( tr( "Horizontal" ), QgsLayoutItemMapGrid::Horizontal );
   c->addItem( tr( "Vertical Ascending" ), QgsLayoutItemMapGrid::Vertical );
   c->addItem( tr( "Vertical Descending" ), QgsLayoutItemMapGrid::VerticalDescending );
+  c->addItem( tr( "Boundary Direction" ), QgsLayoutItemMapGrid::BoundaryDirection );
+  // c->addItem( tr( "Parallel to Tick" ), QgsLayoutItemMapGrid::ParallelToTick );
+  c->addItem( tr( "Above Tick" ), QgsLayoutItemMapGrid::AboveTick );
+  c->addItem( tr( "On Tick" ), QgsLayoutItemMapGrid::OnTick );
+  c->addItem( tr( "Under Tick" ), QgsLayoutItemMapGrid::UnderTick );
 }
 
 void QgsLayoutMapGridWidget::initFrameDisplayBox( QComboBox *c, QgsLayoutItemMapGrid::DisplayMode display )
@@ -395,8 +432,8 @@ void QgsLayoutMapGridWidget::insertFrameDisplayEntries( QComboBox *c )
 void QgsLayoutMapGridWidget::insertAnnotationDisplayEntries( QComboBox *c )
 {
   c->insertItem( 0, tr( "Show All" ), QgsLayoutItemMapGrid::ShowAll );
-  c->insertItem( 1, tr( "Show Latitude Only" ), QgsLayoutItemMapGrid::LatitudeOnly );
-  c->insertItem( 2, tr( "Show Longitude Only" ), QgsLayoutItemMapGrid::LongitudeOnly );
+  c->insertItem( 1, tr( "Show Latitude/Y Only" ), QgsLayoutItemMapGrid::LatitudeOnly );
+  c->insertItem( 2, tr( "Show Longitude/X Only" ), QgsLayoutItemMapGrid::LongitudeOnly );
   c->insertItem( 3, tr( "Disabled" ), QgsLayoutItemMapGrid::HideAll );
 }
 
@@ -525,19 +562,19 @@ void QgsLayoutMapGridWidget::setGridItems()
   {
     case QgsLayoutItemMapGrid::Zebra:
     case QgsLayoutItemMapGrid::ZebraNautical:
-      toggleFrameControls( true, true, true );
+      toggleFrameControls( true, true, true, false );
       break;
     case QgsLayoutItemMapGrid::InteriorTicks:
     case QgsLayoutItemMapGrid::ExteriorTicks:
     case QgsLayoutItemMapGrid::InteriorExteriorTicks:
-      toggleFrameControls( true, false, true );
+      toggleFrameControls( true, false, true, true );
       break;
     case QgsLayoutItemMapGrid::LineBorder:
     case QgsLayoutItemMapGrid::LineBorderNautical:
-      toggleFrameControls( true, false, false );
+      toggleFrameControls( true, false, false, false );
       break;
     case QgsLayoutItemMapGrid::NoFrame:
-      toggleFrameControls( false, false, false );
+      toggleFrameControls( false, false, false, false );
       break;
   }
 
@@ -545,6 +582,16 @@ void QgsLayoutMapGridWidget::setGridItems()
   mCheckGridRightSide->setChecked( mMapGrid->testFrameSideFlag( QgsLayoutItemMapGrid::FrameRight ) );
   mCheckGridTopSide->setChecked( mMapGrid->testFrameSideFlag( QgsLayoutItemMapGrid::FrameTop ) );
   mCheckGridBottomSide->setChecked( mMapGrid->testFrameSideFlag( QgsLayoutItemMapGrid::FrameBottom ) );
+
+  mRotatedTicksGroupBox->setChecked( mMapGrid->rotatedTicksEnabled() );
+  mRotatedTicksLengthModeComboBox->setCurrentIndex( mRotatedTicksLengthModeComboBox->findData( mMapGrid->rotatedTicksLengthMode() ) );
+  mRotatedTicksThresholdSpinBox->setValue( mMapGrid->rotatedTicksMinimumAngle() );
+  mRotatedTicksMarginToCornerSpinBox->setValue( mMapGrid->rotatedTicksMarginToCorner() );
+
+  mRotatedAnnotationsGroupBox->setChecked( mMapGrid->rotatedAnnotationsEnabled() );
+  mRotatedAnnotationsLengthModeComboBox->setCurrentIndex( mRotatedAnnotationsLengthModeComboBox->findData( mMapGrid->rotatedAnnotationsLengthMode() ) );
+  mRotatedAnnotationsThresholdSpinBox->setValue( mMapGrid->rotatedAnnotationsMinimumAngle() );
+  mRotatedAnnotationsMarginToCornerSpinBox->setValue( mMapGrid->rotatedAnnotationsMarginToCorner() );
 
   initFrameDisplayBox( mFrameDivisionsLeftComboBox, mMapGrid->frameDivisions( QgsLayoutItemMapGrid::Left ) );
   initFrameDisplayBox( mFrameDivisionsRightComboBox, mMapGrid->frameDivisions( QgsLayoutItemMapGrid::Right ) );
@@ -600,10 +647,7 @@ void QgsLayoutMapGridWidget::setGridItems()
   mMinWidthSpinBox->setValue( mMapGrid->minimumIntervalWidth() );
   mMaxWidthSpinBox->setValue( mMapGrid->maximumIntervalWidth() );
 
-  //CRS button
-  QgsCoordinateReferenceSystem gridCrs = mMapGrid->crs();
-  QString crsButtonText = gridCrs.isValid() ? gridCrs.authid() : tr( "Change…" );
-  mMapGridCRSButton->setText( crsButtonText );
+  whileBlocking( mMapGridCrsSelector )->setCrs( mMapGrid->crs() );
 }
 
 void QgsLayoutMapGridWidget::mIntervalXSpinBox_editingFinished()
@@ -846,22 +890,128 @@ void QgsLayoutMapGridWidget::mFrameStyleComboBox_currentIndexChanged( int )
   {
     case QgsLayoutItemMapGrid::Zebra:
     case QgsLayoutItemMapGrid::ZebraNautical:
-      toggleFrameControls( true, true, true );
+      toggleFrameControls( true, true, true, false );
       break;
     case QgsLayoutItemMapGrid::InteriorTicks:
     case QgsLayoutItemMapGrid::ExteriorTicks:
     case QgsLayoutItemMapGrid::InteriorExteriorTicks:
-      toggleFrameControls( true, false, true );
+      toggleFrameControls( true, false, true, true );
       break;
     case QgsLayoutItemMapGrid::LineBorder:
     case QgsLayoutItemMapGrid::LineBorderNautical:
-      toggleFrameControls( true, false, false );
+      toggleFrameControls( true, false, false, false );
       break;
     case QgsLayoutItemMapGrid::NoFrame:
-      toggleFrameControls( false, false, false );
+      toggleFrameControls( false, false, false, false );
       break;
   }
   mMap->updateBoundingRect();
+  mMap->update();
+  mMap->endCommand();
+}
+
+void QgsLayoutMapGridWidget::mRotatedTicksGroupBox_toggled( bool state )
+{
+  if ( !mMapGrid || !mMap )
+  {
+    return;
+  }
+
+  mMap->beginCommand( tr( "Change Tick Rotation Enabled" ) );
+  mMapGrid->setRotatedTicksEnabled( state );
+  mMap->update();
+  mMap->endCommand();
+}
+
+void QgsLayoutMapGridWidget::mRotatedTicksLengthModeComboBox_currentIndexChanged( int )
+{
+  if ( !mMapGrid || !mMap )
+  {
+    return;
+  }
+
+  QgsLayoutItemMapGrid::TickLengthMode mode = static_cast< QgsLayoutItemMapGrid::TickLengthMode >( mRotatedTicksLengthModeComboBox->currentData().toInt() );
+  mMap->beginCommand( tr( "Change Tick Length Mode" ) );
+  mMapGrid->setRotatedTicksLengthMode( mode );
+  mMap->update();
+  mMap->endCommand();
+}
+
+void QgsLayoutMapGridWidget::mRotatedTicksThresholdSpinBox_valueChanged( double val )
+{
+  if ( !mMapGrid || !mMap )
+  {
+    return;
+  }
+
+  mMap->beginCommand( tr( "Change Rotated Ticks Threshold" ) );
+  mMapGrid->setRotatedTicksMinimumAngle( val );
+  mMap->update();
+  mMap->endCommand();
+}
+
+void QgsLayoutMapGridWidget::mRotatedTicksMarginToCornerSpinBox_valueChanged( double val )
+{
+  if ( !mMapGrid || !mMap )
+  {
+    return;
+  }
+
+  mMap->beginCommand( tr( "Change Rotated Ticks Margin to Corner" ) );
+  mMapGrid->setRotatedTicksMarginToCorner( val );
+  mMap->update();
+  mMap->endCommand();
+}
+
+void QgsLayoutMapGridWidget::mRotatedAnnotationsGroupBox_toggled( bool state )
+{
+  if ( !mMapGrid || !mMap )
+  {
+    return;
+  }
+
+  mMap->beginCommand( tr( "Change Annotation Rotation Enabled" ) );
+  mMapGrid->setRotatedAnnotationsEnabled( state );
+  mMap->update();
+  mMap->endCommand();
+}
+
+void QgsLayoutMapGridWidget::mRotatedAnnotationsLengthModeComboBox_currentIndexChanged( int )
+{
+  if ( !mMapGrid || !mMap )
+  {
+    return;
+  }
+
+  QgsLayoutItemMapGrid::TickLengthMode mode = static_cast< QgsLayoutItemMapGrid::TickLengthMode >( mRotatedAnnotationsLengthModeComboBox->currentData().toInt() );
+  mMap->beginCommand( tr( "Change Annotation Length Mode" ) );
+  mMapGrid->setRotatedAnnotationsLengthMode( mode );
+  mMap->update();
+  mMap->endCommand();
+}
+
+void QgsLayoutMapGridWidget::mRotatedAnnotationsThresholdSpinBox_valueChanged( double val )
+{
+  if ( !mMapGrid || !mMap )
+  {
+    return;
+  }
+
+  mMap->beginCommand( tr( "Change Rotated Annotations Threshold" ) );
+  mMapGrid->setRotatedAnnotationsMinimumAngle( val );
+  mMap->update();
+  mMap->endCommand();
+}
+
+void QgsLayoutMapGridWidget::mRotatedAnnotationsMarginToCornerSpinBox_valueChanged( double val )
+{
+  if ( !mMapGrid || !mMap )
+  {
+    return;
+  }
+
+  mMap->beginCommand( tr( "Change Rotated Annotations Margin to Corner" ) );
+  mMapGrid->setRotatedAnnotationsMarginToCorner( val );
   mMap->update();
   mMap->endCommand();
 }
@@ -924,6 +1074,55 @@ void QgsLayoutMapGridWidget::annotationTextFormatChanged()
   mMap->endCommand();
   mMap->updateBoundingRect();
   mMap->update();
+}
+
+void QgsLayoutMapGridWidget::onCrsChanged()
+{
+  mBlockAnnotationFormatUpdates++;
+  const QgsLayoutItemMapGrid::AnnotationFormat prevFormat = static_cast< QgsLayoutItemMapGrid::AnnotationFormat  >( mAnnotationFormatComboBox->currentData().toInt() );
+
+  mAnnotationFormatComboBox->clear();
+  mAnnotationFormatComboBox->addItem( tr( "Decimal" ), QgsLayoutItemMapGrid::Decimal );
+  mAnnotationFormatComboBox->addItem( tr( "Decimal with Suffix" ), QgsLayoutItemMapGrid::DecimalWithSuffix );
+
+  // only show degree based options for geographic CRSes
+  const QgsCoordinateReferenceSystem crs = mMapGrid->crs().isValid() ? mMapGrid->crs() : mMap->crs();
+  switch ( crs.mapUnits() )
+  {
+    case QgsUnitTypes::DistanceMeters:
+    case QgsUnitTypes::DistanceKilometers:
+    case QgsUnitTypes::DistanceFeet:
+    case QgsUnitTypes::DistanceNauticalMiles:
+    case QgsUnitTypes::DistanceYards:
+    case QgsUnitTypes::DistanceMiles:
+    case QgsUnitTypes::DistanceCentimeters:
+    case QgsUnitTypes::DistanceMillimeters:
+      break;
+
+    case QgsUnitTypes::DistanceDegrees:
+    case QgsUnitTypes::DistanceUnknownUnit:
+      mAnnotationFormatComboBox->addItem( tr( "Degree, Minute" ), QgsLayoutItemMapGrid::DegreeMinuteNoSuffix );
+      mAnnotationFormatComboBox->addItem( tr( "Degree, Minute with Suffix" ), QgsLayoutItemMapGrid::DegreeMinute );
+      mAnnotationFormatComboBox->addItem( tr( "Degree, Minute Aligned" ), QgsLayoutItemMapGrid::DegreeMinutePadded );
+      mAnnotationFormatComboBox->addItem( tr( "Degree, Minute, Second" ), QgsLayoutItemMapGrid::DegreeMinuteSecondNoSuffix );
+      mAnnotationFormatComboBox->addItem( tr( "Degree, Minute, Second with Suffix" ), QgsLayoutItemMapGrid::DegreeMinuteSecond );
+      mAnnotationFormatComboBox->addItem( tr( "Degree, Minute, Second Aligned" ), QgsLayoutItemMapGrid::DegreeMinuteSecondPadded );
+      break;
+  }
+  mAnnotationFormatComboBox->addItem( tr( "Custom" ), QgsLayoutItemMapGrid::CustomFormat );
+
+  const int prevIndex = mAnnotationFormatComboBox->findData( prevFormat );
+  if ( prevIndex >= 0 )
+    mAnnotationFormatComboBox->setCurrentIndex( prevIndex );
+  else
+    mAnnotationFormatComboBox->setCurrentIndex( 0 );
+  mBlockAnnotationFormatUpdates--;
+
+  const QgsLayoutItemMapGrid::AnnotationFormat newFormat = static_cast< QgsLayoutItemMapGrid::AnnotationFormat  >( mAnnotationFormatComboBox->currentData().toInt() );
+  if ( newFormat != prevFormat )
+  {
+    mAnnotationFormatComboBox_currentIndexChanged( mAnnotationFormatComboBox->currentIndex() );
+  }
 }
 
 void QgsLayoutMapGridWidget::mGridBlendComboBox_currentIndexChanged( int index )
@@ -1007,25 +1206,21 @@ void QgsLayoutMapGridWidget::mGridTypeComboBox_currentIndexChanged( int )
   mMap->endCommand();
 }
 
-void QgsLayoutMapGridWidget::mMapGridCRSButton_clicked()
+void QgsLayoutMapGridWidget::mapGridCrsChanged( const QgsCoordinateReferenceSystem &crs )
 {
   if ( !mMapGrid || !mMap )
   {
     return;
   }
 
-  QgsProjectionSelectionDialog crsDialog( this );
-  QgsCoordinateReferenceSystem crs = mMapGrid->crs();
-  crsDialog.setCrs( crs.isValid() ? crs : mMap->crs() );
+  if ( mMapGrid->crs() == crs )
+    return;
 
-  if ( crsDialog.exec() == QDialog::Accepted )
-  {
-    mMap->beginCommand( tr( "Change Grid CRS" ) );
-    mMapGrid->setCrs( crsDialog.crs() );
-    mMap->updateBoundingRect();
-    mMapGridCRSButton->setText( crsDialog.crs().authid() );
-    mMap->endCommand();
-  }
+  mMap->beginCommand( tr( "Change Grid CRS" ) );
+  mMapGrid->setCrs( crs );
+  mMap->updateBoundingRect();
+  mMap->update();
+  mMap->endCommand();
 }
 
 void QgsLayoutMapGridWidget::mDrawAnnotationGroupBox_toggled( bool state )
@@ -1140,7 +1335,6 @@ void QgsLayoutMapGridWidget::mDistanceToMapFrameSpinBox_valueChanged( double d )
   mMap->endCommand();
 }
 
-
 void QgsLayoutMapGridWidget::lineSymbolChanged()
 {
   if ( !mMapGrid || !mMap )
@@ -1187,6 +1381,8 @@ void QgsLayoutMapGridWidget::mAnnotationFormatComboBox_currentIndexChanged( int 
   {
     return;
   }
+  if ( mBlockAnnotationFormatUpdates )
+    return;
 
   mMap->beginCommand( tr( "Change Annotation Format" ) );
 

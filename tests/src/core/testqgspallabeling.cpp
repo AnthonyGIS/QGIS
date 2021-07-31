@@ -85,7 +85,7 @@ void TestQgsPalLabeling::wrapChar()
   QCOMPARE( QgsPalLabeling::splitToLines( "with auto wrap", QString(), 6, false ), QStringList() << "with auto" << "wrap" );
 
   // manual wrap character should take precedence
-  QCOMPARE( QgsPalLabeling::splitToLines( QStringLiteral( "with auto-wrap and manual-wrap" ), QStringLiteral( "-" ), 12, true ), QStringList() << "with auto" << "wrap and" << "manual" << "wrap" );
+  QCOMPARE( QgsPalLabeling::splitToLines( QStringLiteral( "with auto-wrap and manual-wrap" ), QStringLiteral( "-" ), 12, true ), QStringList() << "with" << "auto" << "wrap and" << "manual" << "wrap" );
   QCOMPARE( QgsPalLabeling::splitToLines( QStringLiteral( "with auto-wrap and manual-wrap" ), QStringLiteral( "-" ), 6, false ), QStringList() << "with auto" << "wrap and" << "manual" << "wrap" );
 }
 
@@ -253,7 +253,7 @@ void TestQgsPalLabeling::testGeometryGenerator()
   {
     for ( int y = 0; y < 10; y += 3 )
     {
-      f.setGeometry( qgis::make_unique< QgsPoint >( x, y ) );
+      f.setGeometry( std::make_unique< QgsPoint >( x, y ) );
       vl2->dataProvider()->addFeature( f );
     }
   }

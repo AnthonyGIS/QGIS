@@ -31,7 +31,7 @@
 #include "qgsrendererpropertiesdialog.h"
 #include "qgs25drendererwidget.h"
 #include "qgsapplication.h"
-#include "qgsoptions.h"
+#include "options/qgsoptions.h"
 #include "qgsguiutils.h"
 #include "qgsvectorlayerjoininfo.h"
 #include "qgsrasterlayer.h"
@@ -148,7 +148,7 @@ void QgsAppScreenShots::saveScreenshot( QPixmap &pixmap, const QString &name, co
   const QDir topDirectory( mSaveDirectory );
   if ( !topDirectory.exists() )
   {
-    QgsMessageLog::logMessage( QStringLiteral( "Directory does not exist: %1" ).arg( mSaveDirectory ), QString(), Qgis::Critical );
+    QgsMessageLog::logMessage( QStringLiteral( "Directory does not exist: %1" ).arg( mSaveDirectory ), QString(), Qgis::MessageLevel::Critical );
     return;
   }
 
@@ -158,14 +158,14 @@ void QgsAppScreenShots::saveScreenshot( QPixmap &pixmap, const QString &name, co
   {
     if ( !topDirectory.mkpath( folder ) )
     {
-      QgsMessageLog::logMessage( QStringLiteral( "Could not create directory %1 in %2" ).arg( folder, mSaveDirectory ), QString(), Qgis::Critical );
+      QgsMessageLog::logMessage( QStringLiteral( "Could not create directory %1 in %2" ).arg( folder, mSaveDirectory ), QString(), Qgis::MessageLevel::Critical );
       return;
     }
   }
   if ( pixmap.save( fileName ) )
     QgsMessageLog::logMessage( QStringLiteral( "Screenshot saved: %1" ).arg( fileName ) );
   else
-    QgsMessageLog::logMessage( QStringLiteral( "Failed to save screenshot: %1" ).arg( fileName ), QString(), Qgis::Critical );
+    QgsMessageLog::logMessage( QStringLiteral( "Failed to save screenshot: %1" ).arg( fileName ), QString(), Qgis::MessageLevel::Critical );
 }
 
 void QgsAppScreenShots::moveWidgetTo( QWidget *widget, Qt::Corner corner, Reference reference )
@@ -306,22 +306,25 @@ void QgsAppScreenShots::takeGlobalOptions()
   dlg->setMinimumHeight( 600 );
   dlg->show();
   QCoreApplication::processEvents();
-  for ( int row = 0; row < dlg->mOptionsListWidget->count(); ++row )
+
+  for ( int page = 0; page < dlg->mOptionsStackedWidget->count(); ++page )
   {
-    dlg->mOptionsListWidget->setCurrentRow( row );
+    dlg->mOptionsStackedWidget->setCurrentIndex( page );
     dlg->adjustSize();
     QCoreApplication::processEvents();
-    QString name = dlg->mOptionsListWidget->item( row )[0].text().toLower();
+    QString name = dlg->mOptTreeView->currentIndex().data( Qt::DisplayRole ).toString().toLower();
     name.replace( QLatin1String( " " ), QLatin1String( "_" ) ).replace( QLatin1String( "&" ), QLatin1String( "and" ) );
     takeScreenshot( name, folder, dlg );
   }
   // -----------------
   // advanced settings
-  dlg->mOptionsListWidget->setCurrentRow( 15 );
+  dlg->mOptionsStackedWidget->setCurrentIndex( dlg->mOptionsStackedWidget->count() - 1 );
   QCoreApplication::processEvents();
-  Q_ASSERT( dlg->mOptionsListWidget->currentItem()->icon().pixmap( 24, 24 ).toImage()
+  Q_ASSERT( dlg->mOptTreeView->currentIndex().data( Qt::DecorationRole ).value< QIcon >().pixmap( 24, 24 ).toImage()
             == QgsApplication::getThemeIcon( QStringLiteral( "/mIconWarning.svg" ) ).pixmap( 24, 24 ).toImage() );
-  dlg->mAdvancedSettingsEditor->show();
+  QWidget *editor = dlg->findChild< QWidget * >( QStringLiteral( "mAdvancedSettingsEditor" ) );
+  if ( editor )
+    editor->show();
   QCoreApplication::processEvents();
   QCoreApplication::processEvents(); // seems a second call is needed, the tabble might not be fully displayed otherwise
   takeScreenshot( QStringLiteral( "advanced_with_settings_shown" ), folder, dlg );

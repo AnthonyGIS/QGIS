@@ -23,7 +23,10 @@
 # fi
 
 # extensions or files that should be excluded from file list if :% is appended in the spelling.dat file
-EXCLUDE_SCRIPT_LIST='(\.(xml|svg|sip|pl|sh|qgs|badquote|cmake(\.in)?)|^(debian/copyright|cmake_templates/.*|tests/testdata/labeling/README.rst|tests/testdata/font/QGIS-Vera/COPYRIGHT.TXT|doc/NEWS\.html|debian/build/))$'
+EXCLUDE_SCRIPT_LIST='(\.(xml|sip|pl|sh|badquote|cmake(\.in)?)|^(debian/copyright|cmake_templates/.*|tests/testdata/labeling/README.rst|tests/testdata/font/QGIS-Vera/COPYRIGHT.TXT|doc/NEWS\.html|debian/build/))$'
+
+# always exclude these external files
+EXCLUDE_EXTERNAL_LIST='((\.(svg|qgs|laz|las|png|lock))|resources/server/src/.*|resources/server/api/ogc/static/landingpage/js/.*|tests/testdata/.*|doc/api_break.dox)$'
 
 DIR=$(git rev-parse --show-toplevel)/scripts/spell_check
 
@@ -160,6 +163,12 @@ for I in $(seq -f '%02g' 0  $((SPLIT-1)) ) ; do
         echo "*** error: no file"
         exit 1
       fi
+
+      if [[ "$FILE" =~ $EXCLUDE_EXTERNAL_LIST ]]; then
+        echo "skipping external file $FILE for $(${GP}sed -r 's/\\//g' <<< $ERRORSMALLCASE)"
+        continue
+      fi
+
       NUMBER=$(echo "$NOCOLOR" | cut -d: -f1)
       ERRORLINE=$(echo "$NOCOLOR" | cut -d: -f2)
       ERROR=$(echo "$LINE" | ${GP}sed -r 's/^.*?\x1B\[30;43m(.*?)\x1B\[0m.*?$/\1/')

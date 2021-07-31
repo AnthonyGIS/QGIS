@@ -27,7 +27,6 @@ QgsStatusBar::QgsStatusBar( QWidget *parent )
   : QWidget( parent )
 {
   mLayout = new QHBoxLayout();
-  mLayout->setMargin( 0 );
   mLayout->setContentsMargins( 2, 0, 2, 0 );
   mLayout->setSpacing( 6 );
 
@@ -77,6 +76,7 @@ void QgsStatusBar::showMessage( const QString &text, int timeout )
     {
       mTempMessageTimer = new QTimer( this );
       connect( mTempMessageTimer, &QTimer::timeout, this, &QgsStatusBar::clearMessage );
+      mTempMessageTimer->setSingleShot( true );
     }
     mTempMessageTimer->start( timeout );
   }

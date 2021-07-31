@@ -15,14 +15,15 @@
 #ifndef QGSVECTORTILEDATAITEMS_H
 #define QGSVECTORTILEDATAITEMS_H
 
-#include "qgsdataitem.h"
+#include "qgsconnectionsitem.h"
+#include "qgslayeritem.h"
 #include "qgsdataitemprovider.h"
 
 ///@cond PRIVATE
 #define SIP_NO_FILE
 
 //! Root item for XYZ tile layers
-class CORE_EXPORT QgsVectorTileRootItem : public QgsDataCollectionItem
+class CORE_EXPORT QgsVectorTileRootItem : public QgsConnectionsRootItem
 {
     Q_OBJECT
   public:

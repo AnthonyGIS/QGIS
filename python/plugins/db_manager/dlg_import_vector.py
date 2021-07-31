@@ -86,7 +86,6 @@ class DlgImportVector(QDialog, Ui_Dialog):
         if mode == self.ASK_FOR_INPUT_MODE:
             self.btnChooseInputFile.clicked.connect(self.chooseInputFile)
             self.cboInputLayer.currentTextChanged.connect(self.updateInputLayer)
-            self.btnUpdateInputLayer.clicked.connect(self.updateInputLayer)
 
             self.editPrimaryKey.setText(self.default_pk)
             self.editGeomColumn.setText(self.default_geom)
@@ -133,7 +132,7 @@ class DlgImportVector(QDialog, Ui_Dialog):
         for nodeLayer in QgsProject.instance().layerTreeRoot().findLayers():
             layer = nodeLayer.layer()
             # TODO: add import raster support!
-            if layer.type() == QgsMapLayerType.VectorLayer:
+            if layer is not None and layer.type() == QgsMapLayerType.VectorLayer:
                 self.cboInputLayer.addItem(layer.name(), layer.id())
 
     def deleteInputLayer(self):

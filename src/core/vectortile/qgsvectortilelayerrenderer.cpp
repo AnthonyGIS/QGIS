@@ -39,7 +39,13 @@ QgsVectorTileLayerRenderer::QgsVectorTileLayerRenderer( QgsVectorTileLayer *laye
   , mRenderer( layer->renderer()->clone() )
   , mDrawTileBoundaries( layer->isTileBorderRenderingEnabled() )
   , mFeedback( new QgsFeedback )
+  , mLayerOpacity( layer->opacity() )
 {
+
+  QgsDataSourceUri dsUri;
+  dsUri.setEncodedUri( layer->source() );
+  mAuthCfg = dsUri.authConfigId();
+  mReferer = dsUri.param( QStringLiteral( "referer" ) );
 
   if ( QgsLabelingEngine *engine = context.labelingEngine() )
   {
@@ -98,7 +104,7 @@ bool QgsVectorTileLayerRenderer::render()
     return true;   // nothing to do
   }
 
-  bool isAsync = ( mSourceType == QStringLiteral( "xyz" ) );
+  bool isAsync = ( mSourceType == QLatin1String( "xyz" ) );
 
   std::unique_ptr<QgsVectorTileLoader> asyncLoader;
   QList<QgsVectorTileRawData> rawTiles;
@@ -106,14 +112,14 @@ bool QgsVectorTileLayerRenderer::render()
   {
     QElapsedTimer tFetch;
     tFetch.start();
-    rawTiles = QgsVectorTileLoader::blockingFetchTileRawData( mSourceType, mSourcePath, mTileMatrix, viewCenter, mTileRange );
+    rawTiles = QgsVectorTileLoader::blockingFetchTileRawData( mSourceType, mSourcePath, mTileMatrix, viewCenter, mTileRange, mAuthCfg, mReferer );
     QgsDebugMsgLevel( QStringLiteral( "Tile fetching time: %1" ).arg( tFetch.elapsed() / 1000. ), 2 );
     QgsDebugMsgLevel( QStringLiteral( "Fetched tiles: %1" ).arg( rawTiles.count() ), 2 );
   }
   else
   {
-    asyncLoader.reset( new QgsVectorTileLoader( mSourcePath, mTileMatrix, mTileRange, viewCenter, mFeedback.get() ) );
-    QObject::connect( asyncLoader.get(), &QgsVectorTileLoader::tileRequestFinished, [this]( const QgsVectorTileRawData & rawTile )
+    asyncLoader.reset( new QgsVectorTileLoader( mSourcePath, mTileMatrix, mTileRange, viewCenter, mAuthCfg, mReferer, mFeedback.get() ) );
+    QObject::connect( asyncLoader.get(), &QgsVectorTileLoader::tileRequestFinished, asyncLoader.get(), [this]( const QgsVectorTileRawData & rawTile )
     {
       QgsDebugMsgLevel( QStringLiteral( "Got tile asynchronously: " ) + rawTile.id.toString(), 2 );
       if ( !rawTile.data.isEmpty() )
@@ -126,7 +132,8 @@ bool QgsVectorTileLayerRenderer::render()
 
   // add @zoom_level variable which can be used in styling
   QgsExpressionContextScope *scope = new QgsExpressionContextScope( QObject::tr( "Tiles" ) ); // will be deleted by popper
-  scope->setVariable( "zoom_level", mTileZoom, true );
+  scope->setVariable( QStringLiteral( "zoom_level" ), mTileZoom, true );
+  scope->setVariable( QStringLiteral( "vector_tile_zoom" ), QgsVectorTileUtils::scaleToZoom( ctx.rendererScale() ), true );
   QgsExpressionContextScopePopper popper( ctx.expressionContext(), scope );
 
   mRenderer->startRender( *renderContext(), mTileZoom, mTileRange );
@@ -135,16 +142,17 @@ bool QgsVectorTileLayerRenderer::render()
 
   if ( mLabelProvider )
   {
-    QMap<QString, QSet<QString> > requiredFieldsLabeling = mLabelProvider->usedAttributes( ctx, mTileZoom );
-    for ( QString layerName : requiredFieldsLabeling.keys() )
+    const QMap<QString, QSet<QString> > requiredFieldsLabeling = mLabelProvider->usedAttributes( ctx, mTileZoom );
+    for ( auto it = requiredFieldsLabeling.begin(); it != requiredFieldsLabeling.end(); ++it )
     {
-      requiredFields[layerName].unite( requiredFieldsLabeling[layerName] );
+      requiredFields[it.key()].unite( it.value() );
     }
   }
 
-  QMap<QString, QgsFields> perLayerFields;
-  for ( QString layerName : requiredFields.keys() )
-    mPerLayerFields[layerName] = QgsVectorTileUtils::makeQgisFields( requiredFields[layerName] );
+  for ( auto it = requiredFields.constBegin(); it != requiredFields.constEnd(); ++it )
+    mPerLayerFields[it.key()] = QgsVectorTileUtils::makeQgisFields( it.value() );
+
+  mRequiredLayers = mRenderer->requiredLayers( ctx, mTileZoom );
 
   if ( mLabelProvider )
   {
@@ -155,6 +163,8 @@ bool QgsVectorTileLayerRenderer::render()
       ctx.labelingEngine()->removeProvider( mLabelProvider );
       mLabelProvider = nullptr; // provider is deleted by the engine
     }
+
+    mRequiredLayers.unite( mLabelProvider->requiredLayers( ctx, mTileZoom ) );
   }
 
   if ( !isAsync )
@@ -183,6 +193,11 @@ bool QgsVectorTileLayerRenderer::render()
   return !ctx.renderingStopped();
 }
 
+bool QgsVectorTileLayerRenderer::forceRasterRender() const
+{
+  return renderContext()->testFlag( QgsRenderContext::UseAdvancedEffects ) && ( !qgsDoubleNear( mLayerOpacity, 1.0 ) );
+}
+
 void QgsVectorTileLayerRenderer::decodeAndDrawTile( const QgsVectorTileRawData &rawTile )
 {
   QgsRenderContext &ctx = *renderContext();
@@ -207,8 +222,17 @@ void QgsVectorTileLayerRenderer::decodeAndDrawTile( const QgsVectorTileRawData &
 
   QgsVectorTileRendererData tile( rawTile.id );
   tile.setFields( mPerLayerFields );
-  tile.setFeatures( decoder.layerFeatures( mPerLayerFields, ct ) );
-  tile.setTilePolygon( QgsVectorTileUtils::tilePolygon( rawTile.id, ct, mTileMatrix, ctx.mapToPixel() ) );
+  tile.setFeatures( decoder.layerFeatures( mPerLayerFields, ct, &mRequiredLayers ) );
+
+  try
+  {
+    tile.setTilePolygon( QgsVectorTileUtils::tilePolygon( rawTile.id, ct, mTileMatrix, ctx.mapToPixel() ) );
+  }
+  catch ( QgsCsException & )
+  {
+    QgsDebugMsgLevel( QStringLiteral( "Failed to generate tile polygon " ) + rawTile.id.toString(), 2 );
+    return;
+  }
 
   mTotalDecodeTime += tLoad.elapsed();
 

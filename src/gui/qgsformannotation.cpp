@@ -27,6 +27,8 @@
 #include "qgsmaptool.h"
 #include "qgsvectorlayer.h"
 #include "qgsgui.h"
+#include "qgsfillsymbol.h"
+
 #include <QDomElement>
 #include <QDir>
 #include <QFile>
@@ -56,9 +58,9 @@ void QgsFormAnnotation::setDesignerForm( const QString &uiFile )
   if ( mDesignerWidget )
   {
     mMinimumSize = mDesignerWidget->minimumSize();
-    if ( fillSymbol() )
+    if ( auto *lFillSymbol = fillSymbol() )
     {
-      QgsFillSymbol *newFill = fillSymbol()->clone();
+      QgsFillSymbol *newFill = lFillSymbol->clone();
       newFill->setColor( mDesignerWidget->palette().color( QPalette::Window ) );
       setFillSymbol( newFill );
     }

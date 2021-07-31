@@ -2,7 +2,7 @@
 ########################################################
 # Files
 
-SET(WFS_SRCS
+set(WFS_SRCS
   ${CMAKE_SOURCE_DIR}/external/nlohmann/json.hpp
   qgswfsprovider.cpp
   qgswfscapabilities.cpp
@@ -28,71 +28,51 @@ SET(WFS_SRCS
   qgsoapifutils.cpp
 )
 
-IF (WITH_GUI)
-  SET(WFS_SRCS ${WFS_SRCS}
+if (WITH_GUI)
+  set(WFS_SRCS ${WFS_SRCS}
     qgswfsprovidergui.cpp
     qgswfsdataitemguiprovider.cpp
     qgswfssourceselect.cpp
     qgswfsnewconnection.cpp
     qgswfsguiutils.cpp
+    qgswfssubsetstringeditor.cpp
   )
-ENDIF ()
+endif()
 
 ########################################################
 # Build
 
-INCLUDE_DIRECTORIES (
-  ${CMAKE_SOURCE_DIR}/src/core
-  ${CMAKE_SOURCE_DIR}/src/core/auth
-  ${CMAKE_SOURCE_DIR}/src/core/expression
-  ${CMAKE_SOURCE_DIR}/src/core/geometry
-  ${CMAKE_SOURCE_DIR}/src/core/symbology  # needed by qgsvectorfilewriter.h
-  ${CMAKE_SOURCE_DIR}/src/core/effects    # needed by qgssymbollayer.h
-  ${CMAKE_SOURCE_DIR}/src/core/labeling
-  ${CMAKE_SOURCE_DIR}/src/core/textrenderer
-  ${CMAKE_SOURCE_DIR}/src/core/geocms/geonode
-  ${CMAKE_SOURCE_DIR}/src/core/metadata
-  ${CMAKE_SOURCE_DIR}/src/gui
-  ${CMAKE_SOURCE_DIR}/src/gui/auth
-  ${CMAKE_SOURCE_DIR}/external
-  ${CMAKE_SOURCE_DIR}/external/nlohmann
+include_directories (
 
-  ${CMAKE_BINARY_DIR}/src/core
-  ${CMAKE_BINARY_DIR}/src/gui
   ${CMAKE_BINARY_DIR}/src/ui
 )
-INCLUDE_DIRECTORIES(SYSTEM
-  ${EXPAT_INCLUDE_DIR}
-  ${QCA_INCLUDE_DIR}
-  ${QTKEYCHAIN_INCLUDE_DIR}
-  ${GDAL_INCLUDE_DIR} # needed by qgsvectorfilewriter.h
-  ${SQLITE3_INCLUDE_DIR}
-  ${GDAL_INCLUDE_DIR}
-)
 
-IF (WITH_GUI)
-  INCLUDE_DIRECTORIES(SYSTEM
+if (WITH_GUI)
+  include_directories(SYSTEM
     ${QSCINTILLA_INCLUDE_DIR}
   )
-ENDIF ()
+endif()
 
-ADD_LIBRARY (wfsprovider MODULE ${WFS_SRCS})
+add_library (provider_wfs MODULE ${WFS_SRCS})
 
-TARGET_LINK_LIBRARIES (wfsprovider
+# require c++17
+target_compile_features(provider_wfs PRIVATE cxx_std_17)
+
+target_link_libraries (provider_wfs
   ${EXPAT_LIBRARY}
   qgis_core
 )
 
-IF (WITH_GUI)
-  TARGET_LINK_LIBRARIES (wfsprovider
+if (WITH_GUI)
+  target_link_libraries (provider_wfs
     qgis_gui
   )
-  ADD_DEPENDENCIES(wfsprovider ui)
-ENDIF ()
+  add_dependencies(provider_wfs ui)
+endif()
 
 ########################################################
 # Install
 
-INSTALL(TARGETS wfsprovider
+install(TARGETS provider_wfs
   RUNTIME DESTINATION ${QGIS_PLUGIN_DIR}
   LIBRARY DESTINATION ${QGIS_PLUGIN_DIR})

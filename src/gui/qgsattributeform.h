@@ -22,7 +22,6 @@
 #include "qgseditorwidgetwrapper.h"
 
 #include <QWidget>
-#include <QSvgWidget>
 #include <QLabel>
 #include <QDialogButtonBox>
 #include "qgis_gui.h"
@@ -36,6 +35,7 @@ class QgsWidgetWrapper;
 class QgsTabWidget;
 class QgsAttributeFormWidget;
 class QgsRelationWidgetWrapper;
+class QSvgWidget;
 
 /**
  * \ingroup gui
@@ -74,6 +74,14 @@ class GUI_EXPORT QgsAttributeForm : public QWidget
     ~QgsAttributeForm() override;
 
     const QgsFeature &feature() { return mFeature; }
+
+    /**
+     * Returns the feature that is currently displayed in the form with all
+     * the changes received on editing the values in the widgets.
+     *
+     * \since QGIS 3.16
+     */
+    QgsFeature currentFormFeature() const { return mCurrentFormFeature; }
 
     /**
      * Displays a warning message in the form message bar
@@ -286,6 +294,17 @@ class GUI_EXPORT QgsAttributeForm : public QWidget
     bool save();
 
     /**
+     * Save all the values from the editors to the layer.
+     *
+     * \param error if specified, will be set to an explanatory error message if an error occurs while saving the form.
+     *
+     * \returns TRUE if save was successful
+     *
+     * \since QGIS 3.18
+     */
+    bool saveWithDetails( QString *error SIP_OUT = nullptr );
+
+    /**
      * Sets all values to the values of the current feature
      */
     void resetValues();
@@ -312,6 +331,11 @@ class GUI_EXPORT QgsAttributeForm : public QWidget
      */
     void parentFormValueChanged( const QString &attribute, const QVariant &newValue );
 
+    /**
+     * Returns TRUE if any of the form widgets need feature geometry
+     * \since QGIS 3.20
+     */
+    bool needsGeometry() const;
 
   private slots:
     void onAttributeChanged( const QVariant &value, const QVariantList &additionalFieldValues );
@@ -321,7 +345,7 @@ class GUI_EXPORT QgsAttributeForm : public QWidget
     void onConstraintStatusChanged( const QString &constraint,
                                     const QString &description, const QString &err, QgsEditorWidgetWrapper::ConstraintResult result );
     void preventFeatureRefresh();
-    void synchronizeEnabledState();
+    void synchronizeState();
     void layerSelectionChanged();
 
     //! Save multi edit changes
@@ -380,7 +404,7 @@ class GUI_EXPORT QgsAttributeForm : public QWidget
     void scanForEqualAttributes( QgsFeatureIterator &fit, QSet< int > &mixedValueFields, QHash< int, QVariant > &fieldSharedValues ) const;
 
     //! Save single feature or add feature edits
-    bool saveEdits();
+    bool saveEdits( QString *error );
 
     //! fill up dependency map for default values
     void createDefaultValueDependencies();
@@ -388,10 +412,9 @@ class GUI_EXPORT QgsAttributeForm : public QWidget
     //! update the default values in the fields after a referenced field changed
     bool updateDefaultValues( const int originIdx );
 
-    int messageTimeout();
     void clearMultiEditMessages();
     void pushSelectedFeaturesMessage();
-    void runSearchSelect( QgsVectorLayer::SelectBehavior behavior );
+    void runSearchSelect( Qgis::SelectBehavior behavior );
 
     QString createFilterExpression() const;
 
@@ -403,14 +426,16 @@ class GUI_EXPORT QgsAttributeForm : public QWidget
     void updateContainersVisibility();
     void updateConstraint( const QgsFeature &ft, QgsEditorWidgetWrapper *eww );
     void updateLabels();
-    bool currentFormFeature( QgsFeature &feature );
+    bool currentFormValuesFeature( QgsFeature &feature );
     bool currentFormValidConstraints( QStringList &invalidFields, QStringList &descriptions );
     QList<QgsEditorWidgetWrapper *> constraintDependencies( QgsEditorWidgetWrapper *w );
 
-    QgsRelationWidgetWrapper *setupRelationWidgetWrapper( const QgsRelation &rel, const QgsAttributeEditorContext &context );
+    Q_DECL_DEPRECATED QgsRelationWidgetWrapper *setupRelationWidgetWrapper( const QgsRelation &rel, const QgsAttributeEditorContext &context ) SIP_DEPRECATED;
+    QgsRelationWidgetWrapper *setupRelationWidgetWrapper( const QString &relationWidgetTypeId, const QgsRelation &rel, const QgsAttributeEditorContext &context );
 
     QgsVectorLayer *mLayer = nullptr;
     QgsFeature mFeature;
+    QgsFeature mCurrentFormFeature;
     QgsMessageBar *mMessageBar = nullptr;
     bool mOwnsMessageBar;
     QgsMessageBarItem *mMultiEditUnsavedMessageBarItem = nullptr;
@@ -428,6 +453,9 @@ class GUI_EXPORT QgsAttributeForm : public QWidget
     bool mValuesInitialized = false;
     bool mDirty = false;
     bool mIsSettingFeature = false;
+
+    bool mValidConstraints = true;
+    QgsMessageBarItem *mConstraintsFailMessageBarItem = nullptr;
 
     struct ContainerInformation
     {
@@ -493,9 +521,10 @@ class GUI_EXPORT QgsAttributeForm : public QWidget
     //! List of updated fields to avoid recursion on the setting of defaultValues
     QList<int> mAlreadyUpdatedFields;
 
+    bool mNeedsGeometry = false;
+
     friend class TestQgsDualView;
     friend class TestQgsAttributeForm;
 };
 
 #endif // QGSATTRIBUTEFORM_H
-

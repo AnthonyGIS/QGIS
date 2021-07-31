@@ -13,7 +13,7 @@
 
 class QgsRasterShaderFunction
 {
-%Docstring
+%Docstring(signature="appended")
 The raster shade function applies a shader to a pixel at render time -
 typically used to render grayscale images as false color.
 %End
@@ -115,7 +115,23 @@ Returns the minimum value for the raster shader.
 Returns legend symbology items if provided by renderer.
 %End
 
+    int labelPrecision() const;
+%Docstring
+Returns label precision
+
+.. versionadded:: 3.16
+%End
+
+    void setLabelPrecision( int labelPrecision );
+%Docstring
+Sets label precision to ``labelPrecision``
+
+.. versionadded:: 3.16
+%End
+
   protected:
+
+
 
 
 };

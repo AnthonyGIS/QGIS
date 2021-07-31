@@ -132,8 +132,8 @@ QgsExpressionBuilderWidget::QgsExpressionBuilderWidget( QWidget *parent )
   txtSearchEdit->setShowSearchIcon( true );
   txtSearchEdit->setPlaceholderText( tr( "Search…" ) );
 
-  mValuesModel = qgis::make_unique<QStandardItemModel>();
-  mProxyValues = qgis::make_unique<QSortFilterProxyModel>();
+  mValuesModel = std::make_unique<QStandardItemModel>();
+  mProxyValues = std::make_unique<QSortFilterProxyModel>();
   mProxyValues->setSourceModel( mValuesModel.get() );
   mValuesListView->setModel( mProxyValues.get() );
   txtSearchEditValues->setShowSearchIcon( true );
@@ -159,8 +159,6 @@ QgsExpressionBuilderWidget::QgsExpressionBuilderWidget( QWidget *parent )
   editorSplit->restoreState( settings.value( QStringLiteral( "Windows/QgsExpressionBuilderWidget/editorsplitter" ) ).toByteArray() );
   functionsplit->restoreState( settings.value( QStringLiteral( "Windows/QgsExpressionBuilderWidget/functionsplitter" ) ).toByteArray() );
   mShowHelpButton->setEnabled( functionsplit->sizes().at( 1 ) == 0 );
-
-  txtExpressionString->setFoldingVisible( false );
 
   if ( QgsPythonRunner::isValid() )
   {
@@ -204,7 +202,8 @@ QgsExpressionBuilderWidget::QgsExpressionBuilderWidget( QWidget *parent )
   txtExpressionString->setCallTipsVisible( 0 );
 
   setExpectedOutputFormat( QString() );
-  mFunctionBuilderHelp->setMarginVisible( false );
+  mFunctionBuilderHelp->setLineNumbersVisible( false );
+  mFunctionBuilderHelp->setFoldingVisible( false );
   mFunctionBuilderHelp->setEdgeMode( QsciScintilla::EdgeNone );
   mFunctionBuilderHelp->setEdgeColumn( 0 );
   mFunctionBuilderHelp->setReadOnly( true );
@@ -287,9 +286,16 @@ void QgsExpressionBuilderWidget::setLayer( QgsVectorLayer *layer )
   if ( mLayer )
   {
     mExpressionContext << QgsExpressionContextUtils::layerScope( mLayer );
-
+    expressionContextUpdated();
     txtExpressionString->setFields( mLayer->fields() );
   }
+}
+
+void QgsExpressionBuilderWidget::expressionContextUpdated()
+{
+  txtExpressionString->setExpressionContext( mExpressionContext );
+  mExpressionTreeView->setExpressionContext( mExpressionContext );
+  mExpressionPreviewWidget->setExpressionContext( mExpressionContext );
 }
 
 QgsVectorLayer *QgsExpressionBuilderWidget::layer() const
@@ -364,7 +370,11 @@ void QgsExpressionBuilderWidget::saveFunctionFile( QString fileName )
   if ( myFile.open( QIODevice::WriteOnly | QFile::Truncate ) )
   {
     QTextStream myFileStream( &myFile );
+#if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)
     myFileStream << txtPython->text() << endl;
+#else
+    myFileStream << txtPython->text() << Qt::endl;
+#endif
     myFile.close();
   }
 }
@@ -393,8 +403,8 @@ void QgsExpressionBuilderWidget::updateFunctionFileList( const QString &path )
   {
     // Create default sample entry.
     newFunctionFile( "default" );
-    txtPython->setText( QStringLiteral( "'''\n#Sample custom function file\n "
-                                        "(uncomment to use and customize or Add button to create a new file) \n%1 \n '''" ).arg( txtPython->text() ) );
+    txtPython->setText( QStringLiteral( "'''\n#Sample custom function file\n"
+                                        "#(uncomment to use and customize or Add button to create a new file) \n%1 \n '''" ).arg( txtPython->text() ) );
     saveFunctionFile( "default" );
   }
 }
@@ -529,7 +539,7 @@ void QgsExpressionBuilderWidget::fillFieldValues( const QString &fieldName, int 
   std::sort( values.begin(), values.end() );
 
   mValuesModel->clear();
-  for ( const QVariant &value : qgis::as_const( values ) )
+  for ( const QVariant &value : std::as_const( values ) )
   {
     QString strValue;
     if ( value.isNull() )
@@ -628,9 +638,7 @@ void QgsExpressionBuilderWidget::setExpectedOutputFormat( const QString &expecte
 void QgsExpressionBuilderWidget::setExpressionContext( const QgsExpressionContext &context )
 {
   mExpressionContext = context;
-  txtExpressionString->setExpressionContext( mExpressionContext );
-  mExpressionTreeView->setExpressionContext( context );
-  mExpressionPreviewWidget->setExpressionContext( context );
+  expressionContextUpdated();
 }
 
 void QgsExpressionBuilderWidget::txtExpressionString_textChanged()

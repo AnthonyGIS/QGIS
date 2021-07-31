@@ -18,17 +18,18 @@
 
 #include "qgis_sip.h"
 #include "qgis_core.h"
+#include "qgsstringutils.h"
+#include "qgstextblock.h"
 
 #include <QVector>
 
-class QgsTextBlock;
 class QgsTextFragment;
 
 /**
  * \class QgsTextDocument
  * \ingroup core
  *
- * Represents a document consisting of one or more QgsTextBlock objects.
+ * \brief Represents a document consisting of one or more QgsTextBlock objects.
  *
  * \warning This API is not considered stable and may change in future QGIS versions.
  *
@@ -77,11 +78,20 @@ class CORE_EXPORT QgsTextDocument
      */
     void reserve( int count );
 
+#ifndef SIP_RUN
+
     /**
      * Returns the block at the specified \a index.
      */
     const QgsTextBlock &at( int index ) const SIP_FACTORY;
-#ifdef SIP_RUN
+#else
+
+    /**
+     * Returns the block at the specified \a index.
+     *
+     * \throws KeyError if no block exists at the specified index.
+     */
+    const QgsTextBlock &at( int index ) const SIP_FACTORY;
     % MethodCode
     if ( a0 < 0 || a0 >= sipCpp->size() )
     {
@@ -136,6 +146,13 @@ class CORE_EXPORT QgsTextDocument
      * if FALSE then the lines are wrapped to an ideal minimum length of \a autoWrapLength characters.
      */
     void splitLines( const QString &wrapCharacter, int autoWrapLength = 0, bool useMaxLineLengthWhenAutoWrapping = true );
+
+    /**
+     * Applies a \a capitalization style to the document's text.
+     *
+     * \since QGIS 3.16
+     */
+    void applyCapitalization( QgsStringUtils::Capitalization capitalization );
 
 #ifndef SIP_RUN
     ///@cond PRIVATE

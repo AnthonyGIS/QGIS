@@ -19,6 +19,8 @@
 #include "qgsimagewarper.h"
 #include "qgscoordinatereferencesystem.h"
 
+#include <memory>
+
 #include <QPointer>
 
 class QAction;
@@ -28,6 +30,7 @@ class QPlainTextEdit;
 class QLabel;
 
 class QgisInterface;
+class QgsDoubleSpinBox;
 class QgsGeorefDataPoint;
 class QgsGCPListWidget;
 class QgsMapTool;
@@ -41,6 +44,7 @@ class QgsGeorefToolAddPoint;
 class QgsGeorefToolDeletePoint;
 class QgsGeorefToolMovePoint;
 class QgsGeorefToolMovePoint;
+class QgsGCPCanvasItem;
 
 class QgsGeorefDockWidget : public QgsDockWidget
 {
@@ -54,16 +58,18 @@ class QgsGeoreferencerMainWindow : public QMainWindow, private Ui::QgsGeorefPlug
     Q_OBJECT
 
   public:
-    QgsGeoreferencerMainWindow( QWidget *parent = nullptr, Qt::WindowFlags fl = nullptr );
+    QgsGeoreferencerMainWindow( QWidget *parent = nullptr, Qt::WindowFlags fl = Qt::WindowFlags() );
     ~QgsGeoreferencerMainWindow() override;
 
   protected:
     void closeEvent( QCloseEvent * ) override;
+    void dropEvent( QDropEvent *event ) override;
+    void dragEnterEvent( QDragEnterEvent *event ) override;
 
   private slots:
     // file
     void reset();
-    void openRaster();
+    void openRaster( const QString &fileName = QString() );
     void doGeoreference();
     void generateGDALScript();
     bool getTransformSettings();
@@ -85,7 +91,7 @@ class QgsGeoreferencerMainWindow : public QMainWindow, private Ui::QgsGeorefPlug
 
     // gcps
     void addPoint( const QgsPointXY &pixelCoords, const QgsPointXY &mapCoords,
-                   bool enable = true, bool finalize = true );
+                   const QgsCoordinateReferenceSystem &crs, bool enable = true, bool finalize = true );
     void deleteDataPoint( QPoint pixelCoords );
     void deleteDataPoint( int index );
     void showCoordDialog( const QgsPointXY &pixelCoords );
@@ -105,6 +111,7 @@ class QgsGeoreferencerMainWindow : public QMainWindow, private Ui::QgsGeorefPlug
     void jumpToGCP( uint theGCPIndex );
     void extentsChangedGeorefCanvas();
     void extentsChangedQGisCanvas();
+    void updateCanvasRotation();
 
     // canvas info
     void showMouseCoords( const QgsPointXY &pt );
@@ -114,12 +121,8 @@ class QgsGeoreferencerMainWindow : public QMainWindow, private Ui::QgsGeorefPlug
     void localHistogramStretch();
     void fullHistogramStretch();
 
-
-    // when one Layer is removed
-    void layerWillBeRemoved( const QString &layerId );
-    void extentsChanged(); // Use for need add again Raster (case above)
-
     bool updateGeorefTransform();
+    void invalidateCanvasCoords();
 
   private:
     enum SaveGCPs
@@ -163,9 +166,12 @@ class QgsGeoreferencerMainWindow : public QMainWindow, private Ui::QgsGeorefPlug
     // gdal script
     void showGDALScript( const QStringList &commands );
     QString generateGDALtranslateCommand( bool generateTFW = true );
-    /* Generate command-line for gdalwarp based on current GCPs and given parameters.
+
+    /**
+     * Generate command-line for gdalwarp based on current GCPs and given parameters.
      * For values in the range 1 to 3, the parameter "order" prescribes the degree of the interpolating polynomials to use,
-     * a value of -1 indicates that thin plate spline interpolation should be used for warping.*/
+     * a value of -1 indicates that thin plate spline interpolation should be used for warping.
+    */
     QString generateGDALwarpCommand( const QString &resampling, const QString &compress, bool useZeroForTrans, int order,
                                      double targetResX, double targetResY );
 
@@ -173,9 +179,8 @@ class QgsGeoreferencerMainWindow : public QMainWindow, private Ui::QgsGeorefPlug
     bool checkReadyGeoref();
     QgsRectangle transformViewportBoundingBox( const QgsRectangle &canvasExtent, QgsGeorefTransform &t,
         bool rasterToWorld = true, uint numSamples = 4 );
-    QString convertTransformEnumToString( QgsGeorefTransform::TransformParametrisation transform );
     QString convertResamplingEnumToString( QgsImageWarper::ResamplingMethod resampling );
-    int polynomialOrder( QgsGeorefTransform::TransformParametrisation transform );
+    int polynomialOrder( QgsGeorefTransform::TransformMethod transform );
     QString guessWorldFileName( const QString &rasterFileName );
     bool checkFileExisting( const QString &fileName, const QString &title, const QString &question );
     bool equalGCPlists( const QgsGCPList &list1, const QgsGCPList &list2 );
@@ -189,7 +194,7 @@ class QgsGeoreferencerMainWindow : public QMainWindow, private Ui::QgsGeorefPlug
      * Note that the RMSE measure is adjusted for the degrees of freedom of the
      * used polynomial transform.
      * \param error out: the mean error
-     * \returns true in case of success
+     * \returns TRUE in case of success
      */
     bool calculateMeanError( double &error ) const;
 
@@ -208,7 +213,9 @@ class QgsGeoreferencerMainWindow : public QMainWindow, private Ui::QgsGeorefPlug
     QLabel *mCoordsLabel = nullptr;
     QLabel *mTransformParamLabel = nullptr;
     QLabel *mEPSG = nullptr;
-    unsigned int mMousePrecisionDecimalPlaces;
+    QLabel *mRotationLabel = nullptr;
+    QgsDoubleSpinBox *mRotationEdit = nullptr;
+    unsigned int mMousePrecisionDecimalPlaces = 0;
 
     QString mRasterFileName;
     QString mModifiedRasterFileName;
@@ -216,12 +223,13 @@ class QgsGeoreferencerMainWindow : public QMainWindow, private Ui::QgsGeorefPlug
     QString mTranslatedRasterFileName;
     QString mGCPpointsFileName;
     QgsCoordinateReferenceSystem mProjection;
+    QgsCoordinateReferenceSystem mLastGCPProjection;
     QString mPdfOutputFile;
     QString mPdfOutputMapFile;
     QString mSaveGcp;
     double  mUserResX, mUserResY;  // User specified target scale
 
-    QgsGeorefTransform::TransformParametrisation mTransformParam;
+    QgsGcpTransformerInterface::TransformMethod mTransformParam = QgsGcpTransformerInterface::TransformMethod::InvalidTransform;
     QgsImageWarper::ResamplingMethod mResamplingMethod;
     QgsGeorefTransform mGeorefTransform;
     QString mCompressionMethod;
@@ -229,8 +237,7 @@ class QgsGeoreferencerMainWindow : public QMainWindow, private Ui::QgsGeorefPlug
     QgsGCPList mPoints;
     QgsGCPList mInitialPoints;
     QgsMapCanvas *mCanvas = nullptr;
-    QgsRasterLayer *mLayer = nullptr;
-    bool mAgainAddRaster;
+    std::unique_ptr< QgsRasterLayer > mLayer;
 
     QgsMapTool *mToolZoomIn = nullptr;
     QgsMapTool *mToolZoomOut = nullptr;
@@ -241,18 +248,19 @@ class QgsGeoreferencerMainWindow : public QMainWindow, private Ui::QgsGeorefPlug
     QgsGeorefToolMovePoint *mToolMovePoint = nullptr;
     QgsGeorefToolMovePoint *mToolMovePointQgis = nullptr;
 
+    QgsGCPCanvasItem *mNewlyAddedPointItem = nullptr;
+
     QgsGeorefDataPoint *mMovingPoint = nullptr;
     QgsGeorefDataPoint *mMovingPointQgis = nullptr;
     QPointer<QgsMapCoordsDialog> mMapCoordsDialog;
 
-    bool mUseZeroForTrans;
+    bool mUseZeroForTrans = false;
     bool mExtentsChangedRecursionGuard;
     bool mGCPsDirty;
-    bool mLoadInQgis;
+    bool mLoadInQgis = false;
 
 
     QgsDockWidget *mDock = nullptr;
-    int messageTimeout();
 };
 
 #endif

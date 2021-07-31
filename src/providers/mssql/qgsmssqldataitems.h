@@ -20,9 +20,13 @@
 #ifndef QGSMSSQLDATAITEMS_H
 #define QGSMSSQLDATAITEMS_H
 
-#include "qgsdataitem.h"
+#include "qgsconnectionsitem.h"
+#include "qgsdatacollectionitem.h"
 #include "qgsdataitemprovider.h"
 #include "qgsmssqltablemodel.h"
+#include "qgsdatabaseschemaitem.h"
+#include "qgslayeritem.h"
+#include "qgsconfig.h"
 
 class QgsMssqlGeomColumnTypeThread;
 
@@ -31,7 +35,7 @@ class QgsMssqlConnectionItem;
 class QgsMssqlSchemaItem;
 class QgsMssqlLayerItem;
 
-class QgsMssqlRootItem : public QgsDataCollectionItem
+class QgsMssqlRootItem : public QgsConnectionsRootItem
 {
     Q_OBJECT
   public:
@@ -61,6 +65,7 @@ class QgsMssqlConnectionItem : public QgsDataCollectionItem
     QVector<QgsDataItem *> createChildren() override;
     bool equal( const QgsDataItem *other ) override;
 
+    using QgsDataCollectionItem::handleDrop;
     bool handleDrop( const QMimeData *data, const QString &toSchema );
 
     QString connInfo() const { return mConnInfo; }
@@ -91,12 +96,14 @@ class QgsMssqlConnectionItem : public QgsDataCollectionItem
     bool mUseEstimatedMetadata;
     bool mAllowGeometrylessTables;
     QgsMssqlGeomColumnTypeThread *mColumnTypeThread = nullptr;
+    QVariantMap mSchemaSettings;
+    bool mSchemasFilteringEnabled = false;
 
     void readConnectionSettings();
     void stop();
 };
 
-class QgsMssqlSchemaItem : public QgsDataCollectionItem
+class QgsMssqlSchemaItem : public QgsDatabaseSchemaItem
 {
     Q_OBJECT
   public:
@@ -105,7 +112,7 @@ class QgsMssqlSchemaItem : public QgsDataCollectionItem
     QVector<QgsDataItem *> createChildren() override;
 
     QgsMssqlLayerItem *addLayer( const QgsMssqlLayerProperty &layerProperty, bool refresh );
-    void refresh() override {} // do not refresh directly
+    void refresh() override; // do not refresh directly (call parent)
     void addLayers( QgsDataItem *newLayers );
 
   public:
@@ -117,7 +124,7 @@ class QgsMssqlLayerItem : public QgsLayerItem
     Q_OBJECT
 
   public:
-    QgsMssqlLayerItem( QgsDataItem *parent, const QString &name, const QString &path, QgsLayerItem::LayerType layerType, const QgsMssqlLayerProperty &layerProperties );
+    QgsMssqlLayerItem( QgsDataItem *parent, const QString &name, const QString &path, Qgis::BrowserLayerType layerType, const QgsMssqlLayerProperty &layerProperties );
 
     QString createUri();
 

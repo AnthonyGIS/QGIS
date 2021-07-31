@@ -26,7 +26,7 @@
 /**
  * \class QgsProxyFeatureSink
  * \ingroup core
- * A simple feature sink which proxies feature addition on to another feature sink.
+ * \brief A simple feature sink which proxies feature addition on to another feature sink.
  *
  * This class is designed to allow factory methods which always return new QgsFeatureSink
  * objects. Since it is not always possible to create an entirely new QgsFeatureSink
@@ -47,6 +47,7 @@ class CORE_EXPORT QgsProxyFeatureSink : public QgsFeatureSink
     bool addFeature( QgsFeature &feature, QgsFeatureSink::Flags flags = QgsFeatureSink::Flags() ) override { return mSink->addFeature( feature, flags ); }
     bool addFeatures( QgsFeatureList &features, QgsFeatureSink::Flags flags = QgsFeatureSink::Flags() ) override { return mSink->addFeatures( features, flags ); }
     bool addFeatures( QgsFeatureIterator &iterator, QgsFeatureSink::Flags flags = QgsFeatureSink::Flags() ) override { return mSink->addFeatures( iterator, flags ); }
+    QString lastError() const override { return mSink->lastError(); }
 
     /**
      * Returns the destination QgsFeatureSink which the proxy will forward features to.

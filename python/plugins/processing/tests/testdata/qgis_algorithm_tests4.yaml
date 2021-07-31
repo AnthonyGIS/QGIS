@@ -177,6 +177,8 @@ tests:
           fields:
             photo: skip
             directory: skip
+            timestamp:
+              cast: str
 
   - algorithm: qgis:concavehull
     name: Concave Hull - Points (0.3)
@@ -549,6 +551,9 @@ tests:
       OUTPUT:
         name: expected/tapered_buffer_line.gml
         type: vector
+        compare:
+          geometry:
+            topo_equal_check: True
 
   - algorithm: native:taperedbuffer
     name: Tapered buffers (multiline)
@@ -561,8 +566,14 @@ tests:
       START_WIDTH: 0.4
     results:
       OUTPUT:
-        name: expected/tapered_buffer_multiline.gml
+        name:
+        - expected/tapered_buffer_multiline.gml
+        - expected/tapered_buffer_multilinev2.gml
         type: vector
+        compare:
+          geometry:
+            topo_equal_check: True
+
 
   - algorithm: native:bufferbym
     name: Variable width buffer by m
@@ -575,6 +586,9 @@ tests:
       OUTPUT:
         name: expected/variable_width_buffer_by_m.gml
         type: vector
+        compare:
+          geometry:
+            topo_equal_check: True
 
   - algorithm: native:reclassifybytable
     name: Reclassify by table
@@ -768,6 +782,7 @@ tests:
     params:
       CLUSTERS: 5
       FIELD_NAME: CLUSTER_ID5
+      SIZE_FIELD_NAME: CLUSTER_SIZE5
       INPUT:
         name: points.gml
         type: vector
@@ -863,10 +878,27 @@ tests:
         name: expected/dbscan_multiple_clusters.gml
         type: vector
 
+  - algorithm: native:stdbscanclustering
+    name: ST-DBScan multiple clusters
+    params:
+      DATETIME_FIELD: date
+      DBSCAN*: false
+      EPS: 5.0
+      EPS2: 1000.0
+      FIELD_NAME: CLUSTER_ID
+      INPUT:
+        name: custom/points_with_date.shp
+        type: vector
+      MIN_SIZE: 1
+    results:
+      OUTPUT:
+        name: expected/stdbscan_multiple_clusters.gml
+        type: vector
+
   - algorithm: qgis:rastersampling
     name: Single band raster
     params:
-      COLUMN_PREFIX: rvalue
+      COLUMN_PREFIX: SAMPLE_
       INPUT:
         name: custom/sampling_points.gml
         type: vector
@@ -1491,7 +1523,10 @@ tests:
           fields:
             sum:
               cast: float
-              precision: 5
+              precision: -1
+            mean:
+              cast: float
+              precision: 3
 
   - algorithm: native:antimeridiansplit
     name: Antimeridian split, lines
@@ -2052,6 +2087,24 @@ tests:
         pk: [fid,fid_2]
 
   - algorithm: native:joinbynearest
+    name: Nearest lines to polys, max distance 0
+    params:
+      INPUT:
+        name: snap_polys.gml|layername=snap_polys
+        type: vector
+      INPUT_2:
+        name: snap_lines.gml|layername=snap_lines
+        type: vector
+      MAX_DISTANCE: 0.0
+      NEIGHBORS: 1
+      PREFIX: ''
+    results:
+      OUTPUT:
+        name: expected/nearest_lines_to_polys_max_distance_0.gml
+        type: vector
+        pk: [fid,fid_2]
+
+  - algorithm: native:joinbynearest
     name: Nearest points to lines, with max distance
     params:
       INPUT:
@@ -2206,9 +2259,11 @@ tests:
     name: Generate vector tiles (Directory)
     params:
       LAYERS:
-      - layer: ../../../../../tests/testdata/lines.shp
-      - layer: ../../../../../tests/testdata/points.shp
-      - layer: ../../../../../tests/testdata/polys.shp
+        type: vrtlayers
+        params:
+        - layer: ../../../../../tests/testdata/lines.shp
+        - layer: ../../../../../tests/testdata/points.shp
+        - layer: ../../../../../tests/testdata/polys.shp
       MAX_ZOOM: 3
       MIN_ZOOM: 1
       XYZ_TEMPLATE: '{z}/{x}/{y}.pbf'
@@ -2244,6 +2299,32 @@ tests:
       OUTPUT:
         name: expected/overlap_analysis_1.gml
         type: vector
+        compare:
+          fields:
+            custom_overlay1_a.geojson_area:
+              precision: 5
+            custom_overlay1_a.geojson_pc:
+              precision: 5
+            custom_overlay1_b.geojson_area:
+              precision: 5
+            custom_overlay1_b.geojson_pc:
+              precision: 5
+            custom_overlay2_a.geojson_area:
+              precision: 5
+            custom_overlay2_a.geojson_pc:
+              precision: 5
+            custom_overlay2_b.geojson_area:
+              precision: 5
+            custom_overlay2_b.geojson_pc:
+              precision: 5
+            custom_overlay3_a.geojson_area:
+              precision: 5
+            custom_overlay3_a.geojson_pc:
+              precision: 5
+            custom_overlay3_b.geojson_area:
+              precision: 4
+            custom_overlay3_b.geojson_pc:
+              precision: 3
 
   - algorithm: native:calculatevectoroverlaps
     name: Overlap analysis reprojected
@@ -2275,13 +2356,29 @@ tests:
         compare:
           fields:
             custom_overlay2_a.geojson_area:
-              precision: 13
+              precision: 8
             custom_overlay2_a.geojson_pc:
-              precision: 13
+              precision: 7
             custom_overlay2_b.geojson_area:
               precision: 8
             custom_overlay2_b.geojson_pc:
               precision: 7
+            custom_overlay1_a.geojson_area:
+              precision: 5
+            custom_overlay1_a.geojson_pc:
+              precision: 5
+            custom_overlay1_b.geojson_area:
+              precision: 5
+            custom_overlay1_b.geojson_pc:
+              precision: 5
+            custom_overlay3_a.geojson_area:
+              precision: 5
+            custom_overlay3_a.geojson_pc:
+              precision: 5
+            custom_overlay3_b.geojson_area:
+              precision: 4
+            custom_overlay3_b.geojson_pc:
+              precision: 3
 
   - algorithm: native:calculatevectoroverlaps
     name: Overlap analysis 3, reordered inputs
@@ -2333,7 +2430,7 @@ tests:
             custom_overlay3_a.geojson_pc:
               precision: 3
             custom_overlay3_b.geojson_area:
-              precision: 8
+              precision: 4
             custom_overlay3_b.geojson_pc:
               precision: 3
 
@@ -2500,6 +2597,133 @@ tests:
       OUTPUT:
         hash: 63610fb1f7ec3d6530591b1eb479355b52cedfebf6331cec77f2b35c
         type: rasterhash
+
+  - algorithm: native:angletonearest
+    name: Align points to nearest line, no max distance
+    params:
+      APPLY_SYMBOLOGY: true
+      FIELD_NAME: rotation
+      INPUT:
+        name: points.gml|layername=points
+        type: vector
+      REFERENCE_LAYER:
+        name: custom/snap_lines_3857.gml|layername=snap_lines_3857
+        type: vector
+    results:
+      OUTPUT:
+        name: expected/rotated_points_no_max.gml
+        type: vector
+        compare:
+          fields:
+            rotation:
+              precision: 2
+
+  - algorithm: native:angletonearest
+    name: Align points to nearest line, max distance
+    params:
+      APPLY_SYMBOLOGY: true
+      FIELD_NAME: angle
+      INPUT:
+        name: points.gml|layername=points
+        type: vector
+      MAX_DISTANCE: 1.0
+      REFERENCE_LAYER:
+        name: custom/snap_lines_3857.gml|layername=snap_lines_3857
+        type: vector
+    results:
+      OUTPUT:
+        name: expected/rotated_points_max.gml
+        type: vector
+        compare:
+          fields:
+            angle:
+              precision: 2
+
+  - algorithm: native:deletecolumn
+    name: Delete one column
+    params:
+      COLUMN:
+      - fid
+      INPUT:
+        name: polys.gml|layername=polys2
+        type: vector
+    results:
+      OUTPUT:
+        name: expected/drop_fields_one.gml
+        type: vector
+
+  - algorithm: native:deletecolumn
+    name: Delete two columns
+    params:
+      COLUMN:
+      - name
+      - floatval
+      INPUT:
+        name: polys.gml|layername=polys2
+        type: vector
+    results:
+      OUTPUT:
+        name: expected/delete_columns_two.gml
+        type: vector
+
+  - algorithm: native:deletecolumn
+    name: Delete three columns
+    params:
+      COLUMN:
+        - fid
+        - intval
+        - doesntexist # should NOT cause algorithm to abort, just a warning -- otherwise we can't make flexible models
+        - floatval
+      INPUT:
+        name: polys.gml|layername=polys2
+        type: vector
+    results:
+      OUTPUT:
+        name: expected/delete_columns_three.gml
+        type: vector
+
+  - algorithm: native:retainfields
+    name: Retain one field
+    params:
+      FIELDS:
+      - name
+      INPUT:
+        name: polys.gml|layername=polys2
+        type: vector
+    results:
+      OUTPUT:
+        name: expected/retain_fields_one.gml
+        type: vector
+
+  - algorithm: native:retainfields
+    name: Retain two fields
+    params:
+      FIELDS:
+      - floatval
+      - name
+      INPUT:
+        name: polys.gml|layername=polys2
+        type: vector
+    results:
+      OUTPUT:
+        name: expected/retain_fields_two.gml
+        type: vector
+
+  - algorithm: native:retainfields
+    name: Retain three fields
+    params:
+      FIELDS:
+      - name
+      - floatval
+      - doesntexist # should NOT cause algorithm to abort, just a warning -- otherwise we can't make flexible models
+      - intval
+      INPUT:
+        name: polys.gml|layername=polys2
+        type: vector
+    results:
+      OUTPUT:
+        name: expected/retain_fields_three.gml
+        type: vector
 
 
 # See ../README.md for a description of the file format

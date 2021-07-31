@@ -27,7 +27,7 @@ class QgsVectorTileRendererData;
 
 /**
  * \ingroup core
- * Internal base class for implementation of label providers for vector tile labeling.
+ * \brief Internal base class for implementation of label providers for vector tile labeling.
  * \since QGIS 3.14
  */
 class QgsVectorTileLabelProvider : public QgsVectorLayerLabelProvider
@@ -38,6 +38,19 @@ class QgsVectorTileLabelProvider : public QgsVectorLayerLabelProvider
 
     //! Returns field names for each sub-layer that are required for labeling
     virtual QMap<QString, QSet<QString> > usedAttributes( const QgsRenderContext &context, int tileZoom ) const = 0;
+
+    //TODO QGIS 4.0 -- make pure virtual
+
+    /**
+     * Returns a list of the layers required for labeling.
+     *
+     * Only layers which are labeled at the specified \a tileZoom should be included in this list.
+     *
+     * An empty string present in the list indicates that all layer in the tiles are required.
+     *
+     * \since QGIS 3.16
+     */
+    virtual QSet< QString > requiredLayers( QgsRenderContext &context, int tileZoom ) const { Q_UNUSED( context ); Q_UNUSED( tileZoom ); return QSet< QString >() << QString(); }
 
     //! Sets fields for each sub-layer
     virtual void setFields( const QMap<QString, QgsFields> &perLayerFields ) = 0;
@@ -50,7 +63,7 @@ class QgsVectorTileLabelProvider : public QgsVectorLayerLabelProvider
 
 /**
  * \ingroup core
- * Base class for labeling configuration classes for vector tile layers.
+ * \brief Base class for labeling configuration classes for vector tile layers.
  *
  * \since QGIS 3.14
  */
@@ -62,7 +75,7 @@ class CORE_EXPORT QgsVectorTileLabeling
 
     const QString type = sipCpp->type();
 
-    if ( type == QStringLiteral( "basic" ) )
+    if ( type == QLatin1String( "basic" ) )
       sipType = sipType_QgsVectorTileBasicLabeling;
     else
       sipType = 0;

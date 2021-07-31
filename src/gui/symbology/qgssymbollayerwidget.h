@@ -21,11 +21,14 @@
 #include "qgis_sip.h"
 #include "qgssymbolwidgetcontext.h"
 #include "qgssymbollayer.h"
+
 #include <QWidget>
 #include <QStandardItemModel>
 
 class QgsVectorLayer;
 class QgsMapCanvas;
+class QgsMarkerSymbol;
+class QgsLineSymbol;
 
 /**
  * \ingroup gui
@@ -137,6 +140,8 @@ class GUI_EXPORT QgsSimpleLineSymbolLayerWidget : public QgsSymbolLayerWidget, p
      */
     QgsSimpleLineSymbolLayerWidget( QgsVectorLayer *vl, QWidget *parent SIP_TRANSFERTHIS = nullptr );
 
+    ~QgsSimpleLineSymbolLayerWidget() override;
+
     /**
      * Creates a new QgsSimpleLineSymbolLayerWidget.
      * \param vl associated vector layer
@@ -146,6 +151,7 @@ class GUI_EXPORT QgsSimpleLineSymbolLayerWidget : public QgsSymbolLayerWidget, p
     // from base class
     void setSymbolLayer( QgsSymbolLayer *layer ) override;
     QgsSymbolLayer *symbolLayer() override;
+    void setContext( const QgsSymbolWidgetContext &context ) override;
 
   protected:
     QgsSimpleLineSymbolLayer *mLayer = nullptr;
@@ -199,6 +205,7 @@ class GUI_EXPORT QgsSimpleMarkerSymbolLayerWidget : public QgsSymbolLayerWidget,
      * \param parent parent widget
      */
     QgsSimpleMarkerSymbolLayerWidget( QgsVectorLayer *vl, QWidget *parent SIP_TRANSFERTHIS = nullptr );
+    ~QgsSimpleMarkerSymbolLayerWidget() override;
 
     /**
      * Creates a new QgsSimpleMarkerSymbolLayerWidget.
@@ -232,6 +239,7 @@ class GUI_EXPORT QgsSimpleMarkerSymbolLayerWidget : public QgsSymbolLayerWidget,
     void setShape();
     void updateAssistantSymbol();
     void penJoinStyleChanged();
+    void penCapStyleChanged();
 
   private:
 
@@ -313,6 +321,7 @@ class GUI_EXPORT QgsFilledMarkerSymbolLayerWidget : public QgsSymbolLayerWidget,
      * \param parent parent widget
      */
     QgsFilledMarkerSymbolLayerWidget( QgsVectorLayer *vl, QWidget *parent SIP_TRANSFERTHIS = nullptr );
+    ~QgsFilledMarkerSymbolLayerWidget() override;
 
     /**
      * Creates a new QgsFilledMarkerSymbolLayerWidget.
@@ -485,6 +494,7 @@ class GUI_EXPORT QgsMarkerLineSymbolLayerWidget : public QgsSymbolLayerWidget, p
     // from base class
     void setSymbolLayer( QgsSymbolLayer *layer ) override;
     QgsSymbolLayer *symbolLayer() override;
+    void setContext( const QgsSymbolWidgetContext &context ) override;
 
   public slots:
 
@@ -515,7 +525,7 @@ class QgsHashedLineSymbolLayer;
 /**
  * \ingroup gui
  * \class QgsHashedLineSymbolLayerWidget
- * Widget for controlling the properties of a QgsHashedLineSymbolLayer.
+ * \brief Widget for controlling the properties of a QgsHashedLineSymbolLayer.
  * \since QGIS 3.8
  */
 class GUI_EXPORT QgsHashedLineSymbolLayerWidget : public QgsSymbolLayerWidget, private Ui::WidgetHashedLine
@@ -540,6 +550,7 @@ class GUI_EXPORT QgsHashedLineSymbolLayerWidget : public QgsSymbolLayerWidget, p
     // from base class
     void setSymbolLayer( QgsSymbolLayer *layer ) override;
     QgsSymbolLayer *symbolLayer() override;
+    void setContext( const QgsSymbolWidgetContext &context ) override;
 
   private slots:
 
@@ -585,6 +596,7 @@ class GUI_EXPORT QgsSvgMarkerSymbolLayerWidget : public QgsSymbolLayerWidget, pr
      * \param parent parent widget
      */
     QgsSvgMarkerSymbolLayerWidget( QgsVectorLayer *vl, QWidget *parent SIP_TRANSFERTHIS = nullptr );
+    ~QgsSvgMarkerSymbolLayerWidget() override;
 
     /**
      * Creates a new QgsSvgMarkerSymbolLayerWidget.
@@ -598,17 +610,33 @@ class GUI_EXPORT QgsSvgMarkerSymbolLayerWidget : public QgsSymbolLayerWidget, pr
 
     void setContext( const QgsSymbolWidgetContext &context ) override;
 
-  protected:
+  public slots:
+    //! Sets the SVG path
+    void setSvgPath( const QString &name );
+    //! Sets the dynamic SVG parameters
+    void setSvgParameters( const QMap<QString, QgsProperty> &parameters );
 
-    void populateList();
-    //update gui for svg file (insert new path, update activation of gui elements for svg params)
-    void setGuiForSvg( const QgsSvgMarkerSymbolLayer *layer );
+
+  protected:
+    // TODO QGIS 4: remove
+
+    /**
+     * This method does nothing anymore, the loading is automatic
+     * \deprecated since QGIS 3.16
+     */
+    Q_DECL_DEPRECATED void populateList() SIP_DEPRECATED {}
+
+    /**
+     * Updates the GUI to reflect the SVG marker symbol \a layer.
+     * \param layer SVG marker symbol layer
+     * \param skipDefaultColors if TRUE, the default fill and outline colors of the SVG file will not overwrite
+     * the ones from the symbol layer
+     */
+    void setGuiForSvg( const QgsSvgMarkerSymbolLayer *layer, bool skipDefaultColors = false );
 
     QgsSvgMarkerSymbolLayer *mLayer = nullptr;
 
   private slots:
-    void setName( const QModelIndex &idx );
-    void populateIcons( const QModelIndex &idx );
     void svgSourceChanged( const QString &text );
     void mChangeColorButton_colorChanged( const QColor &color );
     void mChangeStrokeColorButton_colorChanged( const QColor &color );
@@ -628,7 +656,6 @@ class GUI_EXPORT QgsSvgMarkerSymbolLayerWidget : public QgsSymbolLayerWidget, pr
   private:
 
     std::shared_ptr< QgsMarkerSymbol > mAssistantPreviewSymbol;
-    int mIconSize = 30;
 
 };
 
@@ -774,7 +801,6 @@ class GUI_EXPORT QgsSVGFillSymbolLayerWidget : public QgsSymbolLayerWidget, priv
 
   protected:
     QgsSVGFillSymbolLayer *mLayer = nullptr;
-    void insertIcons();
 
     /**
      * Enables or disables svg fill color, stroke color and stroke width based on whether the
@@ -787,17 +813,14 @@ class GUI_EXPORT QgsSVGFillSymbolLayerWidget : public QgsSymbolLayerWidget, priv
   private slots:
     void mTextureWidthSpinBox_valueChanged( double d );
     void svgSourceChanged( const QString &text );
-    void setFile( const QModelIndex &item );
-    void populateIcons( const QModelIndex &item );
+    void setFile( const QString &name );
+    void setSvgParameters( const QMap<QString, QgsProperty> &parameters );
     void mRotationSpinBox_valueChanged( double d );
     void mChangeColorButton_colorChanged( const QColor &color );
     void mChangeStrokeColorButton_colorChanged( const QColor &color );
     void mStrokeWidthSpinBox_valueChanged( double d );
     void mTextureWidthUnitWidget_changed();
     void mSvgStrokeWidthUnitWidget_changed();
-
-  private:
-    int mIconSize = 30;
 };
 
 //////////
@@ -904,7 +927,7 @@ class QgsRandomMarkerFillSymbolLayer;
  * \ingroup gui
  * \class QgsRandomMarkerFillSymbolLayerWidget
  *
- * Widget for controlling the properties of a QgsRandomMarkerFillSymbolLayer.
+ * \brief Widget for controlling the properties of a QgsRandomMarkerFillSymbolLayer.
  *
  * \since QGIS 3.12
  */
@@ -965,6 +988,7 @@ class GUI_EXPORT QgsFontMarkerSymbolLayerWidget : public QgsSymbolLayerWidget, p
      * \param parent parent widget
      */
     QgsFontMarkerSymbolLayerWidget( QgsVectorLayer *vl, QWidget *parent SIP_TRANSFERTHIS = nullptr );
+    ~QgsFontMarkerSymbolLayerWidget() override;
 
     /**
      * Creates a new QgsFontMarkerSymbolLayerWidget.
@@ -982,7 +1006,8 @@ class GUI_EXPORT QgsFontMarkerSymbolLayerWidget : public QgsSymbolLayerWidget, p
 
     /**
      * Set stroke color.
-     * \since QGIS 2.16 */
+     * \since QGIS 2.16
+    */
     void setColorStroke( const QColor &color );
     void setSize( double size );
     void setAngle( double angle );

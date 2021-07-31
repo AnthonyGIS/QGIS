@@ -25,9 +25,11 @@ class QgsSpatialIndex;
 
 /**
  * \ingroup analysis
+ * \brief A follow boundaries check.
  */
 class ANALYSIS_EXPORT QgsGeometryFollowBoundariesCheck : public QgsGeometryCheck
 {
+    Q_DECLARE_TR_FUNCTIONS( QgsGeometryFollowBoundariesCheck )
   public:
     QgsGeometryFollowBoundariesCheck( QgsGeometryCheckContext *context, const QVariantMap &configuration, QgsVectorLayer *checkLayer );
     ~QgsGeometryFollowBoundariesCheck() override;

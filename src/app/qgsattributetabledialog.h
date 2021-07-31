@@ -171,6 +171,8 @@ class APP_EXPORT QgsAttributeTableDialog : public QDialog, private Ui::QgsAttrib
      * add feature
      */
     void mActionAddFeature_triggered();
+    void mActionAddFeatureViaAttributeTable_triggered();
+    void mActionAddFeatureViaAttributeForm_triggered();
 
     void mActionExpressionSelect_triggered();
 
@@ -225,6 +227,8 @@ class APP_EXPORT QgsAttributeTableDialog : public QDialog, private Ui::QgsAttrib
 
     void updateMultiEditButtonState();
     void deleteFeature( QgsFeatureId fid );
+
+    QList< QPointer< QgsVectorLayer> > mReferencingLayers;
 
     friend class TestQgsAttributeTable;
 };

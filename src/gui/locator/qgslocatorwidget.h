@@ -21,6 +21,8 @@
 #include "qgis_gui.h"
 #include "qgslocatorfilter.h"
 #include "qgsfloatingwidget.h"
+#include "qgsfilterlineedit.h"
+
 #include <QWidget>
 #include <QTreeView>
 #include <QFocusEvent>
@@ -28,15 +30,15 @@
 #include <QTimer>
 
 class QgsLocator;
-class QgsFilterLineEdit;
 class QgsLocatorResultsView;
 class QgsMapCanvas;
 class QgsLocatorModelBridge;
+class QgsLocatorLineEdit;
 
 /**
  * \class QgsLocatorWidget
  * \ingroup gui
- * A special locator widget which allows searching for matching results from a QgsLocator
+ * \brief A special locator widget which allows searching for matching results from a QgsLocator
  * and presenting them to users for selection.
  * \see QgsLocator
  * \since QGIS 3.0
@@ -98,7 +100,7 @@ class GUI_EXPORT QgsLocatorWidget : public QWidget
 
   private:
     QgsLocatorModelBridge *mModelBridge = nullptr;
-    QgsFilterLineEdit *mLineEdit = nullptr;
+    QgsLocatorLineEdit *mLineEdit = nullptr;
     QgsFloatingWidget *mResultsContainer = nullptr;
     QgsLocatorResultsView *mResultsView = nullptr;
     QgsMapCanvas *mMapCanvas = nullptr;
@@ -110,6 +112,7 @@ class GUI_EXPORT QgsLocatorWidget : public QWidget
     bool mHasSelectedResult = false;
 
     void acceptCurrentEntry();
+
 };
 
 #ifndef SIP_RUN
@@ -140,7 +143,7 @@ class QgsLocatorFilterFilter : public QgsLocatorFilter
 /**
  * \class QgsLocatorResultsView
  * \ingroup gui
- * Custom QTreeView designed for showing the results in a QgsLocatorWidget.
+ * \brief Custom QTreeView designed for showing the results in a QgsLocatorWidget.
  * \since QGIS 3.0
  */
 class GUI_EXPORT QgsLocatorResultsView : public QTreeView
@@ -169,6 +172,30 @@ class GUI_EXPORT QgsLocatorResultsView : public QTreeView
      */
     void selectPreviousResult();
 
+};
+
+
+/**
+ * \class QgsLocatorLineEdit
+ * \ingroup gui
+ * \brief Custom line edit to handle completion within the line edit as a light gray text
+ * \since QGIS 3.16
+ */
+class QgsLocatorLineEdit : public QgsFilterLineEdit
+{
+    Q_OBJECT
+  public:
+    explicit QgsLocatorLineEdit( QgsLocatorWidget *locator, QWidget *parent = nullptr );
+
+    //! Performs completion and returns true if successful
+    bool performCompletion();
+
+  protected:
+    void paintEvent( QPaintEvent *event ) override;
+
+  private:
+    QgsLocatorWidget *mLocatorWidget = nullptr;
+    QString mCompletionText = nullptr;
 };
 
 ///@endcond

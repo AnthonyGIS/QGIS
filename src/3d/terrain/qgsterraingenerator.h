@@ -35,7 +35,9 @@ class QgsProject;
 
 /**
  * \ingroup 3d
- * Base class for generators of terrain. All terrain generators are tile based
+ * \brief Base class for generators of terrain.
+ *
+ * All terrain generators are tile based
  * to support hierarchical level of detail. Tiling scheme of a generator is defined
  * by the generator itself. Terrain generators are asked to produce new terrain tiles
  * whenever that is deemed necessary by the terrain controller (that caches generated tiles).
@@ -44,8 +46,9 @@ class QgsProject;
  *
  * \since QGIS 3.0
  */
-class _3D_EXPORT QgsTerrainGenerator : public QgsChunkLoaderFactory
+class _3D_EXPORT QgsTerrainGenerator : public QgsQuadtreeChunkLoaderFactory
 {
+    Q_OBJECT
   public:
 
     //! Enumeration of the available terrain generators
@@ -68,6 +71,9 @@ class _3D_EXPORT QgsTerrainGenerator : public QgsChunkLoaderFactory
 
     //! extent of the terrain in terrain's CRS
     virtual QgsRectangle extent() const = 0;
+
+    //! sets the extent of the terrain in terrain's CRS
+    virtual void setExtent( const QgsRectangle &extent ) { Q_UNUSED( extent ) }
 
     //! Returns bounding box of the root chunk
     virtual QgsAABB rootChunkBbox( const Qgs3DMapSettings &map ) const;
@@ -102,11 +108,21 @@ class _3D_EXPORT QgsTerrainGenerator : public QgsChunkLoaderFactory
     //! Returns whether the terrain generator is valid
     bool isValid() const;
 
+  signals:
+
+    //! Emitted when the terrain extent has changed
+    void extentChanged();
+
+    //! Emitted when the terrain changed (for example, raster DEM or mesh have data changed)
+    void terrainChanged();
+
   protected:
+
     QgsTilingScheme mTerrainTilingScheme;   //!< Tiling scheme of the terrain
     QgsTerrainEntity *mTerrain = nullptr;
 
     bool mIsValid = true;
+
 };
 
 

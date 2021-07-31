@@ -16,6 +16,7 @@
  ***************************************************************************/
 
 #include "qgsmssqlconnection.h"
+#include "qgsmssqlprovider.h"
 #include "qgslogger.h"
 #include "qgssettings.h"
 #include "qgsdatasourceuri.h"
@@ -25,9 +26,14 @@
 #include <QSqlQuery>
 #include <QSet>
 #include <QCoreApplication>
+#include <QFile>
 
 int QgsMssqlConnection::sConnectionId = 0;
-QMutex QgsMssqlConnection::sMutex{ QMutex::Recursive };
+#if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)
+QMutex QgsMssqlConnection::sMutex { QMutex::Recursive };
+#else
+QRecursiveMutex QgsMssqlConnection::sMutex;
+#endif
 
 QSqlDatabase QgsMssqlConnection::getDatabase( const QString &service, const QString &host, const QString &database, const QString &username, const QString &password )
 {
@@ -51,11 +57,11 @@ QSqlDatabase QgsMssqlConnection::getDatabase( const QString &service, const QStr
   else
     connectionName = service;
 
-  const QString threadSafeConnectionName = dbConnectionName( connectionName );
-
   // while everything we use from QSqlDatabase here is thread safe, we need to ensure
   // that the connection cleanup on thread finalization happens in a predictable order
   QMutexLocker locker( &sMutex );
+
+  const QString threadSafeConnectionName = dbConnectionName( connectionName );
 
   if ( !QSqlDatabase::contains( threadSafeConnectionName ) )
   {
@@ -73,10 +79,10 @@ QSqlDatabase QgsMssqlConnection::getDatabase( const QString &service, const QStr
       // and a subsequent call to QSqlDatabase::database with the same thread address (yep it happens, actually a lot)
       // triggers a condition in QSqlDatabase which detects the nullptr private thread data and returns an invalid database instead.
       // QSqlDatabase::removeDatabase is thread safe, so this is ok to do.
-      QObject::connect( QThread::currentThread(), &QThread::finished, QThread::currentThread(), [connectionName]
+      QObject::connect( QThread::currentThread(), &QThread::finished, QThread::currentThread(), [threadSafeConnectionName]
       {
         QMutexLocker locker( &sMutex );
-        QSqlDatabase::removeDatabase( connectionName );
+        QSqlDatabase::removeDatabase( threadSafeConnectionName );
       }, Qt::DirectConnection );
     }
   }
@@ -97,6 +103,16 @@ QSqlDatabase QgsMssqlConnection::getDatabase( const QString &service, const QStr
   {
 #ifdef Q_OS_WIN
     connectionString = "driver={SQL Server}";
+#elif defined (Q_OS_MAC)
+    QString freeTDSDriver( QCoreApplication::applicationDirPath().append( "/lib/libtdsodbc.so" ) );
+    if ( QFile::exists( freeTDSDriver ) )
+    {
+      connectionString = QStringLiteral( "driver=%1;port=1433;TDS_Version=auto" ).arg( freeTDSDriver );
+    }
+    else
+    {
+      connectionString = QStringLiteral( "driver={FreeTDS};port=1433;TDS_Version=auto" );
+    }
 #else
     // It seems that FreeTDS driver by default uses an ancient TDS protocol version (4.2) to communicate with MS SQL
     // which was causing various data corruption errors, for example:
@@ -153,6 +169,30 @@ void QgsMssqlConnection::setGeometryColumnsOnly( const QString &name, bool enabl
 {
   QgsSettings settings;
   settings.setValue( "/MSSQL/connections/" + name + "/geometryColumnsOnly", enabled );
+}
+
+bool QgsMssqlConnection::extentInGeometryColumns( const QString &name )
+{
+  QgsSettings settings;
+  return settings.value( "/MSSQL/connections/" + name + "/extentInGeometryColumns", false ).toBool();
+}
+
+void QgsMssqlConnection::setExtentInGeometryColumns( const QString &name, bool enabled )
+{
+  QgsSettings settings;
+  settings.setValue( "/MSSQL/connections/" + name + "/extentInGeometryColumns", enabled );
+}
+
+bool QgsMssqlConnection::primaryKeyInGeometryColumns( const QString &name )
+{
+  QgsSettings settings;
+  return settings.value( "/MSSQL/connections/" + name + "/primaryKeyInGeometryColumns", false ).toBool();
+}
+
+void QgsMssqlConnection::setPrimaryKeyInGeometryColumns( const QString &name, bool enabled )
+{
+  QgsSettings settings;
+  settings.setValue( "/MSSQL/connections/" + name + "/primaryKeyInGeometryColumns", enabled );
 }
 
 bool QgsMssqlConnection::allowGeometrylessTables( const QString &name )
@@ -313,16 +353,21 @@ QStringList QgsMssqlConnection::schemas( const QString &uri, QString *errorMessa
 // connect to database
   QSqlDatabase db = getDatabase( dsUri.service(), dsUri.host(), dsUri.database(), dsUri.username(), dsUri.password() );
 
-  if ( !openDatabase( db ) )
+  return schemas( db, errorMessage );
+}
+
+QStringList QgsMssqlConnection::schemas( QSqlDatabase &dataBase, QString *errorMessage )
+{
+  if ( !openDatabase( dataBase ) )
   {
     if ( errorMessage )
-      *errorMessage = db.lastError().text();
+      *errorMessage = dataBase.lastError().text();
     return QStringList();
   }
 
   const QString sql = QStringLiteral( "select s.name as schema_name from sys.schemas s" );
 
-  QSqlQuery q = QSqlQuery( db );
+  QSqlQuery q = QSqlQuery( dataBase );
   q.setForwardOnly( true );
   if ( !q.exec( sql ) )
   {
@@ -363,7 +408,6 @@ bool QgsMssqlConnection::isSystemSchema( const QString &schema )
 
 QgsDataSourceUri QgsMssqlConnection::connUri( const QString &connName )
 {
-
   QgsSettings settings;
 
   const QString key = "/MSSQL/connections/" + connName;
@@ -413,6 +457,10 @@ QgsDataSourceUri QgsMssqlConnection::connUri( const QString &connName )
     }
   }
 
+  QStringList excludedSchemas = QgsMssqlConnection::excludedSchemasList( connName );
+  if ( !excludedSchemas.isEmpty() )
+    uri.setParam( QStringLiteral( "excludedSchemas" ), excludedSchemas.join( ',' ) );
+
   return uri;
 }
 
@@ -421,6 +469,135 @@ QStringList QgsMssqlConnection::connectionList()
   QgsSettings settings;
   settings.beginGroup( QStringLiteral( "MSSQL/connections" ) );
   return settings.childGroups();
+}
+
+QList<QgsVectorDataProvider::NativeType> QgsMssqlConnection::nativeTypes()
+{
+  return QList<QgsVectorDataProvider::NativeType>()
+         // integer types
+         << QgsVectorDataProvider::NativeType( QObject::tr( "8 Bytes integer" ), QStringLiteral( "bigint" ), QVariant::Int )
+         << QgsVectorDataProvider::NativeType( QObject::tr( "4 Bytes integer" ), QStringLiteral( "int" ), QVariant::Int )
+         << QgsVectorDataProvider::NativeType( QObject::tr( "2 Bytes integer" ), QStringLiteral( "smallint" ), QVariant::Int )
+         << QgsVectorDataProvider::NativeType( QObject::tr( "1 Bytes integer" ), QStringLiteral( "tinyint" ), QVariant::Int )
+         << QgsVectorDataProvider::NativeType( QObject::tr( "Decimal number (numeric)" ), QStringLiteral( "numeric" ), QVariant::Double, 1, 20, 0, 20 )
+         << QgsVectorDataProvider::NativeType( QObject::tr( "Decimal number (decimal)" ), QStringLiteral( "decimal" ), QVariant::Double, 1, 20, 0, 20 )
+
+         // floating point
+         << QgsVectorDataProvider::NativeType( QObject::tr( "Decimal number (real)" ), QStringLiteral( "real" ), QVariant::Double )
+         << QgsVectorDataProvider::NativeType( QObject::tr( "Decimal number (double)" ), QStringLiteral( "float" ), QVariant::Double )
+
+         // date/time types
+         << QgsVectorDataProvider::NativeType( QObject::tr( "Date" ), QStringLiteral( "date" ), QVariant::Date, -1, -1, -1, -1 )
+         << QgsVectorDataProvider::NativeType( QObject::tr( "Time" ), QStringLiteral( "time" ), QVariant::Time, -1, -1, -1, -1 )
+         << QgsVectorDataProvider::NativeType( QObject::tr( "Date & Time" ), QStringLiteral( "datetime" ), QVariant::DateTime, -1, -1, -1, -1 )
+
+         // string types
+         << QgsVectorDataProvider::NativeType( QObject::tr( "Text, fixed length (char)" ), QStringLiteral( "char" ), QVariant::String, 1, 255 )
+         << QgsVectorDataProvider::NativeType( QObject::tr( "Text, limited variable length (varchar)" ), QStringLiteral( "varchar" ), QVariant::String, 1, 255 )
+         << QgsVectorDataProvider::NativeType( QObject::tr( "Text, fixed length unicode (nchar)" ), QStringLiteral( "nchar" ), QVariant::String, 1, 255 )
+         << QgsVectorDataProvider::NativeType( QObject::tr( "Text, limited variable length unicode (nvarchar)" ), QStringLiteral( "nvarchar" ), QVariant::String, 1, 255 )
+         << QgsVectorDataProvider::NativeType( QObject::tr( "Text, unlimited length (text)" ), QStringLiteral( "text" ), QVariant::String )
+         << QgsVectorDataProvider::NativeType( QObject::tr( "Text, unlimited length unicode (ntext)" ), QStringLiteral( "text" ), QVariant::String )
+         ;
+}
+
+QStringList QgsMssqlConnection::excludedSchemasList( const QString &connName )
+{
+  QgsSettings settings;
+  QString databaseName = settings.value( QStringLiteral( "/MSSQL/connections/" ) + connName + QStringLiteral( "/database" ) ).toString();
+
+  return excludedSchemasList( connName, databaseName );
+}
+
+QStringList QgsMssqlConnection::excludedSchemasList( const QString &connName, const QString &database )
+{
+  QgsSettings settings;
+  bool schemaFilteringEnabled = settings.value( QStringLiteral( "/MSSQL/connections/" ) + connName + QStringLiteral( "/schemasFiltering" ) ).toBool();
+
+  if ( schemaFilteringEnabled )
+  {
+    QVariant schemaSettingsVariant = settings.value( QStringLiteral( "/MSSQL/connections/" ) + connName + QStringLiteral( "/excludedSchemas" ) );
+
+    if ( schemaSettingsVariant.type() == QVariant::Map )
+    {
+      const QVariantMap schemaSettings = schemaSettingsVariant.toMap();
+      if ( schemaSettings.contains( database ) && schemaSettings.value( database ).type() == QVariant::StringList )
+        return schemaSettings.value( database ).toStringList();
+    }
+  }
+
+  return QStringList();
+}
+
+void QgsMssqlConnection::setExcludedSchemasList( const QString &connName, const QStringList &excludedSchemas )
+{
+  QgsSettings settings;
+
+  QString currentDatabaseName = settings.value( QStringLiteral( "/MSSQL/connections/" ) + connName + QStringLiteral( "/database" ) ).toString();
+  setExcludedSchemasList( connName, currentDatabaseName, excludedSchemas );
+}
+
+void QgsMssqlConnection::setExcludedSchemasList( const QString &connName, const QString &database, const QStringList &excludedSchemas )
+{
+  QgsSettings settings;
+  settings.setValue( QStringLiteral( "/MSSQL/connections/" ) + connName + QStringLiteral( "/schemasFiltering" ), excludedSchemas.isEmpty() ? 0 : 1 );
+
+  QVariant schemaSettingsVariant = settings.value( QStringLiteral( "/MSSQL/connections/" ) + connName + QStringLiteral( "/excludedSchemas" ) );
+  QVariantMap schemaSettings = schemaSettingsVariant.toMap();
+  schemaSettings.insert( database, excludedSchemas );
+  settings.setValue( QStringLiteral( "/MSSQL/connections/" ) + connName + QStringLiteral( "/excludedSchemas" ), schemaSettings );
+}
+
+QString QgsMssqlConnection::buildQueryForTables( bool allowTablesWithNoGeometry, bool geometryColumnOnly, const QStringList &excludedSchemaList )
+{
+  QString notSelectedSchemas;
+  if ( !excludedSchemaList.isEmpty() )
+  {
+    QStringList quotedSchemas;
+    for ( const QString &sch : excludedSchemaList )
+      quotedSchemas.append( QgsMssqlProvider::quotedValue( sch ) );
+    notSelectedSchemas = quotedSchemas.join( ',' );
+    notSelectedSchemas.prepend( QStringLiteral( "( " ) );
+    notSelectedSchemas.append( QStringLiteral( " )" ) );
+  }
+
+  QString query( QStringLiteral( "SELECT " ) );
+  if ( geometryColumnOnly )
+  {
+    query += QLatin1String( "f_table_schema, f_table_name, f_geometry_column, srid, geometry_type, 0 FROM geometry_columns" );
+    if ( !notSelectedSchemas.isEmpty() )
+      query += QStringLiteral( " WHERE f_table_schema NOT IN %1" ).arg( notSelectedSchemas );
+  }
+  else
+  {
+    query += QStringLiteral( "sys.schemas.name, sys.objects.name, sys.columns.name, null, 'GEOMETRY', CASE when sys.objects.type = 'V' THEN 1 ELSE 0 END \n"
+                             "FROM sys.columns JOIN sys.types ON sys.columns.system_type_id = sys.types.system_type_id AND sys.columns.user_type_id = sys.types.user_type_id JOIN sys.objects ON sys.objects.object_id = sys.columns.object_id JOIN sys.schemas ON sys.objects.schema_id = sys.schemas.schema_id \n"
+                             "WHERE (sys.types.name = 'geometry' OR sys.types.name = 'geography') AND (sys.objects.type = 'U' OR sys.objects.type = 'V')" );
+    if ( !notSelectedSchemas.isEmpty() )
+      query += QStringLiteral( " AND (sys.schemas.name NOT IN %1)" ).arg( notSelectedSchemas );
+  }
+
+  if ( allowTablesWithNoGeometry )
+  {
+    query += QStringLiteral( " UNION ALL \n"
+                             "SELECT sys.schemas.name, sys.objects.name, null, null, 'NONE', case when sys.objects.type = 'V' THEN 1 ELSE 0 END \n"
+                             "FROM  sys.objects JOIN sys.schemas ON sys.objects.schema_id = sys.schemas.schema_id "
+                             "WHERE NOT EXISTS (SELECT * FROM sys.columns sc1 JOIN sys.types ON sc1.system_type_id = sys.types.system_type_id WHERE (sys.types.name = 'geometry' OR sys.types.name = 'geography') AND sys.objects.object_id = sc1.object_id) AND (sys.objects.type = 'U' or sys.objects.type = 'V')" );
+    if ( !notSelectedSchemas.isEmpty() )
+      query += QStringLiteral( " AND sys.schemas.name NOT IN %1" ).arg( notSelectedSchemas );
+  }
+
+  return query;
+}
+
+QString QgsMssqlConnection::buildQueryForTables( const QString &connName, bool allowTablesWithNoGeometry )
+{
+  return buildQueryForTables( allowTablesWithNoGeometry, geometryColumnsOnly( connName ), excludedSchemasList( connName ) );
+}
+
+QString QgsMssqlConnection::buildQueryForTables( const QString &connName )
+{
+  return buildQueryForTables( allowGeometrylessTables( connName ), geometryColumnsOnly( connName ), excludedSchemasList( connName ) );
 }
 
 QString QgsMssqlConnection::dbConnectionName( const QString &name )

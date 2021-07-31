@@ -20,7 +20,6 @@
 
 #include "ui_qgsmeshcalculatordialogbase.h"
 #include "qgsmeshcalculator.h"
-#include "qgsprovidermetadata.h"
 #include "qgshelp.h"
 #include "qgis_app.h"
 
@@ -36,7 +35,7 @@ class APP_EXPORT QgsMeshCalculatorDialog: public QDialog, private Ui::QgsMeshCal
      * \param parent widget
      * \param f window flags
      */
-    QgsMeshCalculatorDialog( QgsMeshLayer *meshLayer = nullptr, QWidget *parent = nullptr, Qt::WindowFlags f = nullptr );
+    QgsMeshCalculatorDialog( QgsMeshLayer *meshLayer = nullptr, QWidget *parent = nullptr, Qt::WindowFlags f = Qt::WindowFlags() );
     ~QgsMeshCalculatorDialog();
 
     //! Returns new mesh calculator created from dialog options
@@ -128,6 +127,7 @@ class APP_EXPORT QgsMeshCalculatorDialog: public QDialog, private Ui::QgsMeshCal
 
     QgsMeshLayer *mLayer;
     QHash<QString, QgsMeshDriverMetadata> mMeshDrivers;
+    QStringList mVariableNames;
 
     friend class TestQgsMeshCalculatorDialog;
 };

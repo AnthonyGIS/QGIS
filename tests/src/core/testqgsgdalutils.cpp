@@ -41,6 +41,8 @@ class TestQgsGdalUtils: public QObject
     void testResampleSingleBandRaster();
     void testImageToDataset();
     void testResampleImageToImage();
+    void testPathIsCheapToOpen();
+    void testVrtMatchesLayerType();
 
   private:
 
@@ -84,17 +86,10 @@ void TestQgsGdalUtils::supportsRasterCreate()
   QVERIFY( !QgsGdalUtils::supportsRasterCreate( GDALGetDriverByName( "ESRI Shapefile" ) ) );
 }
 
-#if PROJ_VERSION_MAJOR>=6
 #define EPSG_4326_WKT \
   "GEOGCS[\"WGS 84\",DATUM[\"WGS_1984\",SPHEROID[\"WGS 84\",6378137,298.257223563,AUTHORITY[\"EPSG\",\"7030\"]]," \
   "AUTHORITY[\"EPSG\",\"6326\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433," \
   "AUTHORITY[\"EPSG\",\"9122\"]],AXIS[\"Latitude\",NORTH],AXIS[\"Longitude\",EAST],AUTHORITY[\"EPSG\",\"4326\"]]"
-#else
-#define EPSG_4326_WKT \
-  "GEOGCS[\"WGS 84\",DATUM[\"WGS_1984\",SPHEROID[\"WGS 84\",6378137,298.257223563,AUTHORITY[\"EPSG\",\"7030\"]]," \
-  "AUTHORITY[\"EPSG\",\"6326\"]],PRIMEM[\"Greenwich\",0,AUTHORITY[\"EPSG\",\"8901\"]],UNIT[\"degree\",0.0174532925199433," \
-  "AUTHORITY[\"EPSG\",\"9122\"]],AUTHORITY[\"EPSG\",\"4326\"]]"
-#endif
 
 void TestQgsGdalUtils::testCreateSingleBandMemoryDataset()
 {
@@ -105,11 +100,7 @@ void TestQgsGdalUtils::testCreateSingleBandMemoryDataset()
   QCOMPARE( GDALGetRasterXSize( ds1.get() ), 40 );
   QCOMPARE( GDALGetRasterYSize( ds1.get() ), 20 );
 
-#if PROJ_VERSION_MAJOR>=6
   QCOMPARE( GDALGetProjectionRef( ds1.get() ),  R"""(GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AXIS["Latitude",NORTH],AXIS["Longitude",EAST],AUTHORITY["EPSG","4326"]])""" );
-#else
-  QCOMPARE( GDALGetProjectionRef( ds1.get() ), EPSG_4326_WKT );
-#endif
   double geoTransform[6];
   double geoTransformExpected[] = { 1, 0.5, 0, 11, 0, -0.5 };
   QCOMPARE( GDALGetGeoTransform( ds1.get(), geoTransform ), CE_None );
@@ -127,11 +118,7 @@ void TestQgsGdalUtils::testCreateMultiBandMemoryDataset()
   QCOMPARE( GDALGetRasterXSize( ds1.get() ), 40 );
   QCOMPARE( GDALGetRasterYSize( ds1.get() ), 20 );
 
-#if PROJ_VERSION_MAJOR>=6
   QCOMPARE( GDALGetProjectionRef( ds1.get() ),  R"""(GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AXIS["Latitude",NORTH],AXIS["Longitude",EAST],AUTHORITY["EPSG","4326"]])""" );
-#else
-  QCOMPARE( GDALGetProjectionRef( ds1.get() ), EPSG_4326_WKT );
-#endif
   double geoTransform[6];
   double geoTransformExpected[] = { 1, 0.5, 0, 11, 0, -0.5 };
   QCOMPARE( GDALGetGeoTransform( ds1.get(), geoTransform ), CE_None );
@@ -156,11 +143,7 @@ void TestQgsGdalUtils::testCreateSingleBandTiffDataset()
   QCOMPARE( GDALGetRasterXSize( ds1.get() ), 40 );
   QCOMPARE( GDALGetRasterYSize( ds1.get() ), 20 );
 
-#if PROJ_VERSION_MAJOR>=6
   QCOMPARE( GDALGetProjectionRef( ds1.get() ), R"""(GEOGCS["WGS 84",DATUM["WGS_1984",SPHEROID["WGS 84",6378137,298.257223563]],PRIMEM["Greenwich",0],UNIT["degree",0.0174532925199433,AUTHORITY["EPSG","9122"]],AXIS["Latitude",NORTH],AXIS["Longitude",EAST],AUTHORITY["EPSG","4326"]])""" );
-#else
-  QCOMPARE( GDALGetProjectionRef( ds1.get() ), EPSG_4326_WKT );
-#endif
 
   double geoTransform[6];
   double geoTransformExpected[] = { 1, 0.5, 0, 11, 0, -0.5 };
@@ -194,7 +177,7 @@ void TestQgsGdalUtils::testResampleSingleBandRaster()
   gdal::dataset_unique_ptr dstDS = QgsGdalUtils::createSingleBandTiffDataset( outputFilename, GDT_Float32, outputExtent, 2, 2, QgsCoordinateReferenceSystem( "EPSG:4326" ) );
   QVERIFY( dstDS );
 
-  QgsGdalUtils::resampleSingleBandRaster( srcDS.get(), dstDS.get(), GRA_NearestNeighbour );
+  QgsGdalUtils::resampleSingleBandRaster( srcDS.get(), dstDS.get(), GRA_NearestNeighbour, nullptr );
   dstDS.reset();
 
   std::unique_ptr<QgsRasterLayer> layer( new QgsRasterLayer( outputFilename, "test", "gdal" ) );
@@ -285,6 +268,30 @@ void TestQgsGdalUtils::testResampleImageToImage()
   QCOMPARE( qGreen( res.pixel( 40, 40 ) ), 0 );
   QCOMPARE( qBlue( res.pixel( 40, 40 ) ), 255 );
   QCOMPARE( qAlpha( res.pixel( 40, 40 ) ), 255 );
+}
+
+void TestQgsGdalUtils::testPathIsCheapToOpen()
+{
+  // should be safe and report false paths which don't exist
+  QVERIFY( !QgsGdalUtils::pathIsCheapToOpen( "/not/a/file" ) );
+
+  // for now, tiff aren't marked as cheap to open
+  QVERIFY( !QgsGdalUtils::pathIsCheapToOpen( QStringLiteral( TEST_DATA_DIR ) + "/big_raster.tif" ) );
+
+  // a csv is considered cheap to open
+  QVERIFY( QgsGdalUtils::pathIsCheapToOpen( QStringLiteral( TEST_DATA_DIR ) + "/delimitedtext/test.csv" ) );
+
+  // ... unless it's larger than the specified file size limit (500 bytes)
+  QVERIFY( !QgsGdalUtils::pathIsCheapToOpen( QStringLiteral( TEST_DATA_DIR ) + "/delimitedtext/testdms.csv", 500 ) );
+}
+
+void TestQgsGdalUtils::testVrtMatchesLayerType()
+{
+  QVERIFY( QgsGdalUtils::vrtMatchesLayerType( QStringLiteral( TEST_DATA_DIR ) + "/raster/hub13263.vrt", QgsMapLayerType::RasterLayer ) );
+  QVERIFY( !QgsGdalUtils::vrtMatchesLayerType( QStringLiteral( TEST_DATA_DIR ) + "/raster/hub13263.vrt", QgsMapLayerType::VectorLayer ) );
+
+  QVERIFY( !QgsGdalUtils::vrtMatchesLayerType( QStringLiteral( TEST_DATA_DIR ) + "/vector_vrt.vrt", QgsMapLayerType::RasterLayer ) );
+  QVERIFY( QgsGdalUtils::vrtMatchesLayerType( QStringLiteral( TEST_DATA_DIR ) + "/vector_vrt.vrt", QgsMapLayerType::VectorLayer ) );
 }
 
 double TestQgsGdalUtils::identify( GDALDatasetH dataset, int band, int px, int py )

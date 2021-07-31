@@ -28,6 +28,8 @@ email                : a.furieri@lqt.it
 #include "qgsproviderregistry.h"
 #include "qgsproject.h"
 #include "qgsgui.h"
+#include "qgsprovidermetadata.h"
+#include "qgsspatialiteproviderconnection.h"
 
 #include <QInputDialog>
 #include <QMessageBox>
@@ -246,7 +248,8 @@ void QgsSpatiaLiteSourceSelect::setLayerType( const QString &table, const QStrin
 void QgsSpatiaLiteSourceSelect::populateConnectionList()
 {
   cmbConnections->clear();
-  Q_FOREACH ( const QString &name, QgsSpatiaLiteConnection::connectionList() )
+  const QStringList list = QgsSpatiaLiteConnection::connectionList();
+  for ( const QString &name : list )
   {
     // retrieving the SQLite DB name and full path
     QString text = name + tr( "@" ) + QgsSpatiaLiteConnection::connectionPath( name );
@@ -309,8 +312,10 @@ bool QgsSpatiaLiteSourceSelect::newConnection( QWidget *parent )
   // Persist last used SpatiaLite dir
   settings.setValue( QStringLiteral( "UI/lastSpatiaLiteDir" ), myPath );
   // inserting this SQLite DB path
-  settings.setValue( baseKey + "selected", savedName );
-  settings.setValue( baseKey + savedName + "/sqlitepath", myFI.canonicalFilePath() );
+  QgsProviderMetadata *providerMetadata = QgsProviderRegistry::instance()->providerMetadata( QStringLiteral( "spatialite" ) );
+  QgsSpatiaLiteProviderConnection *providerConnection =  static_cast<QgsSpatiaLiteProviderConnection *>( providerMetadata->createConnection( savedName ) );
+  providerMetadata->saveConnection( providerConnection, savedName );
+
   return true;
 }
 
@@ -370,7 +375,8 @@ void QgsSpatiaLiteSourceSelect::btnDelete_clicked()
   if ( result != QMessageBox::Yes )
     return;
 
-  QgsSpatiaLiteConnection::deleteConnection( subKey );
+  QgsProviderMetadata *providerMetadata = QgsProviderRegistry::instance()->providerMetadata( QStringLiteral( "spatialite" ) );
+  providerMetadata->deleteConnection( subKey );
 
   populateConnectionList();
   emit connectionsChanged();
@@ -521,7 +527,13 @@ QString QgsSpatiaLiteSourceSelect::connectionInfo()
 void QgsSpatiaLiteSourceSelect::setSql( const QModelIndex &index )
 {
   QModelIndex idx = mProxyModel.mapToSource( index );
-  QString tableName = mTableModel.itemFromIndex( idx.sibling( idx.row(), 0 ) )->text();
+  const auto item { mTableModel.itemFromIndex( idx.sibling( idx.row(), 0 ) ) };
+  if ( !item )
+  {
+    return;
+  }
+
+  const QString tableName = item->text();
 
   const QgsVectorLayer::LayerOptions options { QgsProject::instance()->transformContext() };
   QgsVectorLayer *vlayer = new QgsVectorLayer( layerURI( idx ), tableName, QStringLiteral( "spatialite" ), options );
@@ -588,7 +600,9 @@ void QgsSpatiaLiteSourceSelect::setSearchExpression( const QString &regexp )
 
 void QgsSpatiaLiteSourceSelect::treeWidgetSelectionChanged( const QItemSelection &, const QItemSelection & )
 {
-  emit enableButtons( !mTablesTreeView->selectionModel()->selection().isEmpty() );
+  const bool selectionIsNotEmpty { !mTablesTreeView->selectionModel()->selection().isEmpty() };
+  mBuildQueryButton->setEnabled( selectionIsNotEmpty );
+  emit enableButtons( selectionIsNotEmpty );
 }
 
 void QgsSpatiaLiteSourceSelect::showHelp()

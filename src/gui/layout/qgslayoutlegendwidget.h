@@ -32,7 +32,7 @@
 
 /**
  * \ingroup gui
- * A widget for setting properties relating to a layout legend.
+ * \brief A widget for setting properties relating to a layout legend.
  *
  * \note This class is not a part of public API
  * \since QGIS 3.12
@@ -82,6 +82,8 @@ class GUI_EXPORT QgsLayoutLegendWidget: public QgsLayoutItemBaseWidget, private 
     void mWmsLegendHeightSpinBox_valueChanged( double d );
     void mTitleSpaceBottomSpinBox_valueChanged( double d );
     void mGroupSpaceSpinBox_valueChanged( double d );
+    void mGroupIndentSpinBox_valueChanged( double d );
+    void mSubgroupIndentSpinBox_valueChanged( double d );
     void mLayerSpaceSpinBox_valueChanged( double d );
     void mSymbolSpaceSpinBox_valueChanged( double d );
     void mIconLabelSpaceSpinBox_valueChanged( double d );
@@ -154,7 +156,7 @@ class GUI_EXPORT QgsLayoutLegendWidget: public QgsLayoutItemBaseWidget, private 
 
 /**
  * \ingroup gui
- * Layout legend menu provider
+ * \brief Layout legend menu provider
  *
  * \note This class is not a part of public API
  * \since QGIS 3.12
@@ -177,7 +179,7 @@ class GUI_EXPORT QgsLayoutLegendMenuProvider : public QgsLayerTreeViewMenuProvid
 
 /**
  * \ingroup gui
- * A widget for properties relating to a node in a layout legend.
+ * \brief A widget for properties relating to a node in a layout legend.
  *
  * \note This class is not a part of public API
  * \since QGIS 3.14
@@ -190,6 +192,8 @@ class GUI_EXPORT QgsLayoutLegendNodeWidget: public QgsPanelWidget, private Ui::Q
 
     QgsLayoutLegendNodeWidget( QgsLayoutItemLegend *legend, QgsLayerTreeNode *node, QgsLayerTreeModelLegendNode *legendNode, int originalLegendNodeIndex, QWidget *parent = nullptr );
 
+    void setDockMode( bool dockMode ) override;
+
   private slots:
 
     void labelChanged();
@@ -197,6 +201,7 @@ class GUI_EXPORT QgsLayoutLegendNodeWidget: public QgsPanelWidget, private Ui::Q
     void insertExpression();
     void sizeChanged( double );
     void customSymbolChanged();
+    void colorRampLegendChanged();
     void columnBreakToggled( bool checked );
     void columnSplitChanged();
 

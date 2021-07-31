@@ -570,7 +570,11 @@ namespace QgsWms
     const QRegExp composerParamRegExp( QStringLiteral( "^MAP\\d+:" ), Qt::CaseInsensitive );
     if ( key.contains( composerParamRegExp ) )
     {
+#if QT_VERSION < QT_VERSION_CHECK(5, 15, 2)
       const int mapId = key.midRef( 3, key.indexOf( ':' ) - 3 ).toInt();
+#else
+      const int mapId = QStringView {key}.mid( 3, key.indexOf( ':' ) - 3 ).toInt();
+#endif
       const QString theKey = key.mid( key.indexOf( ':' ) + 1 );
       const QgsWmsParameter::Name name = QgsWmsParameter::name( theKey );
 
@@ -604,7 +608,7 @@ namespace QgsWms
       }
       else //maybe an external wms parameter?
       {
-        int separator = key.indexOf( QStringLiteral( ":" ) );
+        int separator = key.indexOf( QLatin1Char( ':' ) );
         if ( separator >= 1 )
         {
           QString id = key.left( separator );
@@ -753,22 +757,59 @@ namespace QgsWms
     return mWmsParameters[ QgsWmsParameter::DPI ].toDouble();
   }
 
-  QgsProjectVersion QgsWmsParameters::versionAsNumber() const
+  QString QgsWmsParameters::version() const
   {
-    const QString vStr = version();
+    QString version = QgsServerParameters::version();
 
-    QgsProjectVersion version;
-
-    if ( vStr.isEmpty() )
+    if ( QgsServerParameters::request().compare( QLatin1String( "GetProjectSettings" ), Qt::CaseInsensitive ) == 0 )
     {
-      version = QgsProjectVersion( 1, 3, 0 ); // default value
+      version = QStringLiteral( "1.3.0" );
     }
-    else if ( mVersions.contains( QgsProjectVersion( vStr ) ) )
+    else if ( version.isEmpty() )
     {
-      version = QgsProjectVersion( vStr );
+      if ( ! wmtver().isEmpty() )
+      {
+        version = wmtver();
+      }
+      else
+      {
+        version = QStringLiteral( "1.3.0" );
+      }
+    }
+    else if ( !mVersions.contains( QgsProjectVersion( version ) ) )
+    {
+      // WMS 1.3.0 specification: If a version lower than any of those
+      // known to the server is requested, then the server shall send the
+      // lowest version it supports.
+      if ( QgsProjectVersion( 1, 1, 1 ) > QgsProjectVersion( version ) )
+      {
+        version = QStringLiteral( "1.1.1" );
+      }
+      else
+      {
+        version = QStringLiteral( "1.3.0" );
+      }
     }
 
     return version;
+  }
+
+  QString QgsWmsParameters::request() const
+  {
+    QString req = QgsServerParameters::request();
+
+    if ( version().compare( QLatin1String( "1.1.1" ) ) == 0
+         && req.compare( QLatin1String( "capabilities" ), Qt::CaseInsensitive ) == 0 )
+    {
+      req = QStringLiteral( "GetCapabilities" );
+    }
+
+    return req;
+  }
+
+  QgsProjectVersion QgsWmsParameters::versionAsNumber() const
+  {
+    return QgsProjectVersion( version() );
   }
 
   bool QgsWmsParameters::versionIsValid( const QString version ) const
@@ -1435,7 +1476,7 @@ namespace QgsWms
     for ( int i = 0; i < rawFilters.size(); i++ )
     {
       const QString f = rawFilters[i];
-      if ( f.startsWith( QLatin1String( "<" ) ) \
+      if ( f.startsWith( QLatin1Char( '<' ) ) \
            && f.endsWith( QLatin1String( "Filter>" ) ) \
            &&  i < layers.size() )
       {
@@ -1536,36 +1577,42 @@ namespace QgsWms
     {
       QString layer = layers[i];
 
-      if ( isExternalLayer( layer ) )
-        continue;
-
       QgsWmsParametersLayer param;
       param.mNickname = layer;
-
-      if ( i < styles.count() )
-        param.mStyle = styles[i];
 
       if ( i < opacities.count() )
         param.mOpacity = opacities[i];
 
-      if ( filters.contains( layer ) )
+      if ( isExternalLayer( layer ) )
       {
-        auto it = filters.find( layer );
-        while ( it != filters.end() && it.key() == layer )
-        {
-          param.mFilter.append( it.value() );
-          ++it;
-        }
+        const QgsWmsParametersExternalLayer extParam = externalLayerParameter( layer );
+        param.mNickname = extParam.mName;
+        param.mExternalUri = extParam.mUri;
       }
-
-      if ( layerSelections.contains( layer ) )
+      else
       {
-        QMultiMap<QString, QString>::const_iterator it;
-        it = layerSelections.constFind( layer );
-        while ( it != layerSelections.constEnd() && it.key() == layer )
+        if ( i < styles.count() )
+          param.mStyle = styles[i];
+
+        if ( filters.contains( layer ) )
         {
-          param.mSelection << it.value().split( ',' );
-          ++it;
+          auto it = filters.find( layer );
+          while ( it != filters.end() && it.key() == layer )
+          {
+            param.mFilter.append( it.value() );
+            ++it;
+          }
+        }
+
+        if ( layerSelections.contains( layer ) )
+        {
+          QMultiMap<QString, QString>::const_iterator it;
+          it = layerSelections.constFind( layer );
+          while ( it != layerSelections.constEnd() && it.key() == layer )
+          {
+            param.mSelection << it.value().split( ',' );
+            ++it;
+          }
         }
       }
 
@@ -1736,18 +1783,18 @@ namespace QgsWms
     QStringList layers;
     QList<QgsWmsParametersExternalLayer> eParams;
 
-    for ( const auto &layer : qgis::as_const( allLayers ) )
+    for ( const auto &layer : std::as_const( allLayers ) )
     {
       if ( isExternalLayer( layer ) )
       {
-        eParams << externalLayerParameter( layer );
+        const QgsWmsParametersExternalLayer extParam = externalLayerParameter( layer );
+        layers << extParam.mName;
       }
       else
       {
         layers << layer;
       }
     }
-    param.mExternalLayers = eParams;
 
     QStringList styles;
     wmsParam = idParameter( QgsWmsParameter::STYLES, mapId );
@@ -1884,7 +1931,17 @@ namespace QgsWms
     QMap<QString, QString>::const_iterator paramIt = paramMap.constBegin();
     for ( ; paramIt != paramMap.constEnd(); ++paramIt )
     {
-      wmsUri.setParam( paramIt.key().toLower(), paramIt.value() );
+      QString paramName = paramIt.key().toLower();
+      if ( paramName == QLatin1String( "layers" ) || paramName == QLatin1String( "styles" ) || paramName == QLatin1String( "opacities" ) )
+      {
+        const QStringList values = paramIt.value().split( ',' );
+        for ( const QString &value : values )
+          wmsUri.setParam( paramName, value );
+      }
+      else
+      {
+        wmsUri.setParam( paramName, paramIt.value() );
+      }
     }
     return wmsUri.encodedUri();
   }
@@ -1906,7 +1963,7 @@ namespace QgsWms
 
   void QgsWmsParameters::log( const QString &msg ) const
   {
-    QgsMessageLog::logMessage( msg, QStringLiteral( "Server" ), Qgis::Info );
+    QgsMessageLog::logMessage( msg, QStringLiteral( "Server" ), Qgis::MessageLevel::Info );
   }
 
   void QgsWmsParameters::raiseError( const QString &msg ) const
@@ -2050,7 +2107,7 @@ namespace QgsWms
     const QStringList unmanagedNames = mUnmanagedParameters.keys();
     for ( const QString &key : unmanagedNames )
     {
-      if ( key.startsWith( QStringLiteral( "DIM_" ) ) )
+      if ( key.startsWith( QLatin1String( "DIM_" ) ) )
       {
         dimValues[key.mid( 4 )] = mUnmanagedParameters[key];
       }

@@ -1,48 +1,39 @@
 ########################################################
 # Files
 
-SET (GPS_SRCS
+set (GPS_SRCS
      qgsgpsplugin.cpp
-     qgsbabelformat.cpp
-     qgsgpsdevice.cpp
      qgsgpsplugingui.cpp
-     qgsgpsdevicedialog.cpp
 )
 
-SET (GPS_UIS
+set (GPS_UIS
      qgsgpspluginguibase.ui
-     qgsgpsdevicedialogbase.ui
 )
 
-SET (GPS_RCCS  qgsgps_plugin.qrc)
+set (GPS_RCCS  qgsgps_plugin.qrc)
 
 
 ########################################################
 # Build
 
-QT5_WRAP_UI (GPS_UIS_H  ${GPS_UIS})
+if (WITH_QT6)
+  QT6_WRAP_UI (GPS_UIS_H  ${GPS_UIS})
+else()
+  QT5_WRAP_UI (GPS_UIS_H  ${GPS_UIS})
+endif()
 
-ADD_LIBRARY (gpsimporterplugin MODULE ${GPS_SRCS} ${GPS_RCCS} ${GPS_UIS_H})
+add_library (gpsimporterplugin MODULE ${GPS_SRCS} ${GPS_RCCS} ${GPS_UIS_H})
 
-INCLUDE_DIRECTORIES(
-  ${CMAKE_SOURCE_DIR}/src/core
-  ${CMAKE_SOURCE_DIR}/src/core/expression
-  ${CMAKE_SOURCE_DIR}/src/core/geometry
-  ${CMAKE_SOURCE_DIR}/src/core/layertree
-  ${CMAKE_SOURCE_DIR}/src/core/metadata
-  ${CMAKE_SOURCE_DIR}/src/core/gps
-  ${CMAKE_SOURCE_DIR}/src/core/symbology
-  ${CMAKE_SOURCE_DIR}/src/gui
+# require c++17
+target_compile_features(gpsimporterplugin PRIVATE cxx_std_17)
+
+include_directories(
   ${CMAKE_SOURCE_DIR}/src/plugins
-  ${CMAKE_SOURCE_DIR}/external
-  ${CMAKE_SOURCE_DIR}/external/nlohmann
 
-  ${CMAKE_BINARY_DIR}/src/core
-  ${CMAKE_BINARY_DIR}/src/gui
   ${CMAKE_CURRENT_BINARY_DIR}
 )
 
-TARGET_LINK_LIBRARIES(gpsimporterplugin
+target_link_libraries(gpsimporterplugin
   qgis_core
   qgis_gui
 )
@@ -50,6 +41,6 @@ TARGET_LINK_LIBRARIES(gpsimporterplugin
 ########################################################
 # Install
 
-INSTALL(TARGETS gpsimporterplugin
+install(TARGETS gpsimporterplugin
   RUNTIME DESTINATION ${QGIS_PLUGIN_DIR}
   LIBRARY DESTINATION ${QGIS_PLUGIN_DIR})

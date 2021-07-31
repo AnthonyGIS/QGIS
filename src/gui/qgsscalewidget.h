@@ -28,9 +28,9 @@ class QgsMapCanvas;
 
 /**
  * \ingroup gui
- * A combobox which lets the user select map scale from predefined list
+ * \brief A combobox which lets the user select map scale from predefined list
  * and highlights nearest to current scale value
- **/
+ */
 class GUI_EXPORT QgsScaleWidget : public QWidget
 {
     Q_OBJECT
@@ -43,7 +43,7 @@ class GUI_EXPORT QgsScaleWidget : public QWidget
     /**
      * \brief QgsScaleWidget creates a combobox which lets the user select map scale from predefined list
      * and highlights nearest to current scale value
-     **/
+     */
     explicit QgsScaleWidget( QWidget *parent SIP_TRANSFERTHIS = nullptr );
 
     /**
@@ -85,7 +85,7 @@ class GUI_EXPORT QgsScaleWidget : public QWidget
     double scale() const { return mScaleComboBox->scale(); }
 
     /**
-     * Returns true if the widget is currently set to a "null" value.
+     * Returns TRUE if the widget is currently set to a "null" value.
      *
      * \see setAllowNull()
      * \see setNull()
@@ -168,7 +168,7 @@ class GUI_EXPORT QgsScaleWidget : public QWidget
     /**
      * Sets the widget to the null value.
      *
-     * This only has an effect if allowNull() is true.
+     * This only has an effect if allowNull() is TRUE.
      *
      * \see allowNull()
      * \see isNull()

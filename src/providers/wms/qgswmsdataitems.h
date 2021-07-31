@@ -15,11 +15,13 @@
 #ifndef QGSWMSDATAITEMS_H
 #define QGSWMSDATAITEMS_H
 
-#include "qgsdataitem.h"
+#include "qgsdatacollectionitem.h"
+#include "qgslayeritem.h"
 #include "qgsdataitemprovider.h"
 #include "qgsdatasourceuri.h"
 #include "qgswmsprovider.h"
 #include "qgsgeonodeconnection.h"
+#include "qgsconnectionsitem.h"
 
 class QgsWmsCapabilitiesDownload;
 
@@ -98,7 +100,7 @@ class QgsWMSLayerCollectionItem : public QgsDataCollectionItem, public QgsWMSIte
 
     bool hasDragEnabled() const override;
 
-    QgsMimeDataUtils::Uri mimeUri() const override;
+    QgsMimeDataUtils::UriList mimeUris() const override;
 
   protected:
     //! The URI
@@ -147,7 +149,7 @@ class QgsWMTSLayerItem : public QgsLayerItem
     QString mId, mFormat, mStyle, mTileMatrixSet, mCrs, mTitle;
 };
 
-class QgsWMSRootItem : public QgsDataCollectionItem
+class QgsWMSRootItem : public QgsConnectionsRootItem
 {
     Q_OBJECT
   public:
@@ -160,7 +162,7 @@ class QgsWMSRootItem : public QgsDataCollectionItem
   public slots:
 };
 
-class QgsWMTSRootItem : public QgsDataCollectionItem
+class QgsWMTSRootItem : public QgsConnectionsRootItem
 {
     Q_OBJECT
   public:
@@ -185,7 +187,7 @@ class QgsWmsDataItemProvider : public QgsDataItemProvider
 
 
 //! Root item for XYZ tile layers
-class QgsXyzTileRootItem : public QgsDataCollectionItem
+class QgsXyzTileRootItem : public QgsConnectionsRootItem
 {
     Q_OBJECT
   public:

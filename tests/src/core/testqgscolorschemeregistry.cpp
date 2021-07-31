@@ -213,7 +213,7 @@ void TestQgsColorSchemeRegistry::matchingSchemes()
 
 void TestQgsColorSchemeRegistry::fetchRandomStyleColor()
 {
-  std::unique_ptr<QgsColorSchemeRegistry> registry = qgis::make_unique< QgsColorSchemeRegistry >();
+  std::unique_ptr<QgsColorSchemeRegistry> registry = std::make_unique< QgsColorSchemeRegistry >();
 
   // no randomStyleColorScheme set - test lots of colors to make sure their valid
   for ( int i = 0; i < 10000; ++i )
@@ -239,7 +239,7 @@ void TestQgsColorSchemeRegistry::fetchRandomStyleColor()
   for ( int i = 0; i < 10; ++i )
   {
     QString color = registry->fetchRandomStyleColor().name();
-    QVERIFY( color == QStringLiteral( "#ff0000" ) || color == QStringLiteral( "#00ff00" ) );
+    QVERIFY( color == QLatin1String( "#ff0000" ) || color == QLatin1String( "#00ff00" ) );
   }
 
   // remove current random style color scheme

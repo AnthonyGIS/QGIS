@@ -20,6 +20,7 @@
 #include <QPair>
 #include <QLinearGradient>
 #include <QBrush>
+#include <QPointer>
 #include <algorithm>
 
 #include "qgsmeshlayerrenderer.h"
@@ -40,13 +41,16 @@
 #include "qgsstyle.h"
 #include "qgsmeshdataprovidertemporalcapabilities.h"
 #include "qgsmapclippingutils.h"
+#include "qgscolorrampshader.h"
 
 QgsMeshLayerRenderer::QgsMeshLayerRenderer(
   QgsMeshLayer *layer,
   QgsRenderContext &context )
   : QgsMapLayerRenderer( layer->id(), &context )
+  , mIsEditable( layer->isEditable() )
   , mFeedback( new QgsMeshLayerRendererFeedback )
   , mRendererSettings( layer->rendererSettings() )
+  , mLayerOpacity( layer->opacity() )
 {
   // make copies for mesh data
   // cppcheck-suppress assertWithSideEffect
@@ -57,6 +61,8 @@ QgsMeshLayerRenderer::QgsMeshLayerRenderer(
   Q_ASSERT( layer->rendererCache() );
   // cppcheck-suppress assertWithSideEffect
   Q_ASSERT( layer->dataProvider() );
+
+  mReadyToCompose = false;
 
   // copy native mesh
   mNativeMesh = *( layer->nativeMesh() );
@@ -99,12 +105,11 @@ void QgsMeshLayerRenderer::calculateOutputSize()
 {
   // figure out image size
   QgsRenderContext &context = *renderContext();
-  QgsRectangle extent = context.mapExtent();
-  QgsMapToPixel mapToPixel = context.mapToPixel();
-  QgsPointXY topleft = mapToPixel.transform( extent.xMinimum(), extent.yMaximum() );
-  QgsPointXY bottomright = mapToPixel.transform( extent.xMaximum(), extent.yMinimum() );
-  int width = int( bottomright.x() - topleft.x() );
-  int height = int( bottomright.y() - topleft.y() );
+  const QgsRectangle extent = context.mapExtent();
+  const QgsMapToPixel mapToPixel = context.mapToPixel();
+  const QgsRectangle screenBBox = QgsMeshLayerUtils::boundingBoxToScreenRectangle( mapToPixel, extent );
+  int width = int( screenBBox.width() );
+  int height = int( screenBBox.height() );
   mOutputSize = QSize( width, height );
 }
 
@@ -189,7 +194,6 @@ void QgsMeshLayerRenderer::copyScalarDatasetValues( QgsMeshLayer *layer )
                                  method
                                );
       }
-
     }
 
     const QgsMeshDatasetMetadata datasetMetadata = layer->datasetMetadata( datasetIndex );
@@ -286,6 +290,7 @@ void QgsMeshLayerRenderer::copyVectorDatasetValues( QgsMeshLayer *layer )
 
 bool QgsMeshLayerRenderer::render()
 {
+  mReadyToCompose = false;
   QgsScopedQPainterState painterState( renderContext()->painter() );
   if ( !mClippingRegions.empty() )
   {
@@ -296,15 +301,21 @@ bool QgsMeshLayerRenderer::render()
   }
 
   renderScalarDataset();
+  mReadyToCompose = true;
   renderMesh();
   renderVectorDataset();
 
-  return true;
+  return !renderContext()->renderingStopped();
+}
+
+bool QgsMeshLayerRenderer::forceRasterRender() const
+{
+  return renderContext()->testFlag( QgsRenderContext::UseAdvancedEffects ) && ( !qgsDoubleNear( mLayerOpacity, 1.0 ) );
 }
 
 void QgsMeshLayerRenderer::renderMesh()
 {
-  if ( !mRendererSettings.nativeMeshSettings().isEnabled() &&
+  if ( !mRendererSettings.nativeMeshSettings().isEnabled() && !mIsEditable &&
        !mRendererSettings.edgeMeshSettings().isEnabled() &&
        !mRendererSettings.triangularMeshSettings().isEnabled() )
     return;
@@ -320,7 +331,8 @@ void QgsMeshLayerRenderer::renderMesh()
   }
 
   // native mesh
-  if ( mRendererSettings.nativeMeshSettings().isEnabled() && mTriangularMesh.levelOfDetail() == 0 )
+  if ( ( mRendererSettings.nativeMeshSettings().isEnabled() || mIsEditable ) &&
+       mTriangularMesh.levelOfDetail() == 0 )
   {
     const QSet<int> nativeFacesInExtent = QgsMeshUtils::nativeFacesFromTriangles( trianglesInExtent,
                                           mTriangularMesh.trianglesToNativeFaces() );
@@ -351,8 +363,7 @@ static QPainter *_painterForMeshFrame( QgsRenderContext &context, const QgsMeshR
   pen.setCapStyle( Qt::FlatCap );
   pen.setJoinStyle( Qt::MiterJoin );
 
-  double penWidth = context.convertToPainterUnits( settings.lineWidth(),
-                    QgsUnitTypes::RenderUnit::RenderMillimeters );
+  double penWidth = context.convertToPainterUnits( settings.lineWidth(), settings.lineWidthUnit() );
   pen.setWidthF( penWidth );
   pen.setColor( settings.color() );
   painter->setPen( pen );
@@ -401,7 +412,7 @@ void QgsMeshLayerRenderer::renderFaceMesh(
   const QVector<QgsMeshFace> &faces,
   const QList<int> &facesInExtent )
 {
-  Q_ASSERT( settings.isEnabled() );
+  Q_ASSERT( settings.isEnabled() || mIsEditable );
 
   if ( !mTriangularMesh.contains( QgsMesh::ElementType::Face ) )
     return;

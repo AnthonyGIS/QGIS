@@ -40,21 +40,26 @@ class QgsVectorLayerFeatureSource;
 class QgsAbstract3DSymbol;
 class QgsFeature3DHandler;
 
+namespace Qt3DCore
+{
+  class QTransform;
+}
+
 #include <QFutureWatcher>
 
 
 /**
  * \ingroup 3d
- * This loader factory is responsible for creation of loaders for individual tiles
+ * \brief This loader factory is responsible for creation of loaders for individual tiles
  * of QgsVectorLayerChunkedEntity whenever a new tile is requested by the entity.
  *
  * \since QGIS 3.12
  */
-class QgsVectorLayerChunkLoaderFactory : public QgsChunkLoaderFactory
+class QgsVectorLayerChunkLoaderFactory : public QgsQuadtreeChunkLoaderFactory
 {
   public:
     //! Constructs the factory
-    QgsVectorLayerChunkLoaderFactory( const Qgs3DMapSettings &map, QgsVectorLayer *vl, QgsAbstract3DSymbol *symbol, int leafLevel );
+    QgsVectorLayerChunkLoaderFactory( const Qgs3DMapSettings &map, QgsVectorLayer *vl, QgsAbstract3DSymbol *symbol, int leafLevel, double zMin, double zMax );
 
     //! Creates loader for the given chunk node. Ownership of the returned is passed to the caller.
     virtual QgsChunkLoader *createChunkLoader( QgsChunkNode *node ) const override;
@@ -68,7 +73,7 @@ class QgsVectorLayerChunkLoaderFactory : public QgsChunkLoaderFactory
 
 /**
  * \ingroup 3d
- * This loader class is responsible for async loading of data for a single tile
+ * \brief This loader class is responsible for async loading of data for a single tile
  * of QgsVectorLayerChunkedEntity and creation of final 3D entity from the data
  * previously prepared in a worker thread.
  *
@@ -96,7 +101,7 @@ class QgsVectorLayerChunkLoader : public QgsChunkLoader
 
 /**
  * \ingroup 3d
- * 3D entity used for rendering of vector layers with a single 3D symbol for all features.
+ * \brief 3D entity used for rendering of vector layers with a single 3D symbol for all features.
  *
  * It is implemented using tiling approach with QgsChunkedEntity. Internally it uses
  * QgsVectorLayerChunkLoaderFactory and QgsVectorLayerChunkLoader to do the actual work
@@ -112,6 +117,11 @@ class QgsVectorLayerChunkedEntity : public QgsChunkedEntity
     explicit QgsVectorLayerChunkedEntity( QgsVectorLayer *vl, double zMin, double zMax, const QgsVectorLayer3DTilingSettings &tilingSettings, QgsAbstract3DSymbol *symbol, const Qgs3DMapSettings &map );
 
     ~QgsVectorLayerChunkedEntity();
+  private slots:
+    void onTerrainElevationOffsetChanged( float newOffset );
+
+  private:
+    Qt3DCore::QTransform *mTransform = nullptr;
 };
 
 /// @endcond

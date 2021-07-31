@@ -20,8 +20,9 @@
 #include "qgsmeshdataprovidertemporalcapabilities.h"
 #include "qgsrectangle.h"
 
-QgsMeshDataProvider::QgsMeshDataProvider( const QString &uri, const QgsDataProvider::ProviderOptions &options )
-  : QgsDataProvider( uri, options )
+QgsMeshDataProvider::QgsMeshDataProvider( const QString &uri, const QgsDataProvider::ProviderOptions &options,
+    QgsDataProvider::ReadFlags flags )
+  : QgsDataProvider( uri, options, flags )
 {
 }
 
@@ -42,6 +43,8 @@ void QgsMeshDataProvider::setTemporalUnit( QgsUnitTypes::TemporalUnit unit )
   if ( oldUnit != unit )
     reloadData();
 }
+
+QgsMeshDriverMetadata QgsMeshDataProvider::driverMetadata() const { return QgsMeshDriverMetadata();}
 
 QgsMeshDatasetIndex QgsMeshDatasetSourceInterface::datasetIndexAtTime(
   const QDateTime &referenceTime,
@@ -70,7 +73,7 @@ QgsMeshDatasetIndex QgsMeshDatasetSourceInterface::datasetIndexAtTime(
 }
 
 QgsMeshDatasetSourceInterface::QgsMeshDatasetSourceInterface():
-  mTemporalCapabilities( qgis::make_unique<QgsMeshDataProviderTemporalCapabilities>() ) {}
+  mTemporalCapabilities( std::make_unique<QgsMeshDataProviderTemporalCapabilities>() ) {}
 
 int QgsMeshDatasetSourceInterface::datasetCount( QgsMeshDatasetIndex index ) const
 {
@@ -129,6 +132,26 @@ void QgsMesh::clear()
   vertices.clear();
   edges.clear();
   faces.clear();
+}
+
+bool QgsMesh::compareFaces( const QgsMeshFace &face1, const QgsMeshFace &face2 )
+{
+  if ( face1.count() != face2.count() )
+    return false;
+
+  int startFace2 = 0;
+  for ( int i = 0; i < face2.count(); ++i )
+    if ( face2.at( i ) == face1.at( 0 ) )
+    {
+      startFace2 = i;
+      break;
+    }
+
+  for ( int i = 0; i < face1.count(); ++i )
+    if ( face1.at( i ) != face2.at( ( i + startFace2 ) % ( face2.count() ) ) )
+      return false;
+
+  return true;
 }
 
 bool QgsMesh::contains( const QgsMesh::ElementType &type ) const

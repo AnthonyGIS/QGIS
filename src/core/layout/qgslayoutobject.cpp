@@ -78,6 +78,14 @@ void QgsLayoutObject::initPropertyDefinitions()
     { QgsLayoutObject::MapGridCrossSize, QgsPropertyDefinition( "dataDefinedMapGridCrossSize", QObject::tr( "Grid cross size" ), QgsPropertyDefinition::DoublePositive ) },
     { QgsLayoutObject::MapGridFrameMargin, QgsPropertyDefinition( "dataDefinedMapGridFrameMargin", QObject::tr( "Grid frame margin" ), QgsPropertyDefinition::DoublePositive ) },
     { QgsLayoutObject::MapGridLabelDistance, QgsPropertyDefinition( "dataDefinedMapGridLabelDistance", QObject::tr( "Grid label distance" ), QgsPropertyDefinition::DoublePositive ) },
+    { QgsLayoutObject::MapGridAnnotationDisplayLeft, QgsPropertyDefinition( "dataDefinedMapGridAnnotationDisplayLeft", QgsPropertyDefinition::DataTypeString, QObject::tr( "Map grid annotation display left" ), QObject::tr( "string " ) + QLatin1String( "[<b>all</b>|<b>x_only</b>|<b>y_only</b>|<b>disabled</b>]" ) ) },
+    { QgsLayoutObject::MapGridAnnotationDisplayRight, QgsPropertyDefinition( "dataDefinedMapGridAnnotationDisplayRight", QgsPropertyDefinition::DataTypeString, QObject::tr( "Map grid annotation display right" ), QObject::tr( "string " ) + QLatin1String( "[<b>all</b>|<b>x_only</b>|<b>y_only</b>|<b>disabled</b>]" ) ) },
+    { QgsLayoutObject::MapGridAnnotationDisplayTop, QgsPropertyDefinition( "dataDefinedMapGridAnnotationDisplayTop", QgsPropertyDefinition::DataTypeString, QObject::tr( "Map grid annotation display top" ), QObject::tr( "string " ) + QLatin1String( "[<b>all</b>|<b>x_only</b>|<b>y_only</b>|<b>disabled</b>]" ) ) },
+    { QgsLayoutObject::MapGridAnnotationDisplayBottom, QgsPropertyDefinition( "dataDefinedMapGridAnnotationDisplayBottom", QgsPropertyDefinition::DataTypeString, QObject::tr( "Map grid annotation display bottom" ), QObject::tr( "string " ) + QLatin1String( "[<b>all</b>|<b>x_only</b>|<b>y_only</b>|<b>disabled</b>]" ) ) },
+    { QgsLayoutObject::MapGridFrameDivisionsLeft, QgsPropertyDefinition( "dataDefinedMapGridFrameDivisionsLeft", QgsPropertyDefinition::DataTypeString, QObject::tr( "Map grid frame divisions display left" ), QObject::tr( "string " ) + QLatin1String( "[<b>all</b>|<b>x_only</b>|<b>y_only</b>|<b>disabled</b>]" ) ) },
+    { QgsLayoutObject::MapGridFrameDivisionsRight, QgsPropertyDefinition( "dataDefinedMapGridFrameDivisionsRight", QgsPropertyDefinition::DataTypeString, QObject::tr( "Map grid frame divisions display right" ), QObject::tr( "string " ) + QLatin1String( "[<b>all</b>|<b>x_only</b>|<b>y_only</b>|<b>disabled</b>]" ) ) },
+    { QgsLayoutObject::MapGridFrameDivisionsTop, QgsPropertyDefinition( "dataDefinedMapGridFrameDivisionsTop", QgsPropertyDefinition::DataTypeString, QObject::tr( "Map grid frame divisions display top" ), QObject::tr( "string " ) + QLatin1String( "[<b>all</b>|<b>x_only</b>|<b>y_only</b>|<b>disabled</b>]" ) ) },
+    { QgsLayoutObject::MapGridFrameDivisionsBottom, QgsPropertyDefinition( "dataDefinedMapGridFrameDivisionsBottom", QgsPropertyDefinition::DataTypeString, QObject::tr( "Map grid frame divisions display bottom" ), QObject::tr( "string " ) + QLatin1String( "[<b>all</b>|<b>x_only</b>|<b>y_only</b>|<b>disabled</b>]" ) ) },
     { QgsLayoutObject::PictureSource, QgsPropertyDefinition( "dataDefinedSource", QObject::tr( "Picture source (URL)" ), QgsPropertyDefinition::String ) },
     { QgsLayoutObject::SourceUrl, QgsPropertyDefinition( "dataDefinedSourceUrl", QObject::tr( "Source URL" ), QgsPropertyDefinition::String ) },
     { QgsLayoutObject::PictureSvgBackgroundColor, QgsPropertyDefinition( "dataDefinedSvgBackgroundColor", QObject::tr( "SVG background color" ), QgsPropertyDefinition::ColorWithAlpha ) },
@@ -100,6 +108,80 @@ const QgsPropertiesDefinition &QgsLayoutObject::propertyDefinitions()
 {
   QgsLayoutObject::initPropertyDefinitions();
   return sPropertyDefinitions;
+}
+
+bool QgsLayoutObject::propertyAssociatesWithParentMultiframe( QgsLayoutObject::DataDefinedProperty property )
+{
+  switch ( property )
+  {
+    case QgsLayoutObject::SourceUrl:
+    case QgsLayoutObject::AttributeTableSourceLayer:
+      return true;
+
+    case QgsLayoutObject::NoProperty:
+    case QgsLayoutObject::AllProperties:
+    case QgsLayoutObject::TestProperty:
+    case QgsLayoutObject::PresetPaperSize:
+    case QgsLayoutObject::PaperWidth:
+    case QgsLayoutObject::PaperHeight:
+    case QgsLayoutObject::NumPages:
+    case QgsLayoutObject::PaperOrientation:
+    case QgsLayoutObject::PageNumber:
+    case QgsLayoutObject::PositionX:
+    case QgsLayoutObject::PositionY:
+    case QgsLayoutObject::ItemWidth:
+    case QgsLayoutObject::ItemHeight:
+    case QgsLayoutObject::ItemRotation:
+    case QgsLayoutObject::Transparency:
+    case QgsLayoutObject::Opacity:
+    case QgsLayoutObject::BlendMode:
+    case QgsLayoutObject::ExcludeFromExports:
+    case QgsLayoutObject::FrameColor:
+    case QgsLayoutObject::BackgroundColor:
+    case QgsLayoutObject::MapRotation:
+    case QgsLayoutObject::MapScale:
+    case QgsLayoutObject::MapXMin:
+    case QgsLayoutObject::MapYMin:
+    case QgsLayoutObject::MapXMax:
+    case QgsLayoutObject::MapYMax:
+    case QgsLayoutObject::MapAtlasMargin:
+    case QgsLayoutObject::MapLayers:
+    case QgsLayoutObject::MapStylePreset:
+    case QgsLayoutObject::MapLabelMargin:
+    case QgsLayoutObject::MapGridEnabled:
+    case QgsLayoutObject::MapGridIntervalX:
+    case QgsLayoutObject::MapGridIntervalY:
+    case QgsLayoutObject::MapGridOffsetX:
+    case QgsLayoutObject::MapGridOffsetY:
+    case QgsLayoutObject::MapGridFrameSize:
+    case QgsLayoutObject::MapGridFrameMargin:
+    case QgsLayoutObject::MapGridLabelDistance:
+    case QgsLayoutObject::MapGridCrossSize:
+    case QgsLayoutObject::MapGridFrameLineThickness:
+    case QgsLayoutObject::MapGridAnnotationDisplayLeft:
+    case QgsLayoutObject::MapGridAnnotationDisplayRight:
+    case QgsLayoutObject::MapGridAnnotationDisplayTop:
+    case QgsLayoutObject::MapGridAnnotationDisplayBottom:
+    case QgsLayoutObject::MapGridFrameDivisionsLeft:
+    case QgsLayoutObject::MapGridFrameDivisionsRight:
+    case QgsLayoutObject::MapGridFrameDivisionsTop:
+    case QgsLayoutObject::MapGridFrameDivisionsBottom:
+    case QgsLayoutObject::PictureSource:
+    case QgsLayoutObject::PictureSvgBackgroundColor:
+    case QgsLayoutObject::PictureSvgStrokeColor:
+    case QgsLayoutObject::PictureSvgStrokeWidth:
+    case QgsLayoutObject::LegendTitle:
+    case QgsLayoutObject::LegendColumnCount:
+    case QgsLayoutObject::ScalebarFillColor:
+    case QgsLayoutObject::ScalebarFillColor2:
+    case QgsLayoutObject::ScalebarLineColor:
+    case QgsLayoutObject::ScalebarLineWidth:
+    case QgsLayoutObject::MapCrs:
+    case QgsLayoutObject::StartDateTime:
+    case QgsLayoutObject::EndDateTime:
+      return false;
+  }
+  return false;
 }
 
 QgsLayoutObject::QgsLayoutObject( QgsLayout *layout )

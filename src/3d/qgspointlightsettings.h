@@ -26,7 +26,7 @@ class QDomElement;
 
 /**
  * \ingroup 3d
- * Definition of a point light in a 3D map scene
+ * \brief Definition of a point light in a 3D map scene
  *
  * Total light at the distance D from a point light with intensity I
  * is (I / TA) where TA is total attenuation which is calculated as
@@ -76,12 +76,13 @@ class _3D_EXPORT QgsPointLightSettings
     //! Reads configuration from a DOM element previously written using writeXml()
     void readXml( const QDomElement &elem );
 
+    // TODO c++20 - replace with = default
     bool operator==( const QgsPointLightSettings &other );
 
   private:
-    QgsVector3D mPosition;
+    QgsVector3D mPosition { 0, 1000, 0 };
     QColor mColor = Qt::white;
-    float mIntensity = 0.5;
+    float mIntensity = 1.0;
     float mConstantAttenuation = 1.0f;
     float mLinearAttenuation = 0.0f;
     float mQuadraticAttenuation = 0.0f;

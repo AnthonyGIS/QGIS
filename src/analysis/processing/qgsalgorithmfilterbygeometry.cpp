@@ -36,12 +36,12 @@ QStringList QgsFilterByGeometryAlgorithm::tags() const
 
 QString QgsFilterByGeometryAlgorithm::group() const
 {
-  return QObject::tr( "Vector selection" );
+  return QObject::tr( "Modeler tools" );
 }
 
 QString QgsFilterByGeometryAlgorithm::groupId() const
 {
-  return QStringLiteral( "vectorselection" );
+  return QStringLiteral( "modelertools" );
 }
 
 QgsProcessingAlgorithm::Flags QgsFilterByGeometryAlgorithm::flags() const
@@ -164,21 +164,24 @@ QVariantMap QgsFilterByGeometryAlgorithm::processAlgorithm( const QVariantMap &p
         case QgsWkbTypes::PointGeometry:
           if ( pointSink )
           {
-            pointSink->addFeature( f, QgsFeatureSink::FastInsert );
+            if ( !pointSink->addFeature( f, QgsFeatureSink::FastInsert ) )
+              throw QgsProcessingException( writeFeatureError( pointSink.get(), parameters, QStringLiteral( "POINTS" ) ) );
           }
           pointCount++;
           break;
         case QgsWkbTypes::LineGeometry:
           if ( lineSink )
           {
-            lineSink->addFeature( f, QgsFeatureSink::FastInsert );
+            if ( !lineSink->addFeature( f, QgsFeatureSink::FastInsert ) )
+              throw QgsProcessingException( writeFeatureError( lineSink.get(), parameters, QStringLiteral( "LINES" ) ) );
           }
           lineCount++;
           break;
         case QgsWkbTypes::PolygonGeometry:
           if ( polygonSink )
           {
-            polygonSink->addFeature( f, QgsFeatureSink::FastInsert );
+            if ( !polygonSink->addFeature( f, QgsFeatureSink::FastInsert ) )
+              throw QgsProcessingException( writeFeatureError( polygonSink.get(), parameters, QStringLiteral( "POLYGONS" ) ) );
           }
           polygonCount++;
           break;
@@ -191,7 +194,8 @@ QVariantMap QgsFilterByGeometryAlgorithm::processAlgorithm( const QVariantMap &p
     {
       if ( noGeomSink )
       {
-        noGeomSink->addFeature( f, QgsFeatureSink::FastInsert );
+        if ( !noGeomSink->addFeature( f, QgsFeatureSink::FastInsert ) )
+          throw QgsProcessingException( writeFeatureError( noGeomSink.get(), parameters, QStringLiteral( "NO_GEOMETRY" ) ) );
       }
       nullCount++;
     }
@@ -242,12 +246,12 @@ QStringList QgsFilterByLayerTypeAlgorithm::tags() const
 
 QString QgsFilterByLayerTypeAlgorithm::group() const
 {
-  return QObject::tr( "Layer tools" );
+  return QObject::tr( "Modeler tools" );
 }
 
 QString QgsFilterByLayerTypeAlgorithm::groupId() const
 {
-  return QStringLiteral( "layertools" );
+  return QStringLiteral( "modelertools" );
 }
 
 QgsProcessingAlgorithm::Flags QgsFilterByLayerTypeAlgorithm::flags() const
@@ -304,6 +308,8 @@ QVariantMap QgsFilterByLayerTypeAlgorithm::processAlgorithm( const QVariantMap &
     case QgsMapLayerType::PluginLayer:
     case QgsMapLayerType::MeshLayer:
     case QgsMapLayerType::VectorTileLayer:
+    case QgsMapLayerType::AnnotationLayer:
+    case QgsMapLayerType::PointCloudLayer:
       break;
   }
 

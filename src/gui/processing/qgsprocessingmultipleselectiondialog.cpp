@@ -20,6 +20,8 @@
 #include "qgsvectorlayer.h"
 #include "qgsmeshlayer.h"
 #include "qgsrasterlayer.h"
+#include "qgspluginlayer.h"
+#include "qgsproject.h"
 #include "processing/models/qgsprocessingmodelchildparametersource.h"
 #include <QStandardItemModel>
 #include <QStandardItem>
@@ -27,6 +29,7 @@
 #include <QLineEdit>
 #include <QToolButton>
 #include <QFileDialog>
+#include <QDirIterator>
 
 ///@cond NOT_STABLE
 
@@ -37,14 +40,9 @@ QgsProcessingMultipleSelectionPanelWidget::QgsProcessingMultipleSelectionPanelWi
   , mValueFormatter( []( const QVariant & v )->QString
 {
   if ( v.canConvert< QgsProcessingModelChildParameterSource >() )
-  {
     return v.value< QgsProcessingModelChildParameterSource >().staticValue().toString();
-  }
   else
-  {
     return v.toString();
-  }
-  return QString();
 } )
 {
   setupUi( this );
@@ -88,11 +86,34 @@ QVariantList QgsProcessingMultipleSelectionPanelWidget::selectedOptions() const
 {
   QVariantList options;
   options.reserve( mModel->rowCount() );
+  bool hasModelSources = false;
   for ( int i = 0; i < mModel->rowCount(); ++i )
   {
     if ( mModel->item( i )->checkState() == Qt::Checked )
-      options << mModel->item( i )->data( Qt::UserRole );
+    {
+      const QVariant option = mModel->item( i )->data( Qt::UserRole );
+
+      if ( option.canConvert< QgsProcessingModelChildParameterSource >() )
+        hasModelSources = true;
+
+      options << option;
+    }
   }
+
+  if ( hasModelSources )
+  {
+    // if any selected value is a QgsProcessingModelChildParameterSource, then we need to upgrade them all
+    QVariantList originalOptions = options;
+    options.clear();
+    for ( const QVariant &option : originalOptions )
+    {
+      if ( option.canConvert< QgsProcessingModelChildParameterSource >() )
+        options << option;
+      else
+        options << QVariant::fromValue( QgsProcessingModelChildParameterSource::fromStaticValue( option ) );
+    }
+  }
+
   return options;
 }
 
@@ -155,7 +176,7 @@ void QgsProcessingMultipleSelectionPanelWidget::populateList( const QVariantList
     remainingOptions.removeAll( option );
   }
 
-  for ( const QVariant &option : qgis::as_const( remainingOptions ) )
+  for ( const QVariant &option : std::as_const( remainingOptions ) )
   {
     addOption( option, mValueFormatter( option ), false );
   }
@@ -182,7 +203,7 @@ void QgsProcessingMultipleSelectionPanelWidget::addOption( const QVariant &value
     }
   }
 
-  std::unique_ptr< QStandardItem > item = qgis::make_unique< QStandardItem >( title );
+  std::unique_ptr< QStandardItem > item = std::make_unique< QStandardItem >( title );
   item->setData( value, Qt::UserRole );
   item->setCheckState( selected ? Qt::Checked : Qt::Unchecked );
   item->setCheckable( true );
@@ -310,6 +331,24 @@ void QgsProcessingMultipleInputPanelWidget::addDirectory()
 
 void QgsProcessingMultipleInputPanelWidget::populateFromProject( QgsProject *project )
 {
+  connect( project, &QgsProject::layerRemoved, this, [&]( const QString & layerId )
+  {
+    for ( int i = 0; i < mModel->rowCount(); ++i )
+    {
+      const QStandardItem *item = mModel->item( i );
+      if ( item->data( Qt::UserRole ) == layerId )
+      {
+        bool isChecked = ( item->checkState() == Qt::Checked );
+        mModel->removeRow( i );
+
+        if ( isChecked )
+          emit selectionChanged();
+
+        break;
+      }
+    }
+  } );
+
   QgsSettings settings;
   auto addLayer = [&]( const QgsMapLayer * layer )
   {
@@ -366,6 +405,17 @@ void QgsProcessingMultipleInputPanelWidget::populateFromProject( QgsProject *pro
       break;
     }
 
+    case QgsProcessing::TypePlugin:
+    {
+      const QList<QgsPluginLayer *> options = QgsProcessingUtils::compatiblePluginLayers( project, false );
+      for ( const QgsPluginLayer *layer : options )
+      {
+        addLayer( layer );
+      }
+
+      break;
+    }
+
     case QgsProcessing::TypeVector:
     case QgsProcessing::TypeVectorAnyGeometry:
     {
@@ -392,6 +442,11 @@ void QgsProcessingMultipleInputPanelWidget::populateFromProject( QgsProject *pro
       }
       const QList<QgsMeshLayer *> meshes = QgsProcessingUtils::compatibleMeshLayers( project );
       for ( const QgsMeshLayer *layer : meshes )
+      {
+        addLayer( layer );
+      }
+      const QList<QgsPluginLayer *> plugins = QgsProcessingUtils::compatiblePluginLayers( project );
+      for ( const QgsPluginLayer *layer : plugins )
       {
         addLayer( layer );
       }

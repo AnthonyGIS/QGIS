@@ -157,7 +157,7 @@ class RandomPointsPolygons(QgisAlgorithm):
 
         da = QgsDistanceArea()
         da.setSourceCrs(source.sourceCrs(), context.transformContext())
-        da.setEllipsoid(context.project().ellipsoid())
+        da.setEllipsoid(context.ellipsoid())
 
         total = 100.0 / source.featureCount() if source.featureCount() else 0
         current_progress = 0
@@ -201,7 +201,7 @@ class RandomPointsPolygons(QgisAlgorithm):
             index = None
             if minDistance:
                 index = QgsSpatialIndex()
-            points = dict()
+            points = {}
 
             nPoints = 0
             nIterations = 0

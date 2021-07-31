@@ -33,7 +33,7 @@ class QVariant;
 /**
  * \ingroup core
  *
- * Closes a sqlite3 database.
+ * \brief Closes a sqlite3 database.
  *
  * \since QGIS 3.0
  */
@@ -61,7 +61,7 @@ struct CORE_EXPORT  QgsSqlite3StatementFinalizer
 /**
  * \ingroup core
  *
- * Unique pointer for sqlite3 prepared statements, which automatically finalizes
+ * \brief Unique pointer for sqlite3 prepared statements, which automatically finalizes
  * the statement when the pointer goes out of scope or is reset.
  *
  * \since QGIS 3.0
@@ -110,7 +110,7 @@ class CORE_EXPORT sqlite3_statement_unique_ptr : public std::unique_ptr< sqlite3
 /**
  * \ingroup core
  *
- * Unique pointer for sqlite3 databases, which automatically closes
+ * \brief Unique pointer for sqlite3 databases, which automatically closes
  * the database when the pointer goes out of scope or is reset.
  *
  * \since QGIS 3.0
@@ -161,7 +161,7 @@ class CORE_EXPORT sqlite3_database_unique_ptr : public std::unique_ptr< sqlite3,
  * \note not available in Python bindings.
  * \since QGIS 3.2
  */
-QString CORE_EXPORT QgsSqlite3Mprintf( const char *format, ... );
+QString CORE_EXPORT qgs_sqlite3_mprintf( const char *format, ... );
 
 #endif
 
@@ -208,8 +208,8 @@ class CORE_EXPORT QgsSqliteUtils
      * are not returned.
      * \note the implementation is the same of GDAL but the test coverage is much
      *       better in GDAL.
-     * \since QGIS 3.14
      * \note not available in Python bindings
+     * \since QGIS 3.14
      */
     static QSet<QString> uniqueFields( sqlite3 *connection, const QString &tableName, QString &errorMessage ) SIP_SKIP;
 
@@ -219,8 +219,8 @@ class CORE_EXPORT QgsSqliteUtils
      * error message in case of errors.
      *
      * \returns the next sequence value or -1 case of errors
-     * \since QGIS 3.14
      * \note not available in Python bindings
+     * \since QGIS 3.14
      */
     static long long nextSequenceValue( sqlite3 *connection, const QString &tableName, QString errorMessage ) SIP_SKIP;
 

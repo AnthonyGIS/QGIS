@@ -23,6 +23,7 @@
 #include <QPainter>
 #include <QTime>
 #include <QDesktopServices>
+#include <QSignalSpy>
 
 #include "cpl_conv.h"
 #include "gdal.h"
@@ -94,6 +95,7 @@ class TestQgsRasterLayer : public QObject
     void singleBandPseudoRendererNoData();
     void singleBandPseudoRendererNoDataColor();
     void setRenderer();
+    void setLayerOpacity();
     void regression992(); //test for issue #992 - GeoJP2 images improperly displayed as all black
     void testRefreshRendererIfNeeded();
     void sample();
@@ -118,22 +120,6 @@ class TestQgsRasterLayer : public QObject
 
     QgsMapSettings *mMapSettings = nullptr;
     QString mReport;
-};
-
-class TestSignalReceiver : public QObject
-{
-    Q_OBJECT
-
-  public:
-    TestSignalReceiver()
-      : QObject( nullptr )
-    {}
-    bool rendererChanged =  false ;
-  public slots:
-    void onRendererChanged()
-    {
-      rendererChanged = true;
-    }
 };
 
 //runs before all tests
@@ -505,7 +491,7 @@ void TestQgsRasterLayer::checkScaleOffset()
   if ( identifyResult.isValid() )
   {
     QMap<int, QVariant> values = identifyResult.results();
-    Q_FOREACH ( int bandNo, values.keys() )
+    for ( int bandNo : values.keys() )
     {
       QString valueString;
       if ( values.value( bandNo ).isNull() )
@@ -561,7 +547,7 @@ void TestQgsRasterLayer::buildExternalOverviews()
   for ( int myCounterInt = 0; myCounterInt < myPyramidList.count(); myCounterInt++ )
   {
     //mark to be pyramided
-    myPyramidList[myCounterInt].build = true;
+    myPyramidList[myCounterInt].setBuild( true );
   }
   //now actually make the pyramids
   QString myResult =
@@ -575,7 +561,7 @@ void TestQgsRasterLayer::buildExternalOverviews()
   for ( int myCounterInt = 0; myCounterInt < myPyramidList.count(); myCounterInt++ )
   {
     //mark to be pyramided
-    QVERIFY( myPyramidList.at( myCounterInt ).exists );
+    QVERIFY( myPyramidList.at( myCounterInt ).getExists() );
   }
 
   //
@@ -593,7 +579,7 @@ void TestQgsRasterLayer::buildExternalOverviews()
   for ( int myCounterInt = 0; myCounterInt < myPyramidList.count(); myCounterInt++ )
   {
     //mark to be pyramided
-    myPyramidList[myCounterInt].build = true;
+    myPyramidList[myCounterInt].setBuild( true );
   }
 
   // Test with options
@@ -752,7 +738,7 @@ void TestQgsRasterLayer::multiBandColorRendererNoDataColor()
 void TestQgsRasterLayer::palettedRendererNoData()
 {
   const QString rasterFileName = mTestDataDir + "raster/with_color_table.tif";
-  std::unique_ptr< QgsRasterLayer> rl = qgis::make_unique< QgsRasterLayer >( rasterFileName,
+  std::unique_ptr< QgsRasterLayer> rl = std::make_unique< QgsRasterLayer >( rasterFileName,
                                         QStringLiteral( "rl" ) );
   QVERIFY( rl->isValid() );
 
@@ -770,7 +756,7 @@ void TestQgsRasterLayer::palettedRendererNoData()
 void TestQgsRasterLayer::palettedRendererNoDataColor()
 {
   const QString rasterFileName = mTestDataDir + "raster/with_color_table.tif";
-  std::unique_ptr< QgsRasterLayer> rl = qgis::make_unique< QgsRasterLayer >( rasterFileName,
+  std::unique_ptr< QgsRasterLayer> rl = std::make_unique< QgsRasterLayer >( rasterFileName,
                                         QStringLiteral( "rl" ) );
   QVERIFY( rl->isValid() );
 
@@ -789,7 +775,7 @@ void TestQgsRasterLayer::palettedRendererNoDataColor()
 void TestQgsRasterLayer::singleBandGrayRendererNoData()
 {
   const QString rasterFileName = mTestDataDir + "landsat.tif";
-  std::unique_ptr< QgsRasterLayer> rl = qgis::make_unique< QgsRasterLayer >( rasterFileName,
+  std::unique_ptr< QgsRasterLayer> rl = std::make_unique< QgsRasterLayer >( rasterFileName,
                                         QStringLiteral( "rl" ) );
   QVERIFY( rl->isValid() );
 
@@ -805,7 +791,7 @@ void TestQgsRasterLayer::singleBandGrayRendererNoData()
 void TestQgsRasterLayer::singleBandGrayRendererNoDataColor()
 {
   const QString rasterFileName = mTestDataDir + "landsat.tif";
-  std::unique_ptr< QgsRasterLayer> rl = qgis::make_unique< QgsRasterLayer >( rasterFileName,
+  std::unique_ptr< QgsRasterLayer> rl = std::make_unique< QgsRasterLayer >( rasterFileName,
                                         QStringLiteral( "rl" ) );
   QVERIFY( rl->isValid() );
 
@@ -822,7 +808,7 @@ void TestQgsRasterLayer::singleBandGrayRendererNoDataColor()
 void TestQgsRasterLayer::singleBandPseudoRendererNoData()
 {
   const QString rasterFileName = mTestDataDir + "landsat.tif";
-  std::unique_ptr< QgsRasterLayer> rl = qgis::make_unique< QgsRasterLayer >( rasterFileName,
+  std::unique_ptr< QgsRasterLayer> rl = std::make_unique< QgsRasterLayer >( rasterFileName,
                                         QStringLiteral( "rl" ) );
   QVERIFY( rl->isValid() );
 
@@ -864,7 +850,7 @@ void TestQgsRasterLayer::singleBandPseudoRendererNoData()
 void TestQgsRasterLayer::singleBandPseudoRendererNoDataColor()
 {
   const QString rasterFileName = mTestDataDir + "landsat.tif";
-  std::unique_ptr< QgsRasterLayer> rl = qgis::make_unique< QgsRasterLayer >( rasterFileName,
+  std::unique_ptr< QgsRasterLayer> rl = std::make_unique< QgsRasterLayer >( rasterFileName,
                                         QStringLiteral( "rl" ) );
   QVERIFY( rl->isValid() );
 
@@ -906,14 +892,31 @@ void TestQgsRasterLayer::singleBandPseudoRendererNoDataColor()
 
 void TestQgsRasterLayer::setRenderer()
 {
-  TestSignalReceiver receiver;
-  QObject::connect( mpRasterLayer, SIGNAL( rendererChanged() ),
-                    &receiver, SLOT( onRendererChanged() ) );
+  QSignalSpy spy( mpRasterLayer, &QgsRasterLayer::rendererChanged );
   QgsRasterRenderer *renderer = ( QgsRasterRenderer * ) mpRasterLayer->renderer()->clone();
-  QCOMPARE( receiver.rendererChanged, false );
   mpRasterLayer->setRenderer( renderer );
-  QCOMPARE( receiver.rendererChanged, true );
+  QCOMPARE( spy.count(), 1 );
   QCOMPARE( mpRasterLayer->renderer(), renderer );
+}
+
+void TestQgsRasterLayer::setLayerOpacity()
+{
+  QSignalSpy spy( mpRasterLayer, &QgsMapLayer::opacityChanged );
+
+  mpRasterLayer->setOpacity( 0.5 );
+  QCOMPARE( spy.count(), 1 );
+  QCOMPARE( spy.at( 0 ).at( 0 ).toDouble(), 0.5 );
+  QCOMPARE( mpRasterLayer->opacity(), 0.5 );
+  // QgsRasterLayer::setOpacity is a proxy to QgsRasterRenderer::setOpacity
+  QCOMPARE( mpRasterLayer->renderer()->opacity(), 0.5 );
+
+  mpRasterLayer->setOpacity( 0.5 );
+  QCOMPARE( spy.count(), 1 );
+  mpRasterLayer->setOpacity( 1.0 );
+  QCOMPARE( spy.count(), 2 );
+  QCOMPARE( spy.at( 1 ).at( 0 ).toDouble(), 1.0 );
+  QCOMPARE( mpRasterLayer->opacity(), 1.0 );
+  QCOMPARE( mpRasterLayer->renderer()->opacity(), 1.0 );
 }
 
 void TestQgsRasterLayer::regression992()
@@ -961,7 +964,7 @@ void TestQgsRasterLayer::sample()
   QString fileName = mTestDataDir + "landsat-f32-b1.tif";
 
   QFileInfo rasterFileInfo( fileName );
-  std::unique_ptr< QgsRasterLayer > rl = qgis::make_unique< QgsRasterLayer> ( rasterFileInfo.filePath(),
+  std::unique_ptr< QgsRasterLayer > rl = std::make_unique< QgsRasterLayer> ( rasterFileInfo.filePath(),
                                          rasterFileInfo.completeBaseName() );
   QVERIFY( rl->isValid() );
   QVERIFY( std::isnan( rl->dataProvider()->sample( QgsPointXY( 0, 0 ), 1 ) ) );
@@ -980,7 +983,7 @@ void TestQgsRasterLayer::sample()
 
   fileName = mTestDataDir + "landsat_4326.tif";
   rasterFileInfo = QFileInfo( fileName );
-  rl = qgis::make_unique< QgsRasterLayer> ( rasterFileInfo.filePath(),
+  rl = std::make_unique< QgsRasterLayer> ( rasterFileInfo.filePath(),
        rasterFileInfo.completeBaseName() );
   QVERIFY( rl->isValid() );
   QVERIFY( std::isnan( rl->dataProvider()->sample( QgsPointXY( 0, 0 ), 1 ) ) );
@@ -1009,8 +1012,8 @@ void TestQgsRasterLayer::testTemporalProperties()
   QgsRasterLayerTemporalProperties *temporalProperties = qobject_cast< QgsRasterLayerTemporalProperties * >( mTemporalRasterLayer->temporalProperties() );
   QVERIFY( !mTemporalRasterLayer->temporalProperties()->isActive() );
 
-  QgsDateTimeRange dateTimeRange = QgsDateTimeRange( QDateTime( QDate( 2020, 1, 1 ) ),
-                                   QDateTime( QDate( 2020, 12, 31 ) ) );
+  QgsDateTimeRange dateTimeRange = QgsDateTimeRange( QDateTime( QDate( 2020, 1, 1 ), QTime( 0, 0, 0 ) ),
+                                   QDateTime( QDate( 2020, 12, 31 ), QTime( 0, 0, 0 ) ) );
 
   temporalProperties->setFixedTemporalRange( dateTimeRange );
 

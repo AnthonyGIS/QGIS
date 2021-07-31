@@ -9,12 +9,13 @@
 
 
 
+
 class QgsDoubleValidator : QRegularExpressionValidator
 {
-%Docstring
+%Docstring(signature="appended")
 
-QgsDoubleValidator is a QLineEdit Validator that combines QDoubleValidator
-and QRegularExpressionValidator to allow user to enter double with both
+:py:class:`QgsDoubleValidator` is a QLineEdit Validator that combines QDoubleValidator
+and QRegularExpressionValidator to allow users to enter doubles with both
 local and C interpretation as a fallback.
 
 .. versionadded:: 3.14
@@ -36,6 +37,8 @@ Constructor for QgsDoubleValidator.
 
 :param bottom: the minimal range limit accepted by the validator
 :param top: the maximal range limit accepted by the validator
+:param parent: parent object
+:param expression: custom regular expression
 %End
 
     QgsDoubleValidator( double bottom, double top, QObject *parent );
@@ -44,6 +47,7 @@ Constructor for QgsDoubleValidator.
 
 :param bottom: the minimal range limit accepted by the validator
 :param top: the maximal range limit accepted by the validator
+:param parent: parent object
 %End
 
     QgsDoubleValidator( double bottom, double top, int decimal, QObject *parent );
@@ -52,7 +56,29 @@ Constructor for QgsDoubleValidator.
 
 :param bottom: the minimal range limit accepted by the validator
 :param top: the maximal range limit accepted by the validator
-:param decimal: the number of decimal accepted by the validator
+:param decimal: the number of decimals accepted by the validator
+:param parent: parent object
+%End
+
+    QgsDoubleValidator( int decimal, QObject *parent );
+%Docstring
+Constructor for QgsDoubleValidator.
+
+:param decimal: the number of decimals accepted by the validator
+:param parent: parent object
+
+.. versionadded:: 3.16
+%End
+
+    void setMaxDecimals( int maxDecimals );
+%Docstring
+Sets the number of decimals accepted by the validator to ``maxDecimals``.
+
+.. warning::
+
+   setting decimals overrides any custom regular expression that was previously set
+
+.. versionadded:: 3.22
 %End
 
 

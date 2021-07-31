@@ -23,7 +23,7 @@
 #include "qgsapplication.h"
 
 #include <QStringList>
-#include <QRegExp>
+#include <QRegularExpression>
 #include <QUrl>
 #include <QUrlQuery>
 
@@ -77,7 +77,7 @@ QgsDataSourceUri::QgsDataSourceUri( const QString &u )
 
       if ( pname == QLatin1String( "table" ) )
       {
-        if ( uri[i] == '.' )
+        if ( i < uri.length() && uri[i] == '.' )
         {
           i++;
 
@@ -89,7 +89,7 @@ QgsDataSourceUri::QgsDataSourceUri( const QString &u )
           mTable = pval;
         }
 
-        if ( uri[i] == '(' )
+        if ( i < uri.length() && uri[i] == '(' )
         {
           i++;
 
@@ -159,7 +159,7 @@ QgsDataSourceUri::QgsDataSourceUri( const QString &u )
       }
       else if ( pname == QLatin1String( "connect_timeout" ) )
       {
-        QgsDebugMsg( QStringLiteral( "connection timeout ignored" ) );
+        QgsDebugMsgLevel( QStringLiteral( "connection timeout ignored" ), 3 );
       }
       else if ( pname == QLatin1String( "dbname" ) )
       {
@@ -219,8 +219,8 @@ QgsDataSourceUri::QgsDataSourceUri( const QString &u )
 
 QString QgsDataSourceUri::removePassword( const QString &aUri )
 {
-  QRegExp regexp;
-  regexp.setMinimal( true );
+  QRegularExpression regexp;
+  regexp.setPatternOptions( QRegularExpression::InvertedGreedinessOption );
   QString safeName( aUri );
   if ( aUri.contains( QLatin1String( " password=" ) ) )
   {
@@ -532,7 +532,7 @@ QString QgsDataSourceUri::connectionInfo( bool expandAuthConfig ) const
     }
   }
 
-  return connectionItems.join( QStringLiteral( " " ) );
+  return connectionItems.join( QLatin1Char( ' ' ) );
 }
 
 QString QgsDataSourceUri::uri( bool expandAuthConfig ) const
@@ -546,7 +546,7 @@ QString QgsDataSourceUri::uri( bool expandAuthConfig ) const
 
   if ( mUseEstimatedMetadata )
   {
-    uri += QStringLiteral( " estimatedmetadata=true" );
+    uri += QLatin1String( " estimatedmetadata=true" );
   }
 
   if ( !mSrid.isEmpty() )
@@ -562,10 +562,10 @@ QString QgsDataSourceUri::uri( bool expandAuthConfig ) const
 
   if ( mSelectAtIdDisabled )
   {
-    uri += QStringLiteral( " selectatid=false" );
+    uri += QLatin1String( " selectatid=false" );
   }
 
-  for ( QMap<QString, QString>::const_iterator it = mParams.begin(); it != mParams.end(); ++it )
+  for ( auto it = mParams.constBegin(); it != mParams.constEnd(); ++it )
   {
     if ( it.key().contains( '=' ) || it.key().contains( ' ' ) )
     {
@@ -584,7 +584,7 @@ QString QgsDataSourceUri::uri( bool expandAuthConfig ) const
   {
     uri += QStringLiteral( " table=%1%2" )
            .arg( quotedTablename(),
-                 mGeometryColumn.isNull() ? QString() : QStringLiteral( " (%1)" ).arg( columnName ) );
+                 mGeometryColumn.isEmpty() ? QString() : QStringLiteral( " (%1)" ).arg( columnName ) );
   }
   else if ( !mSchema.isEmpty() )
   {
@@ -638,7 +638,7 @@ void QgsDataSourceUri::setEncodedUri( const QByteArray &uri )
   url.setQuery( QString::fromLatin1( uri ) );
   const QUrlQuery query( url );
 
-  const auto constQueryItems = query.queryItems();
+  const auto constQueryItems = query.queryItems( QUrl::ComponentFormattingOption::FullyDecoded );
   for ( const QPair<QString, QString> &item : constQueryItems )
   {
     if ( item.first == QLatin1String( "username" ) )
@@ -648,7 +648,7 @@ void QgsDataSourceUri::setEncodedUri( const QByteArray &uri )
     else if ( item.first == QLatin1String( "authcfg" ) )
       mAuthConfigId = item.second;
     else
-      mParams.insertMulti( item.first, item.second );
+      mParams.insert( item.first, item.second );
   }
 }
 
@@ -787,7 +787,7 @@ void QgsDataSourceUri::setParam( const QString &key, const QString &value )
   else
   {
     // may be multiple
-    mParams.insertMulti( key, value );
+    mParams.insert( key, value );
   }
 }
 

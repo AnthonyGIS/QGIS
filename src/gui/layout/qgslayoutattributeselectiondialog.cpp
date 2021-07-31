@@ -149,7 +149,7 @@ QVariant QgsLayoutAttributeTableColumnModelBase::data( const QModelIndex &index,
     {
       if ( role == Qt::DisplayRole )
       {
-        return column.width() <= 0 ? tr( "Automatic" ) : QString( tr( "%1 mm" ) ).arg( column.width(), 0, 'f', 2 );
+        return column.width() <= 0 ? tr( "Automatic" ) : tr( "%1 mm" ).arg( column.width(), 0, 'f', 2 );
       }
       else
       {
@@ -288,7 +288,7 @@ bool QgsLayoutAttributeTableColumnModelBase::removeRows( int row, int count, con
 {
   Q_UNUSED( parent )
 
-  int maxRow = std::min( row + count - 1, columns().length() - 1 );
+  int maxRow = std::min< int >( row + count - 1, columns().length() - 1 );
   beginRemoveRows( QModelIndex(), row, maxRow );
   //move backwards through rows, removing each corresponding QgsComposerTableColumn
   for ( int i = maxRow; i >= row; --i )

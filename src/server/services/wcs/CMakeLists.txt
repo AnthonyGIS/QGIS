@@ -2,7 +2,7 @@
 ########################################################
 # Files
 
-SET (wcs_SRCS
+set (wcs_SRCS
   qgswcs.cpp
   qgswcsutils.cpp
   qgswcsgetcapabilities.cpp
@@ -13,32 +13,21 @@ SET (wcs_SRCS
 ########################################################
 # Build
 
-ADD_LIBRARY (wcs MODULE ${wcs_SRCS})
+add_library (wcs MODULE ${wcs_SRCS})
 
+# require c++17
+target_compile_features(wcs PRIVATE cxx_std_17)
 
-INCLUDE_DIRECTORIES(SYSTEM
+include_directories(SYSTEM
   ${GDAL_INCLUDE_DIR}
   ${POSTGRES_INCLUDE_DIR}
 )
 
-INCLUDE_DIRECTORIES(
-  ${CMAKE_SOURCE_DIR}/external
-  ${CMAKE_SOURCE_DIR}/external/nlohmann
-  ${CMAKE_SOURCE_DIR}/src/core
-  ${CMAKE_SOURCE_DIR}/src/core/dxf
-  ${CMAKE_SOURCE_DIR}/src/core/expression
-  ${CMAKE_SOURCE_DIR}/src/core/geometry
-  ${CMAKE_SOURCE_DIR}/src/core/labeling
-  ${CMAKE_SOURCE_DIR}/src/core/metadata
-  ${CMAKE_SOURCE_DIR}/src/core/raster
-  ${CMAKE_SOURCE_DIR}/src/core/symbology
-  ${CMAKE_SOURCE_DIR}/src/core/effects
-  ${CMAKE_SOURCE_DIR}/src/core/layertree
+include_directories(
   ${CMAKE_SOURCE_DIR}/src/server
   ${CMAKE_SOURCE_DIR}/src/server/services
   ${CMAKE_SOURCE_DIR}/src/server/services/wcs
 
-  ${CMAKE_BINARY_DIR}/src/core
   ${CMAKE_BINARY_DIR}/src/python
   ${CMAKE_BINARY_DIR}/src/analysis
   ${CMAKE_BINARY_DIR}/src/server
@@ -48,7 +37,7 @@ INCLUDE_DIRECTORIES(
 )
 
 
-TARGET_LINK_LIBRARIES(wcs
+target_link_libraries(wcs
   qgis_core
   qgis_server
 )
@@ -57,7 +46,7 @@ TARGET_LINK_LIBRARIES(wcs
 ########################################################
 # Install
 
-INSTALL(TARGETS wcs
+install(TARGETS wcs
     RUNTIME DESTINATION ${QGIS_SERVER_MODULE_DIR}
     LIBRARY DESTINATION ${QGIS_SERVER_MODULE_DIR}
 )

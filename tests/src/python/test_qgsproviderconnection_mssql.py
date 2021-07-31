@@ -16,18 +16,12 @@ __revision__ = '$Format:%H$'
 import os
 from test_qgsproviderconnection_base import TestPyQgsProviderConnectionBase
 from qgis.core import (
-    QgsWkbTypes,
-    QgsAbstractDatabaseProviderConnection,
-    QgsProviderConnectionException,
     QgsVectorLayer,
     QgsProviderRegistry,
-    QgsCoordinateReferenceSystem,
-    QgsRasterLayer,
     QgsDataSourceUri,
+    QgsAbstractDatabaseProviderConnection,
 )
 from qgis.testing import unittest
-from osgeo import gdal
-from qgis.PyQt.QtCore import QTemporaryDir
 
 
 class TestPyQgsProviderConnectionMssql(unittest.TestCase, TestPyQgsProviderConnectionBase):
@@ -57,7 +51,7 @@ class TestPyQgsProviderConnectionMssql(unittest.TestCase, TestPyQgsProviderConne
         except:
             pass
 
-    def test_confguration(self):
+    def test_configuration(self):
         """Test storage and retrieval for configuration parameters"""
 
         uri = 'dbname=\'qgis_test\' service=\'driver={SQL Server};server=localhost;port=1433;database=qgis_test\' user=\'sa\' password=\'<YourStrong!Passw0rd>\' srid=4326 type=Point estimatedMetadata=\'true\' disableInvalidGeometryHandling=\'1\' table="qgis_test"."someData" (geom)'
@@ -101,13 +95,53 @@ class TestPyQgsProviderConnectionMssql(unittest.TestCase, TestPyQgsProviderConne
         vl = QgsVectorLayer(conn.tableUri('qgis_test', 'someData'), 'my', 'mssql')
         self.assertTrue(vl.isValid())
 
-    def test_gpkg_fields(self):
+    def test_mssql_fields(self):
         """Test fields"""
 
         md = QgsProviderRegistry.instance().providerMetadata('mssql')
         conn = md.createConnection(self.uri, {})
         fields = conn.fields('qgis_test', 'someData')
-        self.assertEqual(fields.names(), ['pk', 'cnt', 'name', 'name2', 'num_char'])
+        self.assertEqual(fields.names(), ['pk', 'cnt', 'name', 'name2', 'num_char', 'dt', 'date', 'time'])
+
+    def test_schemas_filtering(self):
+        """Test schemas filtering"""
+
+        md = QgsProviderRegistry.instance().providerMetadata('mssql')
+
+        conn = md.createConnection(self.uri, {})
+        schemas = conn.schemas()
+        self.assertEqual(len(schemas), 2)
+        self.assertEqual(schemas, ['dbo', 'qgis_test'])
+        filterUri = QgsDataSourceUri(self.uri)
+        filterUri.setParam('excludedSchemas', 'dbo')
+        conn = md.createConnection(filterUri.uri(), {})
+        schemas = conn.schemas()
+        self.assertEqual(len(schemas), 1)
+        self.assertEqual(schemas, ['qgis_test'])
+
+        # Store the connection
+        conn.store('filteredConnection')
+
+        otherConn = md.createConnection('filteredConnection')
+        schemas = otherConn.schemas()
+        self.assertEqual(len(schemas), 1)
+        self.assertEqual(schemas, ['qgis_test'])
+
+    def test_exec_sql(self):
+
+        md = QgsProviderRegistry.instance().providerMetadata('mssql')
+        conn = md.createConnection(self.uri, {})
+
+        results = conn.executeSql('select * from qgis_test.some_poly_data')
+
+        rows = []
+        results2 = conn.execSql('select * from qgis_test.some_poly_data')
+
+        while results2.hasNextRow():
+            rows.append(results2.nextRow())
+
+        self.assertEqual(len(rows), 4)
+        self.assertEqual(rows, results)
 
 
 if __name__ == '__main__':

@@ -23,7 +23,7 @@
 
 /**
  * \ingroup 3d
- * Class for storage of 3D vectors similar to QVector3D, with the difference that it uses double precision
+ * \brief Class for storage of 3D vectors similar to QVector3D, with the difference that it uses double precision
  * instead of single precision floating point numbers.
  *
  * \since QGIS 3.0
@@ -60,6 +60,7 @@ class CORE_EXPORT QgsVector3D
       mZ = z;
     }
 
+    // TODO c++20 - replace with = default
     bool operator==( const QgsVector3D &other ) const
     {
       return mX == other.mX && mY == other.mY && mZ == other.mZ;
