@@ -81,7 +81,7 @@ QString QgsCommandLineUtils::allVersions( )
   }
 
   // proj
-  PJ_INFO info = proj_info();
+  const PJ_INFO info = proj_info();
   const QString projVersionCompiled { QStringLiteral( "%1.%2.%3" ).arg( PROJ_VERSION_MAJOR ).arg( PROJ_VERSION_MINOR ).arg( PROJ_VERSION_PATCH ) };
   const QString projVersionRunning { info.version };
   if ( projVersionCompiled != projVersionRunning )
@@ -127,7 +127,7 @@ QString QgsCommandLineUtils::allVersions( )
   versionString += QStringLiteral( "OS %1\n" ).arg( QSysInfo::prettyProductName() );
 
 #ifdef QGISDEBUG
-  versionString += QStringLiteral( "This copy of QGIS writes debugging output.\n" );
+  versionString += QLatin1String( "This copy of QGIS writes debugging output.\n" );
 #endif
 
   return versionString;

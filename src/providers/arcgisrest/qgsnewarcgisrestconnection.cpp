@@ -16,6 +16,7 @@
  ***************************************************************************/
 #include "qgsnewarcgisrestconnection.h"
 #include "qgsauthsettingswidget.h"
+#include "qgshttpheaderwidget.h"
 #include "qgssettings.h"
 #include "qgshelp.h"
 #include "qgsgui.h"
@@ -43,7 +44,7 @@ QgsNewArcGisRestConnectionDialog::QgsNewArcGisRestConnectionDialog( QWidget *par
   const QRegularExpressionMatch match = rx.match( baseKey );
   if ( match.hasMatch() )
   {
-    QString connectionType( match.captured( 1 ).toUpper() );
+    const QString connectionType( match.captured( 1 ).toUpper() );
     setWindowTitle( tr( "Create a New %1 Connection" ).arg( connectionType ) );
   }
 
@@ -56,13 +57,13 @@ QgsNewArcGisRestConnectionDialog::QgsNewArcGisRestConnectionDialog( QWidget *par
     // populate the dialog with the information stored for the connection
     // populate the fields with the stored setting parameters
 
-    QgsSettings settings;
+    const QgsSettings settings;
 
-    QString key = mBaseKey + connectionName;
-    QString credentialsKey = "qgis/" + mCredentialsBaseKey + '/' + connectionName;
+    const QString key = mBaseKey + connectionName;
+    const QString credentialsKey = "qgis/" + mCredentialsBaseKey + '/' + connectionName;
     txtName->setText( connectionName );
     txtUrl->setText( settings.value( key + "/url" ).toString() );
-    mRefererLineEdit->setText( settings.value( key + "/referer" ).toString() );
+    mHttpHeaders->setFromSettings( settings, key );
 
     // portal
     mContentEndPointLineEdit->setText( settings.value( key + "/content_endpoint" ).toString() );
@@ -75,7 +76,7 @@ QgsNewArcGisRestConnectionDialog::QgsNewArcGisRestConnectionDialog( QWidget *par
   }
 
   // Adjust height
-  int w = width();
+  const int w = width();
   adjustSize();
   resize( w, height() );
 
@@ -113,14 +114,14 @@ void QgsNewArcGisRestConnectionDialog::urlChanged( const QString &text )
 
 void QgsNewArcGisRestConnectionDialog::updateOkButtonState()
 {
-  bool enabled = !txtName->text().isEmpty() && !txtUrl->text().isEmpty();
+  const bool enabled = !txtName->text().isEmpty() && !txtUrl->text().isEmpty();
   buttonBox->button( QDialogButtonBox::Ok )->setEnabled( enabled );
 }
 
 bool QgsNewArcGisRestConnectionDialog::validate()
 {
-  QgsSettings settings;
-  QString key = mBaseKey + txtName->text();
+  const QgsSettings settings;
+  const QString key = mBaseKey + txtName->text();
 
   // warn if entry was renamed to an existing connection
   if ( ( mOriginalConnName.isNull() || mOriginalConnName.compare( txtName->text(), Qt::CaseInsensitive ) != 0 ) &&
@@ -148,7 +149,7 @@ bool QgsNewArcGisRestConnectionDialog::validate()
 QUrl QgsNewArcGisRestConnectionDialog::urlTrimmed() const
 {
   QUrl url( txtUrl->text().trimmed() );
-  QUrlQuery query( url );
+  const QUrlQuery query( url );
   const QList<QPair<QString, QString> > items = query.queryItems( QUrl::FullyEncoded );
   QHash< QString, QPair<QString, QString> > params;
   for ( const QPair<QString, QString> &it : items )
@@ -168,8 +169,8 @@ QUrl QgsNewArcGisRestConnectionDialog::urlTrimmed() const
 void QgsNewArcGisRestConnectionDialog::accept()
 {
   QgsSettings settings;
-  QString key = mBaseKey + txtName->text();
-  QString credentialsKey = "qgis/" + mCredentialsBaseKey + '/' + txtName->text();
+  const QString key = mBaseKey + txtName->text();
+  const QString credentialsKey = "qgis/" + mCredentialsBaseKey + '/' + txtName->text();
 
   if ( !validate() )
     return;
@@ -182,7 +183,7 @@ void QgsNewArcGisRestConnectionDialog::accept()
     settings.sync();
   }
 
-  QUrl url( urlTrimmed() );
+  const QUrl url( urlTrimmed() );
   settings.setValue( key + "/url", url.toString() );
 
   settings.setValue( credentialsKey + "/username", mAuthSettings->username() );
@@ -193,8 +194,7 @@ void QgsNewArcGisRestConnectionDialog::accept()
 
   settings.setValue( credentialsKey + "/authcfg", mAuthSettings->configId() );
 
-  if ( mHttpGroupBox->isVisible() )
-    settings.setValue( key + "/referer", mRefererLineEdit->text() );
+  mHttpHeaders->updateSettings( settings, key );
 
   settings.setValue( mBaseKey + "/selected", txtName->text() );
 

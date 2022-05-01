@@ -24,6 +24,8 @@ endif()
 #ADD_QGIS_TEST(histogramtest testqgsrasterhistogram.cpp)
 
 set(TESTS
+  testqgsadvanceddigitizingdockwidget.cpp
+  testqgsannotationitemguiregistry.cpp
   testqgsmaptoolzoom.cpp
   testqgsmaptooledit.cpp
   testqgscategorizedrendererwidget.cpp
@@ -35,9 +37,11 @@ set(TESTS
   testqgsdockwidget.cpp
   testqgsfieldexpressionwidget.cpp
   testqgsfilewidget.cpp
+  testqgsexternalstoragefilewidget.cpp
   testqgsfocuswatcher.cpp
   testqgshtmlwidgetwrapper.cpp
   testqgsmapcanvas.cpp
+  testqgsmaptoolcapture.cpp
   testqgsmessagebar.cpp
   testprojectionissues.cpp
   testqgsgui.cpp
@@ -55,7 +59,9 @@ set(TESTS
   testqgslayoutgui.cpp
   testqgslayoutview.cpp
   testqgsvaluemapwidgetwrapper.cpp
+  testqgsvaluemapconfigdlg.cpp
   testqgsvaluerelationwidgetwrapper.cpp
+  testqgsrelationeditorwidget.cpp
   testqgsrelationreferencewidget.cpp
   testqgsfeaturelistcombobox.cpp
   testqgstexteditwrapper.cpp

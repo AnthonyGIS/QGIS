@@ -24,7 +24,7 @@
 
 QIcon QgsIconUtils::iconForWkbType( QgsWkbTypes::Type type )
 {
-  QgsWkbTypes::GeometryType geomType = QgsWkbTypes::geometryType( QgsWkbTypes::Type( type ) );
+  const QgsWkbTypes::GeometryType geomType = QgsWkbTypes::geometryType( QgsWkbTypes::Type( type ) );
   switch ( geomType )
   {
     case QgsWkbTypes::NullGeometry:
@@ -101,6 +101,7 @@ QIcon QgsIconUtils::iconForLayer( const QgsMapLayer *layer )
     case QgsMapLayerType::PointCloudLayer:
     case QgsMapLayerType::PluginLayer:
     case QgsMapLayerType::AnnotationLayer:
+    case QgsMapLayerType::GroupLayer:
     {
       return QgsIconUtils::iconForLayerType( layer->type() );
     }
@@ -160,8 +161,11 @@ QIcon QgsIconUtils::iconForLayerType( QgsMapLayerType type )
     case QgsMapLayerType::VectorLayer:
       return QgsIconUtils::iconGeometryCollection();
 
-    case QgsMapLayerType::PluginLayer:
     case QgsMapLayerType::AnnotationLayer:
+      return QgsApplication::getThemeIcon( QStringLiteral( "/mIconAnnotationLayer.svg" ) );
+
+    case QgsMapLayerType::PluginLayer:
+    case QgsMapLayerType::GroupLayer:
       break;
   }
   return QIcon();

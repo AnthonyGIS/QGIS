@@ -23,12 +23,24 @@
 #include "qgsvectorlayer3drenderer.h"
 #include "qgsmeshlayer3drenderer.h"
 #include "qgspointcloudlayer3drenderer.h"
+#include "qgsprojectelevationproperties.h"
+#include "qgsterrainprovider.h"
 
 #include <QDomDocument>
 #include <QDomElement>
 
 #include "qgssymbollayerutils.h"
 #include "qgsrasterlayer.h"
+
+Qgs3DMapSettings::Qgs3DMapSettings()
+  : QObject( nullptr )
+{
+  connect( this, &Qgs3DMapSettings::settingsChanged, [&]()
+  {
+    QgsProject::instance()->setDirty();
+  } );
+  connectChangedSignalsToSettingsChanged();
+}
 
 Qgs3DMapSettings::Qgs3DMapSettings( const Qgs3DMapSettings &other )
   : QObject( nullptr )
@@ -49,16 +61,14 @@ Qgs3DMapSettings::Qgs3DMapSettings( const Qgs3DMapSettings &other )
   , mShowTerrainBoundingBoxes( other.mShowTerrainBoundingBoxes )
   , mShowTerrainTileInfo( other.mShowTerrainTileInfo )
   , mShowCameraViewCenter( other.mShowCameraViewCenter )
+  , mShowCameraRotationCenter( other.mShowCameraRotationCenter )
   , mShowLightSources( other.mShowLightSources )
   , mShowLabels( other.mShowLabels )
-  , mPointLights( other.mPointLights )
-  , mDirectionalLights( other.mDirectionalLights )
   , mFieldOfView( other.mFieldOfView )
   , mProjectionType( other.mProjectionType )
   , mCameraNavigationMode( other.mCameraNavigationMode )
   , mCameraMovementSpeed( other.mCameraMovementSpeed )
   , mLayers( other.mLayers )
-  , mTerrainLayers( other.mTerrainLayers )
   , mRenderers() // initialized in body
   , mTransformContext( other.mTransformContext )
   , mPathResolver( other.mPathResolver )
@@ -71,6 +81,8 @@ Qgs3DMapSettings::Qgs3DMapSettings( const Qgs3DMapSettings &other )
   , mEyeDomeLightingEnabled( other.mEyeDomeLightingEnabled )
   , mEyeDomeLightingStrength( other.mEyeDomeLightingStrength )
   , mEyeDomeLightingDistance( other.mEyeDomeLightingDistance )
+  , mViewSyncMode( other.mViewSyncMode )
+  , mVisualizeViewFrustum( other.mVisualizeViewFrustum )
   , mDebugShadowMapEnabled( other.mDebugShadowMapEnabled )
   , mDebugShadowMapCorner( other.mDebugShadowMapCorner )
   , mDebugShadowMapSize( other.mDebugShadowMapSize )
@@ -78,20 +90,35 @@ Qgs3DMapSettings::Qgs3DMapSettings( const Qgs3DMapSettings &other )
   , mDebugDepthMapCorner( other.mDebugDepthMapCorner )
   , mDebugDepthMapSize( other.mDebugDepthMapSize )
   , mTerrainRenderingEnabled( other.mTerrainRenderingEnabled )
+  , mRendererUsage( other.mRendererUsage )
 {
   for ( QgsAbstract3DRenderer *renderer : std::as_const( other.mRenderers ) )
   {
     mRenderers << renderer->clone();
   }
+
+  for ( QgsLightSource *source : std::as_const( other.mLightSources ) )
+  {
+    if ( source )
+      mLightSources << source->clone();
+  }
+
+  connect( this, &Qgs3DMapSettings::settingsChanged, [&]()
+  {
+    QgsProject::instance()->setDirty();
+  } );
+  connectChangedSignalsToSettingsChanged();
 }
 
 Qgs3DMapSettings::~Qgs3DMapSettings()
 {
   qDeleteAll( mRenderers );
+  qDeleteAll( mLightSources );
 }
 
 void Qgs3DMapSettings::readXml( const QDomElement &elem, const QgsReadWriteContext &context )
 {
+  QgsProjectDirtyBlocker blocker( QgsProject::instance() );
   QDomElement elemOrigin = elem.firstChildElement( QStringLiteral( "origin" ) );
   mOrigin = QgsVector3D(
               elemOrigin.attribute( QStringLiteral( "x" ) ).toDouble(),
@@ -136,38 +163,53 @@ void Qgs3DMapSettings::readXml( const QDomElement &elem, const QgsReadWriteConte
   mTerrainMapTheme = elemTerrain.attribute( QStringLiteral( "map-theme" ) );
   mShowLabels = elemTerrain.attribute( QStringLiteral( "show-labels" ), QStringLiteral( "0" ) ).toInt();
 
-  mPointLights.clear();
-  QDomElement elemPointLights = elem.firstChildElement( QStringLiteral( "point-lights" ) );
-  if ( !elemPointLights.isNull() )
+  qDeleteAll( mLightSources );
+  mLightSources.clear();
+  const QDomElement lightsElem = elem.firstChildElement( QStringLiteral( "lights" ) );
+  if ( !lightsElem.isNull() )
   {
-    QDomElement elemPointLight = elemPointLights.firstChildElement( QStringLiteral( "point-light" ) );
-    while ( !elemPointLight.isNull() )
+    const QDomNodeList lightNodes = lightsElem.childNodes();
+    for ( int i = 0; i < lightNodes.size(); ++i )
     {
-      QgsPointLightSettings pointLight;
-      pointLight.readXml( elemPointLight );
-      mPointLights << pointLight;
-      elemPointLight = elemPointLight.nextSiblingElement( QStringLiteral( "point-light" ) );
+      const QDomElement lightElement = lightNodes.at( i ).toElement();
+      if ( QgsLightSource *light = QgsLightSource::createFromXml( lightElement, context ) )
+        mLightSources << light;
     }
   }
   else
   {
-    // QGIS <= 3.4 did not have light configuration
-    QgsPointLightSettings defaultLight;
-    defaultLight.setPosition( QgsVector3D( 0, 1000, 0 ) );
-    mPointLights << defaultLight;
-  }
-
-  mDirectionalLights.clear();
-  QDomElement elemDirectionalLights = elem.firstChildElement( QStringLiteral( "directional-lights" ) );
-  if ( !elemDirectionalLights.isNull() )
-  {
-    QDomElement elemDirectionalLight = elemDirectionalLights.firstChildElement( QStringLiteral( "directional-light" ) );
-    while ( !elemDirectionalLight.isNull() )
+    // older project format
+    QDomElement elemPointLights = elem.firstChildElement( QStringLiteral( "point-lights" ) );
+    if ( !elemPointLights.isNull() )
     {
-      QgsDirectionalLightSettings directionalLight;
-      directionalLight.readXml( elemDirectionalLight );
-      mDirectionalLights << directionalLight;
-      elemDirectionalLight = elemDirectionalLight.nextSiblingElement( QStringLiteral( "directional-light" ) );
+      QDomElement elemPointLight = elemPointLights.firstChildElement( QStringLiteral( "point-light" ) );
+      while ( !elemPointLight.isNull() )
+      {
+        std::unique_ptr< QgsPointLightSettings > pointLight = std::make_unique< QgsPointLightSettings >();
+        pointLight->readXml( elemPointLight, context );
+        mLightSources << pointLight.release();
+        elemPointLight = elemPointLight.nextSiblingElement( QStringLiteral( "point-light" ) );
+      }
+    }
+    else
+    {
+      // QGIS <= 3.4 did not have light configuration
+      std::unique_ptr< QgsPointLightSettings > defaultLight = std::make_unique< QgsPointLightSettings >();
+      defaultLight->setPosition( QgsVector3D( 0, 1000, 0 ) );
+      mLightSources << defaultLight.release();
+    }
+
+    QDomElement elemDirectionalLights = elem.firstChildElement( QStringLiteral( "directional-lights" ) );
+    if ( !elemDirectionalLights.isNull() )
+    {
+      QDomElement elemDirectionalLight = elemDirectionalLights.firstChildElement( QStringLiteral( "directional-light" ) );
+      while ( !elemDirectionalLight.isNull() )
+      {
+        std::unique_ptr< QgsDirectionalLightSettings > directionalLight = std::make_unique< QgsDirectionalLightSettings >();
+        directionalLight->readXml( elemDirectionalLight, context );
+        mLightSources << directionalLight.release();
+        elemDirectionalLight = elemDirectionalLight.nextSiblingElement( QStringLiteral( "directional-light" ) );
+      }
     }
   }
 
@@ -180,23 +222,6 @@ void Qgs3DMapSettings::readXml( const QDomElement &elem, const QgsReadWriteConte
     elemMapLayer = elemMapLayer.nextSiblingElement( QStringLiteral( "layer" ) );
   }
   mLayers = mapLayers;  // needs to resolve refs afterwards
-
-  QDomElement elemTerrainLayers = elemTerrain.firstChildElement( QStringLiteral( "terrainLayers" ) );
-  if ( elemTerrainLayers.isNull() )
-  {
-    mTerrainLayers = mLayers;
-  }
-  else
-  {
-    QDomElement elemTerrainMapLayer = elemTerrainLayers.firstChildElement( QStringLiteral( "layer" ) );
-    QList<QgsMapLayerRef> terrainMapLayers;
-    while ( !elemTerrainMapLayer.isNull() )
-    {
-      terrainMapLayers << QgsMapLayerRef( elemTerrainMapLayer.attribute( QStringLiteral( "id" ) ) );
-      elemTerrainMapLayer = elemTerrainMapLayer.nextSiblingElement( QStringLiteral( "layer" ) );
-    }
-    mTerrainLayers = mapLayers;  // needs to resolve refs afterwards
-  }
 
   QDomElement elemTerrainGenerator = elemTerrain.firstChildElement( QStringLiteral( "generator" ) );
   QString terrainGenType = elemTerrainGenerator.attribute( QStringLiteral( "type" ) );
@@ -268,6 +293,10 @@ void Qgs3DMapSettings::readXml( const QDomElement &elem, const QgsReadWriteConte
   mEyeDomeLightingStrength = elemEyeDomeLighting.attribute( "eye-dome-lighting-strength", QStringLiteral( "1000.0" ) ).toDouble();
   mEyeDomeLightingDistance = elemEyeDomeLighting.attribute( "eye-dome-lighting-distance", QStringLiteral( "1" ) ).toInt();
 
+  QDomElement elemNavigationSync = elem.firstChildElement( QStringLiteral( "navigation-sync" ) );
+  mViewSyncMode = ( Qgis::ViewSyncModeFlags )( elemNavigationSync.attribute( QStringLiteral( "view-sync-mode" ), QStringLiteral( "0" ) ).toInt() );
+  mVisualizeViewFrustum = elemNavigationSync.attribute( QStringLiteral( "view-frustum-visualization-enabled" ), QStringLiteral( "0" ) ).toInt();
+
   QDomElement elemDebugSettings = elem.firstChildElement( QStringLiteral( "debug-settings" ) );
   mDebugShadowMapEnabled = elemDebugSettings.attribute( QStringLiteral( "shadowmap-enabled" ), QStringLiteral( "0" ) ).toInt();
   mDebugShadowMapCorner = static_cast<Qt::Corner>( elemDebugSettings.attribute( QStringLiteral( "shadowmap-corner" ), "0" ).toInt() );
@@ -281,6 +310,7 @@ void Qgs3DMapSettings::readXml( const QDomElement &elem, const QgsReadWriteConte
   mShowTerrainBoundingBoxes = elemDebug.attribute( QStringLiteral( "bounding-boxes" ), QStringLiteral( "0" ) ).toInt();
   mShowTerrainTileInfo = elemDebug.attribute( QStringLiteral( "terrain-tile-info" ), QStringLiteral( "0" ) ).toInt();
   mShowCameraViewCenter = elemDebug.attribute( QStringLiteral( "camera-view-center" ), QStringLiteral( "0" ) ).toInt();
+  mShowCameraRotationCenter = elemDebug.attribute( QStringLiteral( "camera-rotation-center" ), QStringLiteral( "0" ) ).toInt();
   mShowLightSources = elemDebug.attribute( QStringLiteral( "show-light-sources" ), QStringLiteral( "0" ) ).toInt();
   mIsFpsCounterEnabled = elemDebug.attribute( QStringLiteral( "show-fps-counter" ), QStringLiteral( "0" ) ).toInt();
 
@@ -339,21 +369,15 @@ QDomElement Qgs3DMapSettings::writeXml( QDomDocument &doc, const QgsReadWriteCon
   elemTerrain.setAttribute( QStringLiteral( "map-theme" ), mTerrainMapTheme );
   elemTerrain.setAttribute( QStringLiteral( "show-labels" ), mShowLabels ? 1 : 0 );
 
-  QDomElement elemPointLights = doc.createElement( QStringLiteral( "point-lights" ) );
-  for ( const QgsPointLightSettings &pointLight : std::as_const( mPointLights ) )
   {
-    QDomElement elemPointLight = pointLight.writeXml( doc );
-    elemPointLights.appendChild( elemPointLight );
+    QDomElement elemLights = doc.createElement( QStringLiteral( "lights" ) );
+    for ( const QgsLightSource *light : mLightSources )
+    {
+      const QDomElement elemLight = light->writeXml( doc, context );
+      elemLights.appendChild( elemLight );
+    }
+    elem.appendChild( elemLights );
   }
-  elem.appendChild( elemPointLights );
-
-  QDomElement elemDirectionalLights = doc.createElement( QStringLiteral( "directional-lights" ) );
-  for ( const QgsDirectionalLightSettings &directionalLight : std::as_const( mDirectionalLights ) )
-  {
-    QDomElement elemDirectionalLight = directionalLight.writeXml( doc );
-    elemDirectionalLights.appendChild( elemDirectionalLight );
-  }
-  elem.appendChild( elemDirectionalLights );
 
   QDomElement elemMapLayers = doc.createElement( QStringLiteral( "layers" ) );
   for ( const QgsMapLayerRef &layerRef : mLayers )
@@ -363,15 +387,6 @@ QDomElement Qgs3DMapSettings::writeXml( QDomDocument &doc, const QgsReadWriteCon
     elemMapLayers.appendChild( elemMapLayer );
   }
   elemTerrain.appendChild( elemMapLayers );
-
-  QDomElement elemTerrainMapLayers = doc.createElement( QStringLiteral( "terrainLayers" ) );
-  for ( const QgsMapLayerRef &layerRef : mTerrainLayers )
-  {
-    QDomElement elemMapLayer = doc.createElement( QStringLiteral( "layer" ) );
-    elemMapLayer.setAttribute( QStringLiteral( "id" ), layerRef.layerId );
-    elemTerrainMapLayers.appendChild( elemMapLayer );
-  }
-  elemTerrain.appendChild( elemTerrainMapLayers );
 
   QDomElement elemTerrainGenerator = doc.createElement( QStringLiteral( "generator" ) );
   elemTerrainGenerator.setAttribute( QStringLiteral( "type" ), QgsTerrainGenerator::typeToString( mTerrainGenerator->type() ) );
@@ -402,16 +417,21 @@ QDomElement Qgs3DMapSettings::writeXml( QDomDocument &doc, const QgsReadWriteCon
   elemDebug.setAttribute( QStringLiteral( "bounding-boxes" ), mShowTerrainBoundingBoxes ? 1 : 0 );
   elemDebug.setAttribute( QStringLiteral( "terrain-tile-info" ), mShowTerrainTileInfo ? 1 : 0 );
   elemDebug.setAttribute( QStringLiteral( "camera-view-center" ), mShowCameraViewCenter ? 1 : 0 );
+  elemDebug.setAttribute( QStringLiteral( "camera-rotation-center" ), mShowCameraRotationCenter ? 1 : 0 );
   elemDebug.setAttribute( QStringLiteral( "show-light-sources" ), mShowLightSources ? 1 : 0 );
   elemDebug.setAttribute( QStringLiteral( "show-fps-counter" ), mIsFpsCounterEnabled ? 1 : 0 );
   elem.appendChild( elemDebug );
 
   QDomElement elemEyeDomeLighting = doc.createElement( QStringLiteral( "eye-dome-lighting" ) );
-  elemEyeDomeLighting.setAttribute( "enabled", mEyeDomeLightingEnabled ? 1 : 0 );
-  elemEyeDomeLighting.setAttribute( "eye-dome-lighting-strength", mEyeDomeLightingStrength );
-  elemEyeDomeLighting.setAttribute( "eye-dome-lighting-distance", mEyeDomeLightingDistance );
+  elemEyeDomeLighting.setAttribute( QStringLiteral( "enabled" ), mEyeDomeLightingEnabled ? 1 : 0 );
+  elemEyeDomeLighting.setAttribute( QStringLiteral( "eye-dome-lighting-strength" ), mEyeDomeLightingStrength );
+  elemEyeDomeLighting.setAttribute( QStringLiteral( "eye-dome-lighting-distance" ), mEyeDomeLightingDistance );
   elem.appendChild( elemEyeDomeLighting );
 
+  QDomElement elemNavigationSync = doc.createElement( QStringLiteral( "navigation-sync" ) );
+  elemNavigationSync.setAttribute( QStringLiteral( "view-sync-mode" ), ( int )mViewSyncMode );
+  elemNavigationSync.setAttribute( QStringLiteral( "view-frustum-visualization-enabled" ), mVisualizeViewFrustum ? 1 : 0 );
+  elem.appendChild( elemNavigationSync );
 
   QDomElement elemDebugSettings = doc.createElement( QStringLiteral( "debug-settings" ) );
   elemDebugSettings.setAttribute( QStringLiteral( "shadowmap-enabled" ), mDebugShadowMapEnabled );
@@ -434,11 +454,6 @@ void Qgs3DMapSettings::resolveReferences( const QgsProject &project )
   for ( int i = 0; i < mLayers.count(); ++i )
   {
     QgsMapLayerRef &layerRef = mLayers[i];
-    layerRef.setLayer( project.mapLayer( layerRef.layerId ) );
-  }
-  for ( int i = 0; i < mTerrainLayers.count(); ++i )
-  {
-    QgsMapLayerRef &layerRef = mTerrainLayers[i];
     layerRef.setLayer( project.mapLayer( layerRef.layerId ) );
   }
 
@@ -546,32 +561,51 @@ QList<QgsMapLayer *> Qgs3DMapSettings::layers() const
   return lst;
 }
 
-void Qgs3DMapSettings::setTerrainLayers( const QList<QgsMapLayer *> &layers )
+void Qgs3DMapSettings::configureTerrainFromProject( QgsProjectElevationProperties *properties, const QgsRectangle &fullExtent )
 {
-  QList<QgsMapLayerRef> lst;
-  lst.reserve( layers.count() );
-  for ( QgsMapLayer *layer : layers )
+  if ( properties->terrainProvider()->type() == QLatin1String( "flat" ) )
   {
-    lst.append( layer );
+    QgsFlatTerrainGenerator *flatTerrain = new QgsFlatTerrainGenerator;
+    flatTerrain->setCrs( crs() );
+    flatTerrain->setExtent( fullExtent );
+    setTerrainGenerator( flatTerrain );
+
+    setTerrainElevationOffset( properties->terrainProvider()->offset() );
   }
-
-  if ( mTerrainLayers == lst )
-    return;
-
-  mTerrainLayers = lst;
-  emit terrainLayersChanged();
-}
-
-QList<QgsMapLayer *> Qgs3DMapSettings::terrainLayers() const
-{
-  QList<QgsMapLayer *> lst;
-  lst.reserve( mTerrainLayers.count() );
-  for ( const QgsMapLayerRef &layerRef : mTerrainLayers )
+  else if ( properties->terrainProvider()->type() == QLatin1String( "raster" ) )
   {
-    if ( layerRef.layer )
-      lst.append( layerRef.layer );
+    QgsRasterDemTerrainProvider *rasterProvider = qgis::down_cast< QgsRasterDemTerrainProvider * >( properties->terrainProvider() );
+
+    QgsDemTerrainGenerator *demTerrainGen = new QgsDemTerrainGenerator;
+    demTerrainGen->setCrs( crs(), QgsProject::instance()->transformContext() );
+    demTerrainGen->setLayer( rasterProvider->layer() );
+    setTerrainGenerator( demTerrainGen );
+
+    setTerrainElevationOffset( properties->terrainProvider()->offset() );
+    setTerrainVerticalScale( properties->terrainProvider()->scale() );
   }
-  return lst;
+  else if ( properties->terrainProvider()->type() == QLatin1String( "mesh" ) )
+  {
+    QgsMeshTerrainProvider *meshProvider = qgis::down_cast< QgsMeshTerrainProvider * >( properties->terrainProvider() );
+
+    QgsMeshTerrainGenerator *newTerrainGenerator = new QgsMeshTerrainGenerator;
+    newTerrainGenerator->setCrs( crs(), QgsProject::instance()->transformContext() );
+    newTerrainGenerator->setLayer( meshProvider->layer() );
+    std::unique_ptr< QgsMesh3DSymbol > symbol( newTerrainGenerator->symbol()->clone() );
+    symbol->setVerticalScale( properties->terrainProvider()->scale() );
+    newTerrainGenerator->setSymbol( symbol.release() );
+    setTerrainGenerator( newTerrainGenerator );
+
+    setTerrainElevationOffset( properties->terrainProvider()->offset() );
+    setTerrainVerticalScale( properties->terrainProvider()->scale() );
+  }
+  else
+  {
+    QgsFlatTerrainGenerator *flatTerrain = new QgsFlatTerrainGenerator;
+    flatTerrain->setCrs( crs() );
+    flatTerrain->setExtent( fullExtent );
+    setTerrainGenerator( flatTerrain );
+  }
 }
 
 void Qgs3DMapSettings::setMapTileResolution( int res )
@@ -702,6 +736,16 @@ void Qgs3DMapSettings::setShowCameraViewCenter( bool enabled )
   emit showCameraViewCenterChanged();
 }
 
+void Qgs3DMapSettings::setShowCameraRotationCenter( bool enabled )
+{
+  if ( mShowCameraRotationCenter == enabled )
+    return;
+
+  mShowCameraRotationCenter = enabled;
+  emit showCameraRotationCenterChanged();
+}
+
+
 void Qgs3DMapSettings::setShowLightSourceOrigins( bool enabled )
 {
   if ( mShowLightSources == enabled )
@@ -744,22 +788,19 @@ void Qgs3DMapSettings::setEyeDomeLightingDistance( int distance )
   emit eyeDomeLightingDistanceChanged();
 }
 
-void Qgs3DMapSettings::setPointLights( const QList<QgsPointLightSettings> &pointLights )
+QList<QgsLightSource *> Qgs3DMapSettings::lightSources() const
 {
-  if ( mPointLights == pointLights )
-    return;
-
-  mPointLights = pointLights;
-  emit pointLightsChanged();
+  return mLightSources;
 }
 
-void Qgs3DMapSettings::setDirectionalLights( const QList<QgsDirectionalLightSettings> &directionalLights )
+void Qgs3DMapSettings::setLightSources( const QList<QgsLightSource *> &lights )
 {
-  if ( mDirectionalLights == directionalLights )
-    return;
+  qDeleteAll( mLightSources );
+  mLightSources = lights;
 
-  mDirectionalLights = directionalLights;
   emit directionalLightsChanged();
+  emit pointLightsChanged();
+  emit lightSourcesChanged();
 }
 
 void Qgs3DMapSettings::setFieldOfView( const float fieldOfView )
@@ -840,4 +881,62 @@ void Qgs3DMapSettings::setTerrainRenderingEnabled( bool terrainRenderingEnabled 
     return;
   mTerrainRenderingEnabled = terrainRenderingEnabled;
   emit terrainGeneratorChanged();
+}
+
+Qgis::RendererUsage Qgs3DMapSettings::rendererUsage() const
+{
+  return mRendererUsage;
+}
+
+void Qgs3DMapSettings::setRendererUsage( Qgis::RendererUsage rendererUsage )
+{
+  mRendererUsage = rendererUsage;
+}
+
+void Qgs3DMapSettings::setViewSyncMode( Qgis::ViewSyncModeFlags mode )
+{
+  mViewSyncMode = mode;
+}
+
+void Qgs3DMapSettings::setViewFrustumVisualizationEnabled( bool enabled )
+{
+  if ( mVisualizeViewFrustum != enabled )
+  {
+    mVisualizeViewFrustum = enabled;
+    emit viewFrustumVisualizationEnabledChanged();
+  }
+}
+
+
+void Qgs3DMapSettings::connectChangedSignalsToSettingsChanged()
+{
+  connect( this, &Qgs3DMapSettings::selectionColorChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::layersChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::terrainGeneratorChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::terrainVerticalScaleChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::mapTileResolutionChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::maxTerrainScreenErrorChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::maxTerrainGroundErrorChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::terrainElevationOffsetChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::terrainShadingChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::terrainMapThemeChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::renderersChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::showTerrainBoundingBoxesChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::showTerrainTilesInfoChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::showCameraViewCenterChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::showCameraRotationCenterChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::showLightSourceOriginsChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::eyeDomeLightingEnabledChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::eyeDomeLightingStrengthChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::eyeDomeLightingDistanceChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::debugShadowMapSettingsChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::debugDepthMapSettingsChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::lightSourcesChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::fieldOfViewChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::projectionTypeChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::cameraNavigationModeChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::cameraMovementSpeedChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::skyboxSettingsChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::shadowSettingsChanged, this, &Qgs3DMapSettings::settingsChanged );
+  connect( this, &Qgs3DMapSettings::fpsCounterEnabledChanged, this, &Qgs3DMapSettings::settingsChanged );
 }

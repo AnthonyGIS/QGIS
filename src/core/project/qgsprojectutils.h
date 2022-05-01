@@ -43,6 +43,22 @@ class CORE_EXPORT QgsProjectUtils
      */
     static QList< QgsMapLayer * > layersMatchingPath( const QgsProject *project, const QString &path );
 
+    /**
+     * Updates a \a project, replacing the data source for all layers which match the given \a oldPath
+     * with sources which point to \a newPath.
+     *
+     * Returns TRUE if any layers were updated as a result.
+     */
+    static bool updateLayerPath( QgsProject *project, const QString &oldPath, const QString &newPath );
+
+    /**
+     * Returns TRUE if the specified \a layer is a child layer from any QgsGroupLayer in the given \a project.
+     *
+     * \since QGIS 3.24
+     */
+    static bool layerIsContainedInGroupLayer( QgsProject *project, QgsMapLayer *layer );
+
+
 };
 
 #endif // QGSPROJECTUTILS_H

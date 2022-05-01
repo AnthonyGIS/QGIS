@@ -39,6 +39,7 @@
 #include "qgsfillsymbol.h"
 #include "qgsiconutils.h"
 #include "qgssymbollayerreference.h"
+#include "qgsconfig.h"
 
 #include <QButtonGroup>
 #include <QMessageBox>
@@ -86,7 +87,11 @@ void QgsTextFormatWidget::initWidget()
   connect( mBufferUnitWidget, &QgsUnitSelectionWidget::changed, this, &QgsTextFormatWidget::mBufferUnitWidget_changed );
   connect( mMaskBufferUnitWidget, &QgsUnitSelectionWidget::changed, this, &QgsTextFormatWidget::mMaskBufferUnitWidget_changed );
   connect( mCoordXDDBtn, &QgsPropertyOverrideButton::changed, this, &QgsTextFormatWidget::mCoordXDDBtn_changed );
+  connect( mCoordXDDBtn, &QgsPropertyOverrideButton::activated, this, &QgsTextFormatWidget::mCoordXDDBtn_activated );
   connect( mCoordYDDBtn, &QgsPropertyOverrideButton::changed, this, &QgsTextFormatWidget::mCoordYDDBtn_changed );
+  connect( mCoordYDDBtn, &QgsPropertyOverrideButton::activated, this, &QgsTextFormatWidget::mCoordYDDBtn_activated );
+  connect( mCoordPointDDBtn, &QgsPropertyOverrideButton::changed, this, &QgsTextFormatWidget::mCoordPointDDBtn_changed );
+  connect( mCoordPointDDBtn, &QgsPropertyOverrideButton::activated, this, &QgsTextFormatWidget::mCoordPointDDBtn_activated );
   connect( mShapeTypeCmbBx, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, &QgsTextFormatWidget::mShapeTypeCmbBx_currentIndexChanged );
   connect( mShapeRotationCmbBx, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, &QgsTextFormatWidget::mShapeRotationCmbBx_currentIndexChanged );
   connect( mShapeSVGParamsBtn, &QPushButton::clicked, this, &QgsTextFormatWidget::mShapeSVGParamsBtn_clicked );
@@ -143,10 +148,11 @@ void QgsTextFormatWidget::initWidget()
   mFontSizeUnitWidget->setUnits( QgsUnitTypes::RenderUnitList() << QgsUnitTypes::RenderPoints << QgsUnitTypes::RenderMetersInMapUnits << QgsUnitTypes::RenderMapUnits
                                  << QgsUnitTypes::RenderMillimeters << QgsUnitTypes::RenderPixels << QgsUnitTypes::RenderInches );
   mBufferUnitWidget->setUnits( QgsUnitTypes::RenderUnitList() << QgsUnitTypes::RenderMillimeters << QgsUnitTypes::RenderMetersInMapUnits << QgsUnitTypes::RenderMapUnits << QgsUnitTypes::RenderPixels
-                               << QgsUnitTypes::RenderPoints << QgsUnitTypes::RenderInches );
+                               << QgsUnitTypes::RenderPoints << QgsUnitTypes::RenderInches << QgsUnitTypes::RenderPercentage );
   mMaskBufferUnitWidget->setUnits( QgsUnitTypes::RenderUnitList() << QgsUnitTypes::RenderMillimeters << QgsUnitTypes::RenderMetersInMapUnits << QgsUnitTypes::RenderMapUnits << QgsUnitTypes::RenderPixels
-                                   << QgsUnitTypes::RenderPoints << QgsUnitTypes::RenderInches );  mShapeSizeUnitWidget->setUnits( QgsUnitTypes::RenderUnitList() << QgsUnitTypes::RenderMillimeters << QgsUnitTypes::RenderMetersInMapUnits << QgsUnitTypes::RenderMapUnits << QgsUnitTypes::RenderPixels
-                                       << QgsUnitTypes::RenderPoints << QgsUnitTypes::RenderInches );
+                                   << QgsUnitTypes::RenderPoints << QgsUnitTypes::RenderInches  << QgsUnitTypes::RenderPercentage );
+  mShapeSizeUnitWidget->setUnits( QgsUnitTypes::RenderUnitList() << QgsUnitTypes::RenderMillimeters << QgsUnitTypes::RenderMetersInMapUnits << QgsUnitTypes::RenderMapUnits << QgsUnitTypes::RenderPixels
+                                  << QgsUnitTypes::RenderPoints << QgsUnitTypes::RenderInches );
   mShapeOffsetUnitWidget->setUnits( QgsUnitTypes::RenderUnitList() << QgsUnitTypes::RenderMillimeters << QgsUnitTypes::RenderMetersInMapUnits << QgsUnitTypes::RenderMapUnits << QgsUnitTypes::RenderPixels
                                     << QgsUnitTypes::RenderPoints << QgsUnitTypes::RenderInches );
   mShapeRadiusUnitWidget->setUnits( QgsUnitTypes::RenderUnitList() << QgsUnitTypes::RenderMillimeters << QgsUnitTypes::RenderMetersInMapUnits << QgsUnitTypes::RenderMapUnits
@@ -155,9 +161,9 @@ void QgsTextFormatWidget::initWidget()
   mShapeStrokeWidthUnitWidget->setUnits( QgsUnitTypes::RenderUnitList() << QgsUnitTypes::RenderMillimeters << QgsUnitTypes::RenderMetersInMapUnits << QgsUnitTypes::RenderMapUnits << QgsUnitTypes::RenderPixels
                                          << QgsUnitTypes::RenderPoints << QgsUnitTypes::RenderInches );
   mShadowOffsetUnitWidget->setUnits( QgsUnitTypes::RenderUnitList() << QgsUnitTypes::RenderMillimeters << QgsUnitTypes::RenderMetersInMapUnits << QgsUnitTypes::RenderMapUnits << QgsUnitTypes::RenderPixels
-                                     << QgsUnitTypes::RenderPoints << QgsUnitTypes::RenderInches );
+                                     << QgsUnitTypes::RenderPoints << QgsUnitTypes::RenderInches << QgsUnitTypes::RenderPercentage );
   mShadowRadiusUnitWidget->setUnits( QgsUnitTypes::RenderUnitList() << QgsUnitTypes::RenderMillimeters << QgsUnitTypes::RenderMetersInMapUnits << QgsUnitTypes::RenderMapUnits << QgsUnitTypes::RenderPixels
-                                     << QgsUnitTypes::RenderPoints << QgsUnitTypes::RenderInches );
+                                     << QgsUnitTypes::RenderPoints << QgsUnitTypes::RenderInches  << QgsUnitTypes::RenderPercentage );
   mPointOffsetUnitWidget->setUnits( QgsUnitTypes::RenderUnitList() << QgsUnitTypes::RenderMillimeters << QgsUnitTypes::RenderMetersInMapUnits << QgsUnitTypes::RenderMapUnits << QgsUnitTypes::RenderPixels
                                     << QgsUnitTypes::RenderPoints << QgsUnitTypes::RenderInches );
   mLineDistanceUnitWidget->setUnits( QgsUnitTypes::RenderUnitList() << QgsUnitTypes::RenderMillimeters << QgsUnitTypes::RenderMetersInMapUnits << QgsUnitTypes::RenderMapUnits << QgsUnitTypes::RenderPixels
@@ -177,6 +183,7 @@ void QgsTextFormatWidget::initWidget()
   mFontWordSpacingSpinBox->setClearValue( 0.0 );
   mZIndexSpinBox->setClearValue( 0.0 );
   mLineDistanceSpnBx->setClearValue( 0.0 );
+  mSpinStretch->setClearValue( 100 );
 
   mOffsetTypeComboBox->addItem( tr( "From Point" ), QgsPalLayerSettings::FromPoint );
   mOffsetTypeComboBox->addItem( tr( "From Symbol Bounds" ), QgsPalLayerSettings::FromSymbolBounds );
@@ -293,7 +300,7 @@ void QgsTextFormatWidget::initWidget()
   // get rid of annoying outer focus rect on Mac
   mLabelingOptionsListWidget->setAttribute( Qt::WA_MacShowFocusRect, false );
 
-  QgsSettings settings;
+  const QgsSettings settings;
 
   // reset horiz stretch of left side of options splitter (set to 1 for previewing in Qt Designer)
   QSizePolicy policy( mLabelingOptionsListFrame->sizePolicy() );
@@ -328,6 +335,12 @@ void QgsTextFormatWidget::initWidget()
   connect( mBackgroundEffectWidget, &QgsEffectStackCompactWidget::changed, this, &QgsTextFormatWidget::updatePreview );
   mBackgroundEffectWidget->setPaintEffect( mBackgroundEffect.get() );
 
+#ifndef HAS_KDE_QT5_FONT_STRETCH_FIX
+  mLabelStretch->hide();
+  mSpinStretch->hide();
+  mFontStretchDDBtn->hide();
+#endif
+
   setDockMode( false );
 
   QList<QWidget *> widgets;
@@ -348,6 +361,7 @@ void QgsTextFormatWidget::initWidget()
           << mBufferOpacityWidget
           << mCentroidInsideCheckBox
           << mChkNoObstacle
+          << mCoordRotationUnitComboBox
           << mDirectSymbChkBx
           << mDirectSymbLeftLineEdit
           << mDirectSymbRevChkBx
@@ -364,6 +378,7 @@ void QgsTextFormatWidget::initWidget()
           << mFontStyleComboBox
           << mTextOrientationComboBox
           << mTextOpacityWidget
+          << mSpinStretch
           << mFontWordSpacingSpinBox
           << mFormatNumChkBx
           << mFormatNumDecimalsSpnBx
@@ -580,6 +595,10 @@ void QgsTextFormatWidget::toggleDDButtons( bool visible )
   const auto buttons = findChildren< QgsPropertyOverrideButton * >();
   for ( QgsPropertyOverrideButton *button : buttons )
   {
+#ifndef HAS_KDE_QT5_FONT_STRETCH_FIX
+    if ( button == mFontStretchDDBtn )
+      continue; // always hidden
+#endif
     button->setVisible( visible );
   }
 }
@@ -691,6 +710,7 @@ void QgsTextFormatWidget::populateDataDefinedButtons()
   registerDataDefinedButton( mFontLetterSpacingDDBtn, QgsPalLayerSettings::FontLetterSpacing );
   registerDataDefinedButton( mFontWordSpacingDDBtn, QgsPalLayerSettings::FontWordSpacing );
   registerDataDefinedButton( mFontBlendModeDDBtn, QgsPalLayerSettings::FontBlendMode );
+  registerDataDefinedButton( mFontStretchDDBtn, QgsPalLayerSettings::FontStretchFactor );
 
   // text formatting
   registerDataDefinedButton( mWrapCharDDBtn, QgsPalLayerSettings::MultiLineWrapChar );
@@ -788,13 +808,16 @@ void QgsTextFormatWidget::populateDataDefinedButtons()
   // data defined-only
   registerDataDefinedButton( mCoordXDDBtn, QgsPalLayerSettings::PositionX );
   registerDataDefinedButton( mCoordYDDBtn, QgsPalLayerSettings::PositionY );
+  registerDataDefinedButton( mCoordPointDDBtn, QgsPalLayerSettings::PositionPoint );
   registerDataDefinedButton( mCoordAlignmentHDDBtn, QgsPalLayerSettings::Hali );
   registerDataDefinedButton( mCoordAlignmentVDDBtn, QgsPalLayerSettings::Vali );
   registerDataDefinedButton( mCoordRotationDDBtn, QgsPalLayerSettings::LabelRotation );
 
+  updateDataDefinedAlignment();
+
   // rendering
-  QString ddScaleVisInfo = tr( "Value &lt; 0 represents a scale closer than 1:1, e.g. -10 = 10:1<br>"
-                               "Value of 0 disables the specific limit." );
+  const QString ddScaleVisInfo = tr( "Value &lt; 0 represents a scale closer than 1:1, e.g. -10 = 10:1<br>"
+                                     "Value of 0 disables the specific limit." );
   registerDataDefinedButton( mScaleBasedVisibilityDDBtn, QgsPalLayerSettings::ScaleVisibility );
   mScaleBasedVisibilityDDBtn->registerCheckedWidget( mScaleBasedVisibilityChkBx );
   registerDataDefinedButton( mScaleBasedVisibilityMinDDBtn, QgsPalLayerSettings::MinimumScale );
@@ -833,10 +856,10 @@ void QgsTextFormatWidget::registerDataDefinedButton( QgsPropertyOverrideButton *
 
 void QgsTextFormatWidget::updateWidgetForFormat( const QgsTextFormat &format )
 {
-  QgsTextBufferSettings buffer = format.buffer();
-  QgsTextMaskSettings mask = format.mask();
-  QgsTextBackgroundSettings background = format.background();
-  QgsTextShadowSettings shadow = format.shadow();
+  const QgsTextBufferSettings buffer = format.buffer();
+  const QgsTextMaskSettings mask = format.mask();
+  const QgsTextBackgroundSettings background = format.background();
+  const QgsTextShadowSettings shadow = format.shadow();
 
   if ( mWidgetMode != Labeling )
   {
@@ -885,6 +908,7 @@ void QgsTextFormatWidget::updateWidgetForFormat( const QgsTextFormat &format )
   mRefFont = format.font();
   mFontSizeSpinBox->setValue( format.size() );
   btnTextColor->setColor( format.color() );
+  whileBlocking( mSpinStretch )->setValue( format.stretchFactor() );
   mTextOpacityWidget->setOpacity( format.opacity() );
   comboBlendMode->setBlendMode( format.blendMode() );
   mTextOrientationComboBox->setCurrentIndex( mTextOrientationComboBox->findData( format.orientation() ) );
@@ -894,7 +918,7 @@ void QgsTextFormatWidget::updateWidgetForFormat( const QgsTextFormat &format )
   mFontLetterSpacingSpinBox->setValue( format.font().letterSpacing() );
   whileBlocking( mKerningCheckBox )->setChecked( format.font().kerning() );
 
-  whileBlocking( mFontCapitalsComboBox )->setCurrentIndex( mFontCapitalsComboBox->findData( format.capitalization() ) );
+  whileBlocking( mFontCapitalsComboBox )->setCurrentIndex( mFontCapitalsComboBox->findData( static_cast< int >( format.capitalization() ) ) );
   QgsFontUtils::updateFontViaStyle( mRefFont, format.namedStyle() );
   updateFont( mRefFont );
 
@@ -902,7 +926,7 @@ void QgsTextFormatWidget::updateWidgetForFormat( const QgsTextFormat &format )
   mFontMissingLabel->setVisible( !format.fontFound() );
   if ( !format.fontFound() )
   {
-    QString missingTxt = tr( "%1 not found. Default substituted." );
+    const QString missingTxt = tr( "%1 not found. Default substituted." );
     QString txtPrepend = tr( "Chosen font" );
     if ( !format.resolvedFontFamily().isEmpty() )
     {
@@ -1023,6 +1047,7 @@ QgsTextFormat QgsTextFormatWidget::format( bool includeDataDefinedProperties ) c
   format.setSize( mFontSizeSpinBox->value() );
   format.setNamedStyle( mFontStyleComboBox->currentText() );
   format.setOpacity( mTextOpacityWidget->opacity() );
+  format.setStretchFactor( mSpinStretch->value() );
   format.setBlendMode( comboBlendMode->blendMode() );
   format.setSizeUnit( mFontSizeUnitWidget->unit() );
   format.setSizeMapUnitScale( mFontSizeUnitWidget->getMapUnitScale() );
@@ -1030,7 +1055,7 @@ QgsTextFormat QgsTextFormatWidget::format( bool includeDataDefinedProperties ) c
   format.setPreviewBackgroundColor( mPreviewBackgroundColor );
   format.setOrientation( static_cast< QgsTextFormat::TextOrientation >( mTextOrientationComboBox->currentData().toInt() ) );
   format.setAllowHtmlFormatting( mHtmlFormattingCheckBox->isChecked( ) );
-  format.setCapitalization( static_cast< QgsStringUtils::Capitalization >( mFontCapitalsComboBox->currentData().toInt() ) );
+  format.setCapitalization( static_cast< Qgis::Capitalization >( mFontCapitalsComboBox->currentData().toInt() ) );
 
   // buffer
   QgsTextBufferSettings buffer;
@@ -1128,7 +1153,7 @@ void QgsTextFormatWidget::setFormat( const QgsTextFormat &format )
   {
     // we need to combine any data defined properties from the text format with existing ones from the label settings
     const QgsPropertyCollection formatProps = format.dataDefinedProperties();
-    for ( int key : formatProps.propertyKeys() )
+    for ( const int key : formatProps.propertyKeys() )
     {
       if ( formatProps.isActive( key ) )
       {
@@ -1150,12 +1175,9 @@ void QgsTextFormatWidget::deactivateField( QgsPalLayerSettings::Property key )
   if ( mButtons.contains( key ) )
   {
     QgsPropertyOverrideButton *button = mButtons[ key ];
-    QgsProperty p = button->toProperty();
-    p.setField( QString() );
-    p.setActive( false );
     button->updateFieldLists();
-    button->setToProperty( p );
-    mDataDefinedProperties.setProperty( key, p );
+    button->setToProperty( QgsProperty() );
+    mDataDefinedProperties.setProperty( key, QgsProperty() );
   }
 }
 
@@ -1192,7 +1214,7 @@ void QgsTextFormatWidget::collapseSample( bool collapse )
     QList<int> splitSizes = mFontPreviewSplitter->sizes();
     if ( splitSizes[0] > groupBox_mPreview->height() )
     {
-      int delta = splitSizes[0] - groupBox_mPreview->height();
+      const int delta = splitSizes[0] - groupBox_mPreview->height();
       splitSizes[0] -= delta;
       splitSizes[1] += delta;
       mFontPreviewSplitter->setSizes( splitSizes );
@@ -1297,7 +1319,7 @@ void QgsTextFormatWidget::updatePlacementWidgets()
   bool showMaxCharAngleFrame = false;
 
   const QgsPalLayerSettings::Placement currentPlacement = static_cast< QgsPalLayerSettings::Placement >( mPlacementModeComboBox->currentData().toInt() );
-  bool showPolygonPlacementOptions = ( currentGeometryType == QgsWkbTypes::PolygonGeometry && currentPlacement != QgsPalLayerSettings::Line && currentPlacement != QgsPalLayerSettings::PerimeterCurved && currentPlacement != QgsPalLayerSettings::OutsidePolygons );
+  const bool showPolygonPlacementOptions = ( currentGeometryType == QgsWkbTypes::PolygonGeometry && currentPlacement != QgsPalLayerSettings::Line && currentPlacement != QgsPalLayerSettings::PerimeterCurved && currentPlacement != QgsPalLayerSettings::OutsidePolygons );
 
   bool enableMultiLinesFrame = true;
 
@@ -1333,12 +1355,12 @@ void QgsTextFormatWidget::updatePlacementWidgets()
     showDistanceFrame = true;
     //showRotationFrame = true; // TODO: uncomment when supported
 
-    bool offline = chkLineAbove->isChecked() || chkLineBelow->isChecked();
+    const bool offline = chkLineAbove->isChecked() || chkLineBelow->isChecked();
     chkLineOrientationDependent->setEnabled( offline );
     mPlacementDistanceFrame->setEnabled( offline );
 
-    bool isCurved = ( currentGeometryType == QgsWkbTypes::LineGeometry && currentPlacement == QgsPalLayerSettings::Curved )
-                    || ( currentGeometryType == QgsWkbTypes::PolygonGeometry && currentPlacement == QgsPalLayerSettings::PerimeterCurved );
+    const bool isCurved = ( currentGeometryType == QgsWkbTypes::LineGeometry && currentPlacement == QgsPalLayerSettings::Curved )
+                          || ( currentGeometryType == QgsWkbTypes::PolygonGeometry && currentPlacement == QgsPalLayerSettings::PerimeterCurved );
     showMaxCharAngleFrame = isCurved;
     // TODO: enable mMultiLinesFrame when supported for curved labels
     enableMultiLinesFrame = !isCurved;
@@ -1421,20 +1443,23 @@ void QgsTextFormatWidget::updatePlacementWidgets()
 
 void QgsTextFormatWidget::populateFontCapitalsComboBox()
 {
-  mFontCapitalsComboBox->addItem( tr( "No Change" ), QgsStringUtils::MixedCase );
-  mFontCapitalsComboBox->addItem( tr( "All Uppercase" ), QgsStringUtils::AllUppercase );
-  mFontCapitalsComboBox->addItem( tr( "All Lowercase" ), QgsStringUtils::AllLowercase );
-  // Small caps doesn't work right with QPainterPath::addText()
+  mFontCapitalsComboBox->addItem( tr( "No Change" ), static_cast< int >( Qgis::Capitalization::MixedCase ) );
+  mFontCapitalsComboBox->addItem( tr( "All Uppercase" ), static_cast< int >( Qgis::Capitalization::AllUppercase ) );
+  mFontCapitalsComboBox->addItem( tr( "All Lowercase" ), static_cast< int >( Qgis::Capitalization::AllLowercase ) );
+#if defined(HAS_KDE_QT5_SMALL_CAPS_FIX) || QT_VERSION >= QT_VERSION_CHECK(6, 3, 0)
+  // Requires new enough build due to
   // https://bugreports.qt.io/browse/QTBUG-13965
-//  mFontCapitalsComboBox->addItem( tr( "Small Caps" ), QVariant( 3 ) );
-  mFontCapitalsComboBox->addItem( tr( "Title Case" ), QgsStringUtils::TitleCase );
-  mFontCapitalsComboBox->addItem( tr( "Force First Letter to Capital" ), QgsStringUtils::ForceFirstLetterToCapital );
+  mFontCapitalsComboBox->addItem( tr( "Small Caps" ), static_cast< int >( Qgis::Capitalization::SmallCaps ) );
+  mFontCapitalsComboBox->addItem( tr( "All Small Caps" ), static_cast< int >( Qgis::Capitalization::AllSmallCaps ) );
+#endif
+  mFontCapitalsComboBox->addItem( tr( "Title Case" ), static_cast< int >( Qgis::Capitalization::TitleCase ) );
+  mFontCapitalsComboBox->addItem( tr( "Force First Letter to Capital" ), static_cast< int >( Qgis::Capitalization::ForceFirstLetterToCapital ) );
 }
 
 void QgsTextFormatWidget::populateFontStyleComboBox()
 {
   mFontStyleComboBox->clear();
-  QStringList styles = mFontDB.styles( mRefFont.family() );
+  const QStringList styles = mFontDB.styles( mRefFont.family() );
   const auto constStyles = styles;
   for ( const QString &style : constStyles )
   {
@@ -1444,12 +1469,12 @@ void QgsTextFormatWidget::populateFontStyleComboBox()
   QString targetStyle = mFontDB.styleString( mRefFont );
   if ( !styles.contains( targetStyle ) )
   {
-    QFont f = QFont( mRefFont.family() );
+    const QFont f = QFont( mRefFont.family() );
     targetStyle = QFontInfo( f ).styleName();
     mRefFont.setStyleName( targetStyle );
   }
   int curIndx = 0;
-  int stylIndx = mFontStyleComboBox->findText( targetStyle );
+  const int stylIndx = mFontStyleComboBox->findText( targetStyle );
   if ( stylIndx > -1 )
   {
     curIndx = stylIndx;
@@ -1551,34 +1576,50 @@ void QgsTextFormatWidget::mMaskBufferUnitWidget_changed()
   updateFont( mRefFont );
 }
 
-void QgsTextFormatWidget::mCoordXDDBtn_changed( )
+void QgsTextFormatWidget::mCoordXDDBtn_changed()
 {
-  if ( !mCoordXDDBtn->isActive() ) //no data defined alignment without data defined position
-  {
-    enableDataDefinedAlignment( false );
-  }
-  else if ( mCoordYDDBtn->isActive() )
-  {
-    enableDataDefinedAlignment( true );
-  }
+  updateDataDefinedAlignment();
 }
 
-void QgsTextFormatWidget::mCoordYDDBtn_changed( )
+void QgsTextFormatWidget::mCoordXDDBtn_activated( bool isActive )
 {
-  if ( !mCoordYDDBtn->isActive() ) //no data defined alignment without data defined position
-  {
-    enableDataDefinedAlignment( false );
-  }
-  else if ( mCoordXDDBtn->isActive() )
-  {
-    enableDataDefinedAlignment( true );
-  }
+  if ( !isActive )
+    return;
+
+  mCoordPointDDBtn->setActive( false );
+}
+
+void QgsTextFormatWidget::mCoordYDDBtn_changed()
+{
+  updateDataDefinedAlignment();
+}
+
+void QgsTextFormatWidget::mCoordYDDBtn_activated( bool isActive )
+{
+  if ( !isActive )
+    return;
+
+  mCoordPointDDBtn->setActive( false );
+}
+
+void QgsTextFormatWidget::mCoordPointDDBtn_changed()
+{
+  updateDataDefinedAlignment();
+}
+
+void QgsTextFormatWidget::mCoordPointDDBtn_activated( bool isActive )
+{
+  if ( !isActive )
+    return;
+
+  mCoordXDDBtn->setActive( false );
+  mCoordYDDBtn->setActive( false );
 }
 
 void QgsTextFormatWidget::mShapeTypeCmbBx_currentIndexChanged( int )
 {
   // shape background
-  QgsTextBackgroundSettings::ShapeType type = static_cast< QgsTextBackgroundSettings::ShapeType >( mShapeTypeCmbBx->currentData().toInt() );
+  const QgsTextBackgroundSettings::ShapeType type = static_cast< QgsTextBackgroundSettings::ShapeType >( mShapeTypeCmbBx->currentData().toInt() );
   const bool isRect = type == QgsTextBackgroundSettings::ShapeRectangle || type == QgsTextBackgroundSettings::ShapeSquare;
   const bool isSVG = type == QgsTextBackgroundSettings::ShapeSVG;
   const bool isMarker = type == QgsTextBackgroundSettings::ShapeMarkerSymbol;
@@ -1645,9 +1686,9 @@ void QgsTextFormatWidget::mShapeSVGPathLineEdit_textChanged( const QString &text
 
 void QgsTextFormatWidget::updateLinePlacementOptions()
 {
-  int numOptionsChecked = ( chkLineAbove->isChecked() ? 1 : 0 ) +
-                          ( chkLineBelow->isChecked() ? 1 : 0 ) +
-                          ( chkLineOn->isChecked() ? 1 : 0 );
+  const int numOptionsChecked = ( chkLineAbove->isChecked() ? 1 : 0 ) +
+                                ( chkLineBelow->isChecked() ? 1 : 0 ) +
+                                ( chkLineOn->isChecked() ? 1 : 0 );
 
   if ( numOptionsChecked == 1 )
   {
@@ -1741,7 +1782,7 @@ void QgsTextFormatWidget::updateAvailableShadowPositions()
        || ( mShadowUnderCmbBx->findData( QgsTextShadowSettings::ShadowShape ) == -1 && mShapeTypeCmbBx->currentData().toInt() != QgsTextBackgroundSettings::ShapeMarkerSymbol ) )
   {
     // showing invalid choices, have to rebuild the list
-    QgsTextShadowSettings::ShadowPlacement currentPlacement = static_cast< QgsTextShadowSettings::ShadowPlacement >( mShadowUnderCmbBx->currentData().toInt() );
+    const QgsTextShadowSettings::ShadowPlacement currentPlacement = static_cast< QgsTextShadowSettings::ShadowPlacement >( mShadowUnderCmbBx->currentData().toInt() );
     mShadowUnderCmbBx->clear();
 
     mShadowUnderCmbBx->addItem( tr( "Lowest Label Component" ), QgsTextShadowSettings::ShadowLowest );
@@ -1759,7 +1800,7 @@ void QgsTextFormatWidget::updateAvailableShadowPositions()
 void QgsTextFormatWidget::updateProperty()
 {
   QgsPropertyOverrideButton *button = qobject_cast<QgsPropertyOverrideButton *>( sender() );
-  QgsPalLayerSettings::Property key = static_cast< QgsPalLayerSettings::Property >( button->propertyKey() );
+  const QgsPalLayerSettings::Property key = static_cast< QgsPalLayerSettings::Property >( button->propertyKey() );
   mDataDefinedProperties.setProperty( key, button->toProperty() );
   updatePreview();
 }
@@ -1820,6 +1861,13 @@ void QgsTextFormatWidget::updateCalloutFrameStatus()
   mCalloutFrame->setEnabled( mCalloutDrawDDBtn->isActive() || mCalloutsDrawCheckBox->isChecked() );
 }
 
+void QgsTextFormatWidget::updateDataDefinedAlignment()
+{
+  // no data defined alignment without data defined position
+  mCoordAlignmentFrame->setEnabled( ( mCoordXDDBtn->isActive() && mCoordYDDBtn->isActive() )
+                                    || mCoordPointDDBtn->isActive() );
+}
+
 void QgsTextFormatWidget::setFormatFromStyle( const QString &name, QgsStyle::StyleEntity type )
 {
   switch ( type )
@@ -1837,7 +1885,7 @@ void QgsTextFormatWidget::setFormatFromStyle( const QString &name, QgsStyle::Sty
       if ( !QgsStyle::defaultStyle()->textFormatNames().contains( name ) )
         return;
 
-      QgsTextFormat newFormat = QgsStyle::defaultStyle()->textFormat( name );
+      const QgsTextFormat newFormat = QgsStyle::defaultStyle()->textFormat( name );
       setFormat( newFormat );
       break;
     }
@@ -1847,7 +1895,7 @@ void QgsTextFormatWidget::setFormatFromStyle( const QString &name, QgsStyle::Sty
       if ( !QgsStyle::defaultStyle()->labelSettingsNames().contains( name ) )
         return;
 
-      QgsTextFormat newFormat = QgsStyle::defaultStyle()->labelSettings( name ).format();
+      const QgsTextFormat newFormat = QgsStyle::defaultStyle()->labelSettings( name ).format();
       setFormat( newFormat );
       break;
     }
@@ -1871,10 +1919,10 @@ void QgsTextFormatWidget::saveFormat()
   // check if there is no format with same name
   if ( style->textFormatNames().contains( saveDlg.name() ) )
   {
-    int res = QMessageBox::warning( this, tr( "Save Text Format" ),
-                                    tr( "Format with name '%1' already exists. Overwrite?" )
-                                    .arg( saveDlg.name() ),
-                                    QMessageBox::Yes | QMessageBox::No );
+    const int res = QMessageBox::warning( this, tr( "Save Text Format" ),
+                                          tr( "Format with name '%1' already exists. Overwrite?" )
+                                          .arg( saveDlg.name() ),
+                                          QMessageBox::Yes | QMessageBox::No );
     if ( res != QMessageBox::Yes )
     {
       return;
@@ -1882,9 +1930,9 @@ void QgsTextFormatWidget::saveFormat()
     style->removeTextFormat( saveDlg.name() );
   }
 
-  QStringList symbolTags = saveDlg.tags().split( ',' );
+  const QStringList symbolTags = saveDlg.tags().split( ',' );
 
-  QgsTextFormat newFormat = format();
+  const QgsTextFormat newFormat = format();
   style->addTextFormat( saveDlg.name(), newFormat );
   style->saveTextFormat( saveDlg.name(), newFormat, saveDlg.isFavorite(), symbolTags );
 }
@@ -1897,7 +1945,7 @@ void QgsTextFormatWidget::mShapeSVGSelectorBtn_clicked()
 
   if ( svgDlg.exec() == QDialog::Accepted )
   {
-    QString svgPath = svgDlg.svgSelector()->currentSvgPath();
+    const QString svgPath = svgDlg.svgSelector()->currentSvgPath();
     if ( !svgPath.isEmpty() )
     {
       mShapeSVGPathLineEdit->setText( svgPath );
@@ -1908,7 +1956,7 @@ void QgsTextFormatWidget::mShapeSVGSelectorBtn_clicked()
 
 void QgsTextFormatWidget::mShapeSVGParamsBtn_clicked()
 {
-  QString svgPath = mShapeSVGPathLineEdit->text();
+  const QString svgPath = mShapeSVGPathLineEdit->text();
   mLoadSvgParams = true;
   updateSvgWidgets( svgPath );
   mLoadSvgParams = false;
@@ -1942,7 +1990,7 @@ void QgsTextFormatWidget::mDirectSymbLeftToolBtn_clicked()
   bool gotChar = false;
 
   const QChar initial = !mDirectSymbLeftLineEdit->text().isEmpty() ? mDirectSymbLeftLineEdit->text().at( 0 ) : QChar();
-  QChar dirSymb = mCharDlg->selectCharacter( &gotChar, mRefFont, mFontDB.styleString( mRefFont ), initial );
+  const QChar dirSymb = mCharDlg->selectCharacter( &gotChar, mRefFont, mFontDB.styleString( mRefFont ), initial );
 
   if ( !gotChar )
     return;
@@ -1955,7 +2003,7 @@ void QgsTextFormatWidget::mDirectSymbRightToolBtn_clicked()
 {
   bool gotChar = false;
   const QChar initial = !mDirectSymbRightLineEdit->text().isEmpty() ? mDirectSymbRightLineEdit->text().at( 0 ) : QChar();
-  QChar dirSymb = mCharDlg->selectCharacter( &gotChar, mRefFont, mFontDB.styleString( mRefFont ), initial );
+  const QChar dirSymb = mCharDlg->selectCharacter( &gotChar, mRefFont, mFontDB.styleString( mRefFont ), initial );
 
   if ( !gotChar )
     return;
@@ -2014,11 +2062,6 @@ void QgsTextFormatWidget::showBackgroundRadius( bool show )
   mShapeRadiusUnitsDDBtn->setVisible( show );
 }
 
-void QgsTextFormatWidget::enableDataDefinedAlignment( bool enable )
-{
-  mCoordAlignmentFrame->setEnabled( enable );
-}
-
 QgsExpressionContext QgsTextFormatWidget::createExpressionContext() const
 {
   if ( auto *lExpressionContext = mContext.expressionContext() )
@@ -2071,7 +2114,7 @@ QgsTextFormatDialog::QgsTextFormatDialog( const QgsTextFormat &format, QgsMapCan
   layout->addWidget( mButtonBox );
 
   setLayout( layout );
-  QgsGui::instance()->enableAutoGeometryRestore( this );
+  QgsGui::enableAutoGeometryRestore( this );
 
   connect( mButtonBox->button( QDialogButtonBox::Ok ), &QAbstractButton::clicked, this, &QDialog::accept );
   connect( mButtonBox->button( QDialogButtonBox::Cancel ), &QAbstractButton::clicked, this, &QDialog::reject );

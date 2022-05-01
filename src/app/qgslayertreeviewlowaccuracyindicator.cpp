@@ -17,6 +17,7 @@
 #include "qgsdatums.h"
 #include "qgssettings.h"
 #include "qgsgui.h"
+#include "qgsexception.h"
 
 QgsLayerTreeViewLowAccuracyIndicatorProvider::QgsLayerTreeViewLowAccuracyIndicatorProvider( QgsLayerTreeView *view )
   : QgsLayerTreeViewIndicatorProvider( view )
@@ -92,7 +93,7 @@ QString QgsLayerTreeViewLowAccuracyIndicatorProvider::tooltipText( QgsMapLayer *
 
 bool QgsLayerTreeViewLowAccuracyIndicatorProvider::acceptLayer( QgsMapLayer *layer )
 {
-  QgsSettings settings;
+  const QgsSettings settings;
   if ( !settings.value( QStringLiteral( "/projections/crsAccuracyIndicator" ), false, QgsSettings::App ).toBool() )
     return false;
 

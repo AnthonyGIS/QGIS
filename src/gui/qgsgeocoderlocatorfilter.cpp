@@ -34,7 +34,7 @@ QgsLocatorFilter *QgsGeocoderLocatorFilter::clone() const
 
 void QgsGeocoderLocatorFilter::handleGeocodeResult( const QgsGeocoderResult &result )
 {
-  QgsCoordinateTransform ct( result.crs(), mCanvas->mapSettings().destinationCrs(), mCanvas->mapSettings().transformContext() );
+  const QgsCoordinateTransform ct( result.crs(), mCanvas->mapSettings().destinationCrs(), mCanvas->mapSettings().transformContext() );
   QgsGeometry g = result.geometry();
   const QgsRectangle viewport = result.viewport();
   try
@@ -47,7 +47,9 @@ void QgsGeocoderLocatorFilter::handleGeocodeResult( const QgsGeocoderResult &res
     }
     else
     {
-      bounds = ct.transformBoundingBox( viewport );
+      QgsCoordinateTransform extentTransform = ct;
+      extentTransform.setBallparkTransformsAreAppropriate( true );
+      bounds = extentTransform.transformBoundingBox( viewport );
     }
     mCanvas->zoomToFeatureExtent( bounds );
 

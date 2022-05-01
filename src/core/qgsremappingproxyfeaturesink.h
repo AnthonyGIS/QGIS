@@ -22,6 +22,7 @@
 #include "qgis.h"
 #include "qgsfeaturesink.h"
 #include "qgsproperty.h"
+#include "qgscoordinatetransform.h"
 
 /**
  * \class QgsRemappingSinkDefinition
@@ -205,7 +206,7 @@ class CORE_EXPORT QgsRemappingProxyFeatureSink : public QgsFeatureSink
     /**
      * Sets the expression \a context to use when evaluating mapped field values.
      */
-    void setExpressionContext( const QgsExpressionContext &context );
+    void setExpressionContext( const QgsExpressionContext &context ) const;
 
     /**
      * Sets the transform \a context to use when reprojecting features.

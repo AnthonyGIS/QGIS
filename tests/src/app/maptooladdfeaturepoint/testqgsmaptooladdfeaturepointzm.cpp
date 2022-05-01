@@ -90,14 +90,14 @@ void TestQgsMapToolAddFeaturePointZM::initTestCase()
 
   mLayerPointZM->startEditing();
   QgsFeature pointFZM;
-  QString pointWktZM = "PointZM(7 7 4 3)";
+  const QString pointWktZM = "PointZM(7 7 4 3)";
   pointFZM.setGeometry( QgsGeometry::fromWkt( pointWktZM ) );
 
   mLayerPointZM->addFeature( pointFZM );
   QCOMPARE( mLayerPointZM->featureCount(), ( long )1 );
 
   // create the tool
-  mCaptureTool = new QgsMapToolAddFeature( mCanvas, /*mAdvancedDigitizingDockWidget, */ QgsMapToolCapture::CapturePoint );
+  mCaptureTool = new QgsMapToolAddFeature( mCanvas, QgisApp::instance()->cadDockWidget(), QgsMapToolCapture::CapturePoint );
   mCanvas->setMapTool( mCaptureTool );
 
   QCOMPARE( mCanvas->mapSettings().outputSize(), QSize( 512, 512 ) );

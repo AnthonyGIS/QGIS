@@ -35,7 +35,6 @@
 #include "qgsfields.h"
 #include "qgsvectordataprovider.h"
 #include "qgsvectorsimplifymethod.h"
-#include "qgsvectorlayerserverproperties.h"
 #include "qgseditformconfig.h"
 #include "qgsattributetableconfig.h"
 #include "qgsaggregatecalculator.h"
@@ -43,6 +42,7 @@
 #include "qgsexpressioncontextgenerator.h"
 #include "qgsexpressioncontextscopegenerator.h"
 #include "qgsexpressioncontext.h"
+#include "qgsabstractprofilesource.h"
 
 class QPainter;
 class QImage;
@@ -81,6 +81,7 @@ class QgsGeometryOptions;
 class QgsStyleEntityVisitorInterface;
 class QgsVectorLayerTemporalProperties;
 class QgsFeatureRendererGenerator;
+class QgsVectorLayerElevationProperties;
 
 typedef QList<int> QgsAttributeList;
 typedef QSet<int> QgsAttributeIds;
@@ -389,7 +390,7 @@ typedef QSet<int> QgsAttributeIds;
  *
  * \see QgsVectorLayerUtils()
  */
-class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionContextGenerator, public QgsExpressionContextScopeGenerator, public QgsFeatureSink, public QgsFeatureSource
+class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionContextGenerator, public QgsExpressionContextScopeGenerator, public QgsFeatureSink, public QgsFeatureSource, public QgsAbstractProfileSource
 {
     Q_OBJECT
 
@@ -571,6 +572,27 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
      */
     QString capabilitiesString() const;
 
+
+    /**
+     * Returns TRUE if the layer is a query (SQL) layer.
+     *
+     * \note this is simply a shortcut to check if the SqlQuery flag
+     *       is set.
+     *
+     * \see vectorLayerTypeFlags()
+     * \since QGIS 3.24
+     */
+    bool isSqlQuery() const;
+
+    /**
+     * Returns the vector layer type flags.
+     *
+     * \see isSqlQuery()
+     * \since QGIS 3.24
+     */
+    Qgis::VectorLayerTypeFlags vectorLayerTypeFlags() const;
+
+
     /**
      * Returns a description for this layer as defined in the data provider.
      */
@@ -604,11 +626,9 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
 
     QgsVectorDataProvider *dataProvider() FINAL;
     const QgsVectorDataProvider *dataProvider() const FINAL SIP_SKIP;
-
-    /**
-     * Returns temporal properties associated with the vector layer.
-     */
     QgsMapLayerTemporalProperties *temporalProperties() override;
+    QgsMapLayerElevationProperties *elevationProperties() override;
+    QgsAbstractProfileGenerator *createProfileGenerator( const QgsProfileRequest &request ) override SIP_FACTORY;
 
     /**
      * Sets the text \a encoding of the data provider.
@@ -730,12 +750,6 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
     const QgsActionManager *actions() const SIP_SKIP { return mActions; }
 
     /**
-     * Returns QGIS Server Properties of the vector layer
-     * \since QGIS 3.10
-     */
-    QgsVectorLayerServerProperties *serverProperties() const { return mServerProperties.get(); }
-
-    /**
      * Returns the number of features that are selected in this layer.
      *
      * \see selectedFeatureIds()
@@ -758,11 +772,12 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
      * \param expression expression to evaluate to select features
      * \param behavior selection type, allows adding to current selection, removing
      * from selection, etc.
+     * \param context since QGIS 3.26, specifies an optional expression context to use when selecting features. If not specified a default one will be built.
      * \see selectByRect()
      * \see selectByIds()
      * \since QGIS 2.16
      */
-    Q_INVOKABLE void selectByExpression( const QString &expression, Qgis::SelectBehavior behavior = Qgis::SelectBehavior::SetSelection );
+    Q_INVOKABLE void selectByExpression( const QString &expression, Qgis::SelectBehavior behavior = Qgis::SelectBehavior::SetSelection, QgsExpressionContext *context = nullptr );
 
     /**
      * Selects matching features using a list of feature IDs. Will emit the
@@ -974,6 +989,13 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
      * \param useAsDefault Set to TRUE if style should be used as the default style for the layer
      * \param uiFileContent
      * \param msgError will be set to a descriptive error message if any occurs
+     *
+     *
+     * \note Prior to QGIS 3.24, this method would show a message box warning when a
+     * style with the same \a styleName already existed to confirm replacing the style with the user.
+     * Since 3.24, calling this method will ALWAYS overwrite any existing style with the same name.
+     * Use QgsProviderRegistry::styleExists() to test in advance if a style already exists and handle this appropriately
+     * in your client code.
      */
     virtual void saveStyleToDatabase( const QString &name, const QString &description,
                                       bool useAsDefault, const QString &uiFileContent,
@@ -1295,7 +1317,7 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
      * Adds a ring to polygon/multipolygon features
      * \param ring ring to add
      * \param featureId if specified, feature ID for feature ring was added to will be stored in this parameter
-     * \returns QgsGeometry::OperationResult
+     * \returns Qgis::GeometryOperationResult
      *
      * - Success
      * - LayerNotEditable
@@ -1311,14 +1333,14 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
      * changes can be discarded by calling rollBack().
      * \deprecated since QGIS 3.12 - will be removed in QGIS 4.0. Use the variant which accepts QgsPoint objects instead of QgsPointXY.
      */
-    Q_DECL_DEPRECATED QgsGeometry::OperationResult addRing( const QVector<QgsPointXY> &ring, QgsFeatureId *featureId = nullptr ) SIP_DEPRECATED;
+    Q_DECL_DEPRECATED Qgis::GeometryOperationResult addRing( const QVector<QgsPointXY> &ring, QgsFeatureId *featureId = nullptr ) SIP_DEPRECATED;
 
 
     /**
      * Adds a ring to polygon/multipolygon features
      * \param ring ring to add
      * \param featureId if specified, feature ID for feature ring was added to will be stored in this parameter
-     * \returns QgsGeometry::OperationResult
+     * \returns Qgis::GeometryOperationResult
      *
      * - Success
      * - LayerNotEditable
@@ -1333,13 +1355,13 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
      * to the underlying data provider until a commitChanges() call is made. Any uncommitted
      * changes can be discarded by calling rollBack().
      */
-    Q_INVOKABLE QgsGeometry::OperationResult addRing( const QgsPointSequence &ring, QgsFeatureId *featureId = nullptr );
+    Q_INVOKABLE Qgis::GeometryOperationResult addRing( const QgsPointSequence &ring, QgsFeatureId *featureId = nullptr );
 
     /**
      * Adds a ring to polygon/multipolygon features (takes ownership)
      * \param ring ring to add
      * \param featureId if specified, feature ID for feature ring was added to will be stored in this parameter
-     * \returns QgsGeometry::OperationResult
+     * \returns Qgis::GeometryOperationResult
      *
      * - Success
      * - LayerNotEditable
@@ -1355,11 +1377,11 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
      * to the underlying data provider until a commitChanges() call is made. Any uncommitted
      * changes can be discarded by calling rollBack().
      */
-    Q_INVOKABLE QgsGeometry::OperationResult addRing( QgsCurve *ring SIP_TRANSFER, QgsFeatureId *featureId = nullptr ) SIP_PYNAME( addCurvedRing );
+    Q_INVOKABLE Qgis::GeometryOperationResult addRing( QgsCurve *ring SIP_TRANSFER, QgsFeatureId *featureId = nullptr ) SIP_PYNAME( addCurvedRing );
 
     /**
      * Adds a new part polygon to a multipart feature
-     * \returns QgsGeometry::OperationResult
+     * \returns Qgis::GeometryOperationResult
      *
      * - Success
      * - LayerNotEditable
@@ -1376,13 +1398,13 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
      * changes can be discarded by calling rollBack().
      * \deprecated since QGIS 3.12 - will be removed in QGIS 4.0. Use the variant which accepts QgsPoint objects instead of QgsPointXY.
      */
-    Q_DECL_DEPRECATED QgsGeometry::OperationResult addPart( const QList<QgsPointXY> &ring ) SIP_DEPRECATED;
+    Q_DECL_DEPRECATED Qgis::GeometryOperationResult addPart( const QList<QgsPointXY> &ring ) SIP_DEPRECATED;
 
 #if QT_VERSION < QT_VERSION_CHECK(6, 0, 0)
 
     /**
      * Adds a new part polygon to a multipart feature
-     * \returns QgsGeometry::OperationResult
+     * \returns Qgis::GeometryOperationResult
      *
      * - Success
      * - LayerNotEditable
@@ -1400,12 +1422,12 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
      * changes can be discarded by calling rollBack().
      * \deprecated since QGIS 3.12 - will be removed in QGIS 4.0. Use the variant which accepts QgsPoint objects instead of QgsPointXY.
      */
-    Q_DECL_DEPRECATED QgsGeometry::OperationResult addPart( const QVector<QgsPointXY> &ring ) SIP_PYNAME( addPartV2 ) SIP_DEPRECATED;
+    Q_DECL_DEPRECATED Qgis::GeometryOperationResult addPart( const QVector<QgsPointXY> &ring ) SIP_PYNAME( addPartV2 ) SIP_DEPRECATED;
 #endif
 
     /**
      * Adds a new part polygon to a multipart feature
-     * \returns QgsGeometry::OperationResult
+     * \returns Qgis::GeometryOperationResult
      *
      * - Success
      * - LayerNotEditable
@@ -1422,7 +1444,7 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
      * to the underlying data provider until a commitChanges() call is made. Any uncommitted
      * changes can be discarded by calling rollBack().
      */
-    Q_INVOKABLE QgsGeometry::OperationResult addPart( const QgsPointSequence &ring ) SIP_PYNAME( addPartV2 );
+    Q_INVOKABLE Qgis::GeometryOperationResult addPart( const QgsPointSequence &ring ) SIP_PYNAME( addPartV2 );
 
     /**
      * \note available in Python as addCurvedPart
@@ -1431,7 +1453,7 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
      * to the underlying data provider until a commitChanges() call is made. Any uncommitted
      * changes can be discarded by calling rollBack().
      */
-    Q_INVOKABLE QgsGeometry::OperationResult addPart( QgsCurve *ring SIP_TRANSFER ) SIP_PYNAME( addCurvedPart );
+    Q_INVOKABLE Qgis::GeometryOperationResult addPart( QgsCurve *ring SIP_TRANSFER ) SIP_PYNAME( addCurvedPart );
 
     /**
      * Translates feature by dx, dy
@@ -1450,7 +1472,7 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
      * Splits parts cut by the given line
      * \param splitLine line that splits the layer features
      * \param topologicalEditing TRUE if topological editing is enabled
-     * \returns QgsGeometry::OperationResult
+     * \returns Qgis::GeometryOperationResult
      *
      * - Success
      * - NothingHappened
@@ -1466,13 +1488,13 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
      * changes can be discarded by calling rollBack().
      * \deprecated since QGIS 3.12 - will be removed in QGIS 4.0. Use the variant which accepts QgsPoint objects instead of QgsPointXY.
      */
-    Q_DECL_DEPRECATED QgsGeometry::OperationResult splitParts( const QVector<QgsPointXY> &splitLine, bool topologicalEditing = false ) SIP_DEPRECATED;
+    Q_DECL_DEPRECATED Qgis::GeometryOperationResult splitParts( const QVector<QgsPointXY> &splitLine, bool topologicalEditing = false ) SIP_DEPRECATED;
 
     /**
      * Splits parts cut by the given line
      * \param splitLine line that splits the layer features
      * \param topologicalEditing TRUE if topological editing is enabled
-     * \returns QgsGeometry::OperationResult
+     * \returns Qgis::GeometryOperationResult
      *
      * - Success
      * - NothingHappened
@@ -1487,13 +1509,13 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
      * to the underlying data provider until a commitChanges() call is made. Any uncommitted
      * changes can be discarded by calling rollBack().
      */
-    Q_INVOKABLE QgsGeometry::OperationResult splitParts( const QgsPointSequence &splitLine, bool topologicalEditing = false );
+    Q_INVOKABLE Qgis::GeometryOperationResult splitParts( const QgsPointSequence &splitLine, bool topologicalEditing = false );
 
     /**
      * Splits features cut by the given line
      * \param splitLine line that splits the layer features
      * \param topologicalEditing TRUE if topological editing is enabled
-     * \returns QgsGeometry::OperationResult
+     * \returns Qgis::GeometryOperationResult
      *
      * - Success
      * - NothingHappened
@@ -1509,13 +1531,13 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
      * changes can be discarded by calling rollBack().
      * \deprecated since QGIS 3.12 - will be removed in QGIS 4.0. Use the variant which accepts QgsPoint objects instead of QgsPointXY.
      */
-    Q_DECL_DEPRECATED QgsGeometry::OperationResult splitFeatures( const QVector<QgsPointXY> &splitLine, bool topologicalEditing = false ) SIP_DEPRECATED;
+    Q_DECL_DEPRECATED Qgis::GeometryOperationResult splitFeatures( const QVector<QgsPointXY> &splitLine, bool topologicalEditing = false ) SIP_DEPRECATED;
 
     /**
      * Splits features cut by the given line
      * \param splitLine line that splits the layer features
      * \param topologicalEditing TRUE if topological editing is enabled
-     * \returns QgsGeometry::OperationResult
+     * \returns Qgis::GeometryOperationResult
      *
      * - Success
      * - NothingHappened
@@ -1530,7 +1552,7 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
      * to the underlying data provider until a commitChanges() call is made. Any uncommitted
      * changes can be discarded by calling rollBack().
      */
-    Q_INVOKABLE QgsGeometry::OperationResult splitFeatures( const QgsPointSequence &splitLine, bool topologicalEditing = false );
+    Q_INVOKABLE Qgis::GeometryOperationResult splitFeatures( const QgsPointSequence &splitLine, bool topologicalEditing = false );
 
     /**
      * Splits features cut by the given curve
@@ -1538,7 +1560,7 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
      * \param[out] topologyTestPoints topological points to be tested against other layers
      * \param preserveCircular whether circular strings are preserved after splitting
      * \param topologicalEditing TRUE if topological editing is enabled
-     * \returns QgsGeometry::OperationResult
+     * \returns Qgis::GeometryOperationResult
      *
      * - Success
      * - NothingHappened
@@ -1554,7 +1576,7 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
      * changes can be discarded by calling rollBack().
      * \since QGIS 3.16
      */
-    Q_INVOKABLE QgsGeometry::OperationResult splitFeatures( const QgsCurve *curve, QgsPointSequence &topologyTestPoints SIP_OUT, bool preserveCircular = false, bool topologicalEditing = false );
+    Q_INVOKABLE Qgis::GeometryOperationResult splitFeatures( const QgsCurve *curve, QgsPointSequence &topologyTestPoints SIP_OUT, bool preserveCircular = false, bool topologicalEditing = false );
 
     /**
      * Adds topological points for every vertex of the geometry.
@@ -2256,6 +2278,7 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
      * \param ok if specified, will be set to TRUE if aggregate calculation was successful
      * \param fids list of fids to filter, otherwise will use all fids
      * \param feedback optional feedback argument for early cancellation (since QGIS 3.22)
+     * \param error optional storage for error messages (not available in Python bindings)
      * \returns calculated aggregate value
      * \since QGIS 2.16
      */
@@ -2265,7 +2288,8 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
                         QgsExpressionContext *context = nullptr,
                         bool *ok = nullptr,
                         QgsFeatureIds *fids = nullptr,
-                        QgsFeedback *feedback = nullptr ) const;
+                        QgsFeedback *feedback = nullptr,
+                        QString *error SIP_PYARGREMOVE = nullptr ) const;
 
     //! Sets the blending mode used for rendering each feature
     void setFeatureBlendMode( QPainter::CompositionMode blendMode );
@@ -2664,17 +2688,17 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
      */
     void geometryChanged( QgsFeatureId fid, const QgsGeometry &geometry );
 
-    //! Emitted when attributes are deleted from the provider
+    //! Emitted when attributes are deleted from the provider if not in transaction mode.
     void committedAttributesDeleted( const QString &layerId, const QgsAttributeList &deletedAttributes );
-    //! Emitted when attributes are added to the provider
+    //! Emitted when attributes are added to the provider if not in transaction mode.
     void committedAttributesAdded( const QString &layerId, const QList<QgsField> &addedAttributes );
-    //! Emitted when features are added to the provider
+    //! Emitted when features are added to the provider if not in transaction mode.
     void committedFeaturesAdded( const QString &layerId, const QgsFeatureList &addedFeatures );
-    //! Emitted when features are deleted from the provider
+    //! Emitted when features are deleted from the provider if not in transaction mode.
     void committedFeaturesRemoved( const QString &layerId, const QgsFeatureIds &deletedFeatureIds );
-    //! Emitted when attribute value changes are saved to the provider
+    //! Emitted when attribute value changes are saved to the provider if not in transaction mode.
     void committedAttributeValuesChanges( const QString &layerId, const QgsChangedAttributesMap &changedAttributesValues );
-    //! Emitted when geometry changes are saved to the provider
+    //! Emitted when geometry changes are saved to the provider if not in transaction mode.
     void committedGeometriesChanges( const QString &layerId, const QgsGeometryMap &changedGeometries );
 
     //! Emitted when the font family defined for labeling layer is not found on system
@@ -2836,6 +2860,9 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
     //! Returns the minimum or maximum value
     void minimumOrMaximumValue( int index, QVariant *minimum, QVariant *maximum ) const;
 
+    void createEditBuffer();
+    void clearEditBuffer();
+
     QgsConditionalLayerStyles *mConditionalStyles = nullptr;
 
     //! Pointer to data provider derived from the abastract base class QgsDataProvider
@@ -2843,6 +2870,8 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
 
     //! Pointer to temporal properties
     QgsVectorLayerTemporalProperties *mTemporalProperties = nullptr;
+
+    QgsVectorLayerElevationProperties *mElevationProperties = nullptr;
 
     //! The preview expression used to generate a human readable preview string for features
     QString mDisplayExpression;
@@ -2923,13 +2952,11 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
     //! stores information about uncommitted changes to layer
     QgsVectorLayerEditBuffer *mEditBuffer = nullptr;
     friend class QgsVectorLayerEditBuffer;
+    friend class QgsVectorLayerEditBufferGroup;
     friend class QgsVectorLayerEditPassthrough;
 
     //stores information about joined layers
     QgsVectorLayerJoinBuffer *mJoinBuffer = nullptr;
-
-    //!stores information about server properties
-    std::unique_ptr< QgsVectorLayerServerProperties > mServerProperties;
 
     //! stores information about expression fields on this layer
     QgsExpressionFieldBuffer *mExpressionFieldBuffer = nullptr;
@@ -2959,6 +2986,9 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
     //! True while an undo command is active
     bool mEditCommandActive = false;
 
+    //! True while a commit is active
+    bool mCommitChangesActive = false;
+
     bool mReadExtentFromXml;
     QgsRectangle mXmlExtent;
 
@@ -2987,6 +3017,9 @@ class CORE_EXPORT QgsVectorLayer : public QgsMapLayer, public QgsExpressionConte
     bool mSetLegendFromStyle = false;
 
     QList< QgsFeatureRendererGenerator * > mRendererGenerators;
+
+    //! Timer for triggering automatic redraw of the layer based on feature renderer settings (e.g. animated symbols)
+    QTimer *mRefreshRendererTimer = nullptr;
 };
 
 

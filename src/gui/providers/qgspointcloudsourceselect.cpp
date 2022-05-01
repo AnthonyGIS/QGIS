@@ -21,6 +21,8 @@
 #include "qgsproviderregistry.h"
 #include "qgsprovidermetadata.h"
 
+///@cond PRIVATE
+
 QgsPointCloudSourceSelect::QgsPointCloudSourceSelect( QWidget *parent, Qt::WindowFlags fl, QgsProviderRegistry::WidgetMode widgetMode ):
   QgsAbstractDataSourceWidget( parent, fl, widgetMode )
 {
@@ -50,10 +52,10 @@ QgsPointCloudSourceSelect::QgsPointCloudSourceSelect( QWidget *parent, Qt::Windo
   } );
 
 
-  QStringList protocolTypes = QStringLiteral( "HTTP/HTTPS/FTP,vsicurl" ).split( ';' );
+  const QStringList protocolTypes = QStringLiteral( "HTTP/HTTPS/FTP,vsicurl" ).split( ';' );
   for ( int i = 0; i < protocolTypes.count(); i++ )
   {
-    QString protocolType = protocolTypes.at( i );
+    const QString protocolType = protocolTypes.at( i );
     if ( ( !protocolType.isEmpty() ) && ( !protocolType.isNull() ) )
       cmbProtocolTypes->addItem( protocolType.split( ',' ).at( 0 ) );
   }
@@ -92,11 +94,11 @@ void QgsPointCloudSourceSelect::addButtonClicked()
       return;
     }
 
-    if ( !mPath.endsWith( QLatin1String( "/ept.json" ) ) )
+    if ( !mPath.endsWith( QLatin1String( "/ept.json" ), Qt::CaseInsensitive ) && !mPath.endsWith( QLatin1String( ".copc.laz" ), Qt::CaseInsensitive ) )
     {
       QMessageBox::information( this,
                                 tr( "Add Point Cloud Layers" ),
-                                tr( "Unvalid point cloud URL \"%1\", please make sure your URL ends with /ept.json" ).arg( mPath ) );
+                                tr( "Invalid point cloud URL \"%1\", please make sure your URL ends with /ept.json or .copc.laz" ).arg( mPath ) );
       return;
     }
 
@@ -106,9 +108,16 @@ void QgsPointCloudSourceSelect::addButtonClicked()
     if ( !preferredProviders.empty() )
     {
       QString baseName = QStringLiteral( "remote ept layer" );
-      QStringList separatedPath = mPath.split( '/' );
-      if ( separatedPath.size() >= 2 )
-        baseName = separatedPath[ separatedPath.size() - 2 ];
+      if ( mPath.endsWith( QLatin1String( "/ept.json" ), Qt::CaseInsensitive ) )
+      {
+        QStringList separatedPath = mPath.split( '/' );
+        if ( separatedPath.size() >= 2 )
+          baseName = separatedPath[ separatedPath.size() - 2 ];
+      }
+      if ( mPath.endsWith( QLatin1String( ".copc.laz" ), Qt::CaseInsensitive ) )
+      {
+        baseName = QFileInfo( mPath ).baseName();
+      }
       emit addPointCloudLayer( mPath, baseName, preferredProviders.at( 0 ).metadata()->key() ) ;
     }
   }
@@ -164,3 +173,4 @@ void QgsPointCloudSourceSelect::setProtocolWidgetsVisibility()
   mAuthWarning->hide();
 }
 
+///@endcond

@@ -627,7 +627,7 @@ class CORE_EXPORT QgsMeshDatasetGroup
     double maximum() const;
 
     //! Overrides the minimum and the maximum value of the whole dataset group
-    void setMinimumMaximum( double min, double max );
+    void setMinimumMaximum( double min, double max ) const;
 
     //! Returns the name of the dataset group
     QString name() const;
@@ -656,7 +656,10 @@ class CORE_EXPORT QgsMeshDatasetGroup
     bool checkValueCountPerDataset( int count ) const;
 
     //! Calculates the statistics (minimum and maximum)
-    void calculateStatistic();
+    void calculateStatistic() const;
+
+    //! Sets statistic obsolete, that means statistic will be recalculated when requested
+    void setStatisticObsolete() const;
 
     //! Returns the dataset group variable name which this dataset group depends on
     virtual QStringList datasetGroupNamesDependentOn() const;
@@ -678,8 +681,11 @@ class CORE_EXPORT QgsMeshDatasetGroup
     bool mIsScalar = true;
 
   private:
-    double mMinimum = std::numeric_limits<double>::quiet_NaN();
-    double mMaximum = std::numeric_limits<double>::quiet_NaN();
+    mutable double mMinimum = std::numeric_limits<double>::quiet_NaN();
+    mutable double mMaximum = std::numeric_limits<double>::quiet_NaN();
+    mutable bool mIsStatisticObsolete = true;
+
+    void updateStatictic() const;
 
     QDateTime mReferenceTime;
 };
@@ -791,7 +797,7 @@ class QgsMeshVerticesElevationDataset: public QgsMeshDataset
  *
  * \since QGIS 3.22
  */
-class QgsMeshVerticesElevationDatasetGroup : public QgsMeshDatasetGroup
+class CORE_EXPORT QgsMeshVerticesElevationDatasetGroup : public QgsMeshDatasetGroup
 {
   public:
     //! Constructor with a \a name and linked to \a mesh

@@ -26,6 +26,7 @@
 #include "qgsrenderer.h"
 #include "qgssettingsregistrycore.h"
 #include "qgsexpressioncontextutils.h"
+#include "qgsrendercontext.h"
 
 #include <queue>
 #include <vector>
@@ -35,7 +36,7 @@ typedef std::pair<int, double> DijkstraQueueItem; // first = vertex index, secon
 // utility comparator for queue items based on distance
 struct comp
 {
-  bool operator()( DijkstraQueueItem a, DijkstraQueueItem b )
+  bool operator()( DijkstraQueueItem a, DijkstraQueueItem b ) const
   {
     return a.second > b.second;
   }
@@ -660,14 +661,14 @@ void QgsTracer::setOffset( double offset )
 void QgsTracer::offsetParameters( int &quadSegments, int &joinStyle, double &miterLimit )
 {
   quadSegments = mOffsetSegments;
-  joinStyle = mOffsetJoinStyle;
+  joinStyle = static_cast< int >( mOffsetJoinStyle );
   miterLimit = mOffsetMiterLimit;
 }
 
 void QgsTracer::setOffsetParameters( int quadSegments, int joinStyle, double miterLimit )
 {
   mOffsetSegments = quadSegments;
-  mOffsetJoinStyle = joinStyle;
+  mOffsetJoinStyle = static_cast< Qgis::JoinStyle >( joinStyle );
   mOffsetMiterLimit = miterLimit;
 }
 

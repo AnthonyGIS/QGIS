@@ -69,6 +69,7 @@ class TestVectorLayerJoinBuffer : public QObject
     void testSignals();
     void testChangeAttributeValues();
     void testCollidingNameColumn();
+    void testCollidingNameColumnCached();
 
   private:
     QgsProject mProject;
@@ -354,7 +355,7 @@ void TestVectorLayerJoinBuffer::testJoinDetectCycle()
   joinInfo2.setJoinFieldName( QStringLiteral( "id_a" ) );
   joinInfo2.setUsingMemoryCache( true );
   joinInfo2.setPrefix( QStringLiteral( "A_" ) );
-  bool res = vlB->addJoin( joinInfo2 );
+  const bool res = vlB->addJoin( joinInfo2 );
 
   QVERIFY( !res );
 
@@ -398,7 +399,7 @@ void TestVectorLayerJoinBuffer::testJoinSubset()
   joinInfo.setJoinFieldName( QStringLiteral( "id_x" ) );
   joinInfo.setUsingMemoryCache( memoryCache );
   joinInfo.setPrefix( QStringLiteral( "X_" ) );
-  bool res = vlA->addJoin( joinInfo );
+  const bool res = vlA->addJoin( joinInfo );
   QVERIFY( res );
 
   QCOMPARE( vlA->fields().count(), 3 ); // id_a, X_value_x1, X_value_x2
@@ -506,7 +507,7 @@ void TestVectorLayerJoinBuffer::testJoinLayerDefinitionFile()
   QVERIFY( r );
 
   // Generate QLR
-  QDomDocument qlrDoc( QStringLiteral( "qgis-layer-definition" ) );
+  const QDomDocument qlrDoc( QStringLiteral( "qgis-layer-definition" ) );
   QString errorMessage;
   r = QgsLayerDefinition::exportLayerDefinition( qlrDoc, mProject.layerTreeRoot()->children(), errorMessage, QgsReadWriteContext() );
   QVERIFY2( r, errorMessage.toUtf8().constData() );
@@ -520,7 +521,7 @@ void TestVectorLayerJoinBuffer::testJoinLayerDefinitionFile()
   QVERIFY2( r, errorMessage.toUtf8().constData() );
 
   // Get layer
-  QList<QgsMapLayer *> mapLayers = mProject.mapLayersByName( QStringLiteral( "layerB" ) );
+  const QList<QgsMapLayer *> mapLayers = mProject.mapLayersByName( QStringLiteral( "layerB" ) );
   QCOMPARE( mapLayers.count(), 1 );
 
   QgsVectorLayer *vLayer = dynamic_cast<QgsVectorLayer *>( mapLayers.value( 0 ) );
@@ -705,7 +706,7 @@ void TestVectorLayerJoinBuffer::testSignals()
   QVERIFY( !fA2.attribute( "B_value_b" ).isValid() );
 
   // change value in join target layer, check for signals
-  QSignalSpy spy( vlA, &QgsVectorLayer::attributeValueChanged );
+  const QSignalSpy spy( vlA, &QgsVectorLayer::attributeValueChanged );
   vlA->startEditing();
   vlB->startEditing();
   // adds new feature to second layer
@@ -975,6 +976,49 @@ void TestVectorLayerJoinBuffer::testCollidingNameColumn()
   QCOMPARE( fA1.attribute( "id_a" ).toInt(), 1 );
   QCOMPARE( fA1.attribute( "name" ).toString(), QStringLiteral( "name_a" ) );
   QVERIFY( !fA1.attribute( "value_b" ).isValid() );
+  QCOMPARE( fA1.attribute( "value_c" ).toString(), QStringLiteral( "value_c" ) );
+}
+
+void TestVectorLayerJoinBuffer::testCollidingNameColumnCached()
+{
+  mProject.clear();
+  QgsVectorLayer *vlA = new QgsVectorLayer( QStringLiteral( "Point?field=id_a:integer&field=name" ), QStringLiteral( "cacheA" ), QStringLiteral( "memory" ) );
+  QVERIFY( vlA->isValid() );
+  QgsVectorLayer *vlB = new QgsVectorLayer( QStringLiteral( "Point?field=id_b:integer&field=name&field=value_b&field=value_c" ), QStringLiteral( "cacheB" ), QStringLiteral( "memory" ) );
+  QVERIFY( vlB->isValid() );
+  mProject.addMapLayer( vlA );
+  mProject.addMapLayer( vlB );
+
+  QgsFeature fA1( vlA->dataProvider()->fields(), 1 );
+  fA1.setAttribute( QStringLiteral( "id_a" ), 1 );
+  fA1.setAttribute( QStringLiteral( "name" ), QStringLiteral( "name_a" ) );
+
+  vlA->dataProvider()->addFeatures( QgsFeatureList() << fA1 );
+
+  QgsFeature fB1( vlB->dataProvider()->fields(), 1 );
+  fB1.setAttribute( QStringLiteral( "id_b" ), 1 );
+  fB1.setAttribute( QStringLiteral( "name" ), QStringLiteral( "name_b" ) );
+  fB1.setAttribute( QStringLiteral( "value_b" ), QStringLiteral( "value_b" ) );
+  fB1.setAttribute( QStringLiteral( "value_c" ), QStringLiteral( "value_c" ) );
+
+  vlB->dataProvider()->addFeatures( QgsFeatureList() << fB1 );
+
+  QgsVectorLayerJoinInfo joinInfo;
+  joinInfo.setTargetFieldName( QStringLiteral( "id_a" ) );
+  joinInfo.setJoinLayer( vlB );
+  joinInfo.setJoinFieldName( QStringLiteral( "id_b" ) );
+  joinInfo.setPrefix( QStringLiteral( "" ) );
+  joinInfo.setEditable( true );
+  joinInfo.setUpsertOnEdit( false );
+  joinInfo.setUsingMemoryCache( true );
+  vlA->addJoin( joinInfo );
+
+  QgsFeatureIterator fi1 = vlA->getFeatures();
+  fi1.nextFeature( fA1 );
+  QCOMPARE( fA1.fields().names(), QStringList( {"id_a", "name", "value_b", "value_c"} ) );
+  QCOMPARE( fA1.attribute( "id_a" ).toInt(), 1 );
+  QCOMPARE( fA1.attribute( "name" ).toString(), QStringLiteral( "name_a" ) );
+  QCOMPARE( fA1.attribute( "value_b" ).toString(), QStringLiteral( "value_b" ) );
   QCOMPARE( fA1.attribute( "value_c" ).toString(), QStringLiteral( "value_c" ) );
 }
 

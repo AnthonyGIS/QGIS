@@ -72,10 +72,10 @@ QgsStyleItemsListWidget::QgsStyleItemsListWidget( QWidget *parent )
   btnAdvanced->hide(); // advanced button is hidden by default
   btnAdvanced->setMenu( new QMenu( this ) );
 
-  double iconSize = Qgis::UI_SCALE_FACTOR * fontMetrics().horizontalAdvance( 'X' ) * 10;
+  const double iconSize = Qgis::UI_SCALE_FACTOR * fontMetrics().horizontalAdvance( 'X' ) * 10;
   viewSymbols->setIconSize( QSize( static_cast< int >( iconSize ), static_cast< int >( iconSize * 0.9 ) ) );  // ~100, 90 on low dpi
 
-  double treeIconSize = Qgis::UI_SCALE_FACTOR * fontMetrics().horizontalAdvance( 'X' ) * 2;
+  const double treeIconSize = Qgis::UI_SCALE_FACTOR * fontMetrics().horizontalAdvance( 'X' ) * 2;
   mSymbolTreeView->setIconSize( QSize( static_cast< int >( treeIconSize ), static_cast< int >( treeIconSize ) ) );
   mSymbolTreeView->setMinimumHeight( mSymbolTreeView->fontMetrics().height() * 6 );
 
@@ -105,7 +105,7 @@ QgsStyleItemsListWidget::QgsStyleItemsListWidget( QWidget *parent )
   } );
 
   // restore previous view
-  QgsSettings settings;
+  const QgsSettings settings;
   const int currentView = settings.value( QStringLiteral( "UI/symbolsList/lastIconView" ), 0, QgsSettings::Gui ).toInt();
   if ( currentView == 0 )
     mButtonIconView->setChecked( true );
@@ -137,6 +137,11 @@ void QgsStyleItemsListWidget::setStyle( QgsStyle *style )
 
   mModel->addDesiredIconSize( viewSymbols->iconSize() );
   mModel->addDesiredIconSize( mSymbolTreeView->iconSize() );
+
+  // set a grid size which allows sufficient vertical spacing to fit reasonably sized entity names
+  viewSymbols->setGridSize( QSize( static_cast< int >( viewSymbols->iconSize().width() * 1.4 ), static_cast< int >( viewSymbols->iconSize().height() * 1.7 ) ) );
+  viewSymbols->setTextElideMode( Qt::TextElideMode::ElideRight );
+
   viewSymbols->setModel( mModel );
   mSymbolTreeView->setModel( mModel );
 
@@ -149,7 +154,7 @@ void QgsStyleItemsListWidget::setStyle( QgsStyle *style )
   connect( groupsCombo, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, &QgsStyleItemsListWidget::groupsCombo_currentIndexChanged );
   connect( groupsCombo, &QComboBox::currentTextChanged, this, &QgsStyleItemsListWidget::updateModelFilters );
 
-  QgsSettings settings;
+  const QgsSettings settings;
   mSymbolTreeView->header()->restoreState( settings.value( QStringLiteral( "UI/symbolsList/treeState" ), QByteArray(), QgsSettings::Gui ).toByteArray() );
 }
 
@@ -261,7 +266,7 @@ void QgsStyleItemsListWidget::showAdvancedButton( bool enabled )
 
 QString QgsStyleItemsListWidget::currentItemName() const
 {
-  QItemSelection selection = viewSymbols->selectionModel()->selection();
+  const QItemSelection selection = viewSymbols->selectionModel()->selection();
   if ( selection.isEmpty() )
     return QString();
 
@@ -272,7 +277,7 @@ QString QgsStyleItemsListWidget::currentItemName() const
 
 QgsStyle::StyleEntity QgsStyleItemsListWidget::currentEntityType() const
 {
-  QItemSelection selection = viewSymbols->selectionModel()->selection();
+  const QItemSelection selection = viewSymbols->selectionModel()->selection();
   if ( selection.isEmpty() )
     return QgsStyle::SymbolEntity;
 
@@ -288,7 +293,7 @@ void QgsStyleItemsListWidget::showEvent( QShowEvent *event )
   // to ensure that a header resize for any of the widgets applies the next time any other item list widgets
   // are shown.
   QWidget::showEvent( event );
-  QgsSettings settings;
+  const QgsSettings settings;
   mSymbolTreeView->header()->restoreState( settings.value( QStringLiteral( "UI/symbolsList/treeState" ), QByteArray(), QgsSettings::Gui ).toByteArray() );
 }
 
@@ -367,7 +372,7 @@ void QgsStyleItemsListWidget::populateGroups()
   }
   groupsCombo->blockSignals( false );
 
-  QgsSettings settings;
+  const QgsSettings settings;
   index = settings.value( QStringLiteral( "qgis/symbolsListGroupsIndex" ), 0 ).toInt();
   groupsCombo->setCurrentIndex( index );
 
@@ -446,7 +451,7 @@ void QgsStyleItemsListWidget::onSelectionChanged( const QModelIndex &index )
   if ( !mModel )
     return;
 
-  QString symbolName = mModel->data( mModel->index( index.row(), QgsStyleModel::Name ) ).toString();
+  const QString symbolName = mModel->data( mModel->index( index.row(), QgsStyleModel::Name ) ).toString();
   lblSymbolName->setText( symbolName );
 
   emit selectionChanged( symbolName, static_cast< QgsStyle::StyleEntity >( mModel->data( index, QgsStyleModel::TypeRole ).toInt() ) );

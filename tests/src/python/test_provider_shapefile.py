@@ -218,11 +218,14 @@ class TestPyQgsShapefileProvider(unittest.TestCase, ProviderTestCase):
                        '"dt" <= format_date(make_datetime(2020, 5, 4, 12, 13, 14), \'yyyy-MM-dd hh:mm:ss\')',
                        '"dt" < format_date(make_date(2020, 5, 4), \'yyyy-MM-dd hh:mm:ss\')',
                        '"dt" = format_date(to_datetime(\'000www14ww13ww12www4ww5ww2020\',\'zzzwwwsswwmmwwhhwwwdwwMwwyyyy\'),\'yyyy-MM-dd hh:mm:ss\')',
+                       """dt BETWEEN format_date(make_datetime(2020, 5, 3, 12, 13, 14),  'yyyy-MM-dd hh:mm:ss') AND format_date(make_datetime(2020, 5, 4, 12, 14, 14), 'yyyy-MM-dd hh:mm:ss')""",
+                       """dt NOT BETWEEN format_date(make_datetime(2020, 5, 3, 12, 13, 14), 'yyyy-MM-dd hh:mm:ss') AND format_date(make_datetime(2020, 5, 4, 12, 14, 14), 'yyyy-MM-dd hh:mm:ss')""",
                        '"date" = to_date(\'www4ww5ww2020\',\'wwwdwwMwwyyyy\')',
                        'to_time("time") >= make_time(12, 14, 14)',
                        'to_time("time") = to_time(\'000www14ww13ww12www\',\'zzzwwwsswwmmwwhhwww\')',
                        'to_datetime("dt", \'yyyy-MM-dd hh:mm:ss\') + make_interval(days:=1) <= make_datetime(2020, 5, 4, 12, 13, 14)',
-                       'to_datetime("dt", \'yyyy-MM-dd hh:mm:ss\') + make_interval(days:=0.01) <= make_datetime(2020, 5, 4, 12, 13, 14)'
+                       'to_datetime("dt", \'yyyy-MM-dd hh:mm:ss\') + make_interval(days:=0.01) <= make_datetime(2020, 5, 4, 12, 13, 14)',
+                       'cnt BETWEEN -200 AND 200'  # NoUnaryMinus
                        ])
         return filters
 
@@ -843,8 +846,8 @@ class TestPyQgsShapefileProvider(unittest.TestCase, ProviderTestCase):
 
         # Check DataItem
         registry = QgsApplication.dataItemProviderRegistry()
-        ogrprovider = next(provider for provider in registry.providers() if provider.name() == 'OGR')
-        item = ogrprovider.createDataItem(tmpfile, None)
+        files_provider = next(provider for provider in registry.providers() if provider.name() == 'files')
+        item = files_provider.createDataItem(tmpfile, None)
         self.assertTrue(item.uri().endswith('testShzSupport.shz'))
 
     def testShpZipSupport(self):
@@ -899,17 +902,13 @@ class TestPyQgsShapefileProvider(unittest.TestCase, ProviderTestCase):
 
         # Check DataItem
         registry = QgsApplication.dataItemProviderRegistry()
-        ogrprovider = next(provider for provider in registry.providers() if provider.name() == 'OGR')
-        item = ogrprovider.createDataItem(tmpfile, None)
+        files_provider = next(provider for provider in registry.providers() if provider.name() == 'files')
+        item = files_provider.createDataItem(tmpfile, None)
         children = item.createChildren()
         self.assertEqual(len(children), 2)
         uris = sorted([children[i].uri() for i in range(2)])
         self.assertIn('testShpZipSupport.shp.zip|layername=layer1', uris[0])
         self.assertIn('testShpZipSupport.shp.zip|layername=layer2', uris[1])
-
-        gdalprovider = next(provider for provider in registry.providers() if provider.name() == 'GDAL')
-        item = gdalprovider.createDataItem(tmpfile, None)
-        assert not item
 
     def testWriteShapefileWithSingleConversion(self):
         """Check writing geometries from a POLYGON ESRI shapefile does not

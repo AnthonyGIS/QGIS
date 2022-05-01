@@ -86,10 +86,11 @@ void TestQgsTileDownloadManager::testOneRequest()
   spy.wait();
   QCOMPARE( spy.count(), 1 );
   QVERIFY( !r->data().isEmpty() );
+  QVERIFY( r->error() == QNetworkReply::NoError );
 
   QVERIFY( !manager.hasPendingRequests() );
 
-  QgsTileDownloadManager::Stats stats = manager.statistics();
+  const QgsTileDownloadManager::Stats stats = manager.statistics();
   QCOMPARE( stats.requestsTotal, 1 );
   QCOMPARE( stats.requestsMerged, 0 );
   QCOMPARE( stats.requestsEarlyDeleted, 0 );
@@ -124,7 +125,7 @@ void TestQgsTileDownloadManager::testOneRequestEarlyDelete()
 
   QVERIFY( !manager.hasPendingRequests() );
 
-  QgsTileDownloadManager::Stats stats = manager.statistics();
+  const QgsTileDownloadManager::Stats stats = manager.statistics();
   QCOMPARE( stats.requestsTotal, 1 );
   QCOMPARE( stats.requestsMerged, 0 );
   QCOMPARE( stats.requestsEarlyDeleted, 1 );
@@ -157,11 +158,13 @@ void TestQgsTileDownloadManager::testOneRequestTwice()
   QCOMPARE( spy1.count(), 1 );
   QCOMPARE( spy2.count(), 1 );
   QVERIFY( !r1->data().isEmpty() );
+  QVERIFY( r1->error() == QNetworkReply::NoError );
   QVERIFY( !r2->data().isEmpty() );
+  QVERIFY( r2->error() == QNetworkReply::NoError );
 
   QVERIFY( !manager.hasPendingRequests() );
 
-  QgsTileDownloadManager::Stats stats = manager.statistics();
+  const QgsTileDownloadManager::Stats stats = manager.statistics();
   QCOMPARE( stats.requestsTotal, 2 );
   QCOMPARE( stats.requestsMerged, 1 );
   QCOMPARE( stats.requestsEarlyDeleted, 0 );
@@ -194,10 +197,11 @@ void TestQgsTileDownloadManager::testOneRequestTwiceAndEarlyDelete()
   spy.wait();
   QCOMPARE( spy.count(), 1 );
   QVERIFY( !r2->data().isEmpty() );
+  QVERIFY( r2->error() == QNetworkReply::NoError );
 
   QVERIFY( !manager.hasPendingRequests() );
 
-  QgsTileDownloadManager::Stats stats = manager.statistics();
+  const QgsTileDownloadManager::Stats stats = manager.statistics();
   QCOMPARE( stats.requestsTotal, 2 );
   QCOMPARE( stats.requestsMerged, 1 );
   QCOMPARE( stats.requestsEarlyDeleted, 1 );
@@ -222,11 +226,11 @@ void TestQgsTileDownloadManager::testOneRequestFailure()
   QSignalSpy spy( r.get(), &QgsTileDownloadManagerReply::finished );
   spy.wait();
   QCOMPARE( spy.count(), 1 );
-  QVERIFY( r->data().isEmpty() );
+  QVERIFY( r->error() != QNetworkReply::NoError );
 
   QVERIFY( !manager.hasPendingRequests() );
 
-  QgsTileDownloadManager::Stats stats = manager.statistics();
+  const QgsTileDownloadManager::Stats stats = manager.statistics();
   QCOMPARE( stats.requestsTotal, 1 );
   QCOMPARE( stats.requestsMerged, 0 );
   QCOMPARE( stats.requestsEarlyDeleted, 0 );
@@ -260,11 +264,13 @@ void TestQgsTileDownloadManager::testTwoRequests()
   QCOMPARE( spy1.count(), 1 );
   QCOMPARE( spy2.count(), 1 );
   QVERIFY( !r1->data().isEmpty() );
+  QVERIFY( r1->error() == QNetworkReply::NoError );
   QVERIFY( !r2->data().isEmpty() );
+  QVERIFY( r2->error() == QNetworkReply::NoError );
 
   QVERIFY( !manager.hasPendingRequests() );
 
-  QgsTileDownloadManager::Stats stats = manager.statistics();
+  const QgsTileDownloadManager::Stats stats = manager.statistics();
   QCOMPARE( stats.requestsTotal, 2 );
   QCOMPARE( stats.requestsMerged, 0 );
   QCOMPARE( stats.requestsEarlyDeleted, 0 );
@@ -285,7 +291,7 @@ void TestQgsTileDownloadManager::testShutdownWithPendingRequest()
   QVERIFY( !manager.hasPendingRequests() );
   manager.resetStatistics();
 
-  std::unique_ptr<QgsTileDownloadManagerReply> r( manager.get( QNetworkRequest( url_1 ) ) );
+  const std::unique_ptr<QgsTileDownloadManagerReply> r( manager.get( QNetworkRequest( url_1 ) ) );
 
   QVERIFY( manager.hasPendingRequests() );
 
@@ -295,7 +301,7 @@ void TestQgsTileDownloadManager::testShutdownWithPendingRequest()
 
   QVERIFY( !manager.hasPendingRequests() );
 
-  QgsTileDownloadManager::Stats stats = manager.statistics();
+  const QgsTileDownloadManager::Stats stats = manager.statistics();
   QCOMPARE( stats.requestsTotal, 1 );
   QCOMPARE( stats.requestsMerged, 0 );
   QCOMPARE( stats.requestsEarlyDeleted, 0 );
@@ -313,7 +319,7 @@ void TestQgsTileDownloadManager::testIdleThread()
 
   QVERIFY( !manager.hasWorkerThreadRunning() );
 
-  std::unique_ptr<QgsTileDownloadManagerReply> r1( manager.get( QNetworkRequest( url_1 ) ) );
+  const std::unique_ptr<QgsTileDownloadManagerReply> r1( manager.get( QNetworkRequest( url_1 ) ) );
 
   QSignalSpy spy1( r1.get(), &QgsTileDownloadManagerReply::finished );
   spy1.wait();
@@ -327,7 +333,7 @@ void TestQgsTileDownloadManager::testIdleThread()
 
   // check that the thread can be restarted again
 
-  std::unique_ptr<QgsTileDownloadManagerReply> r2( manager.get( QNetworkRequest( url_2 ) ) );
+  const std::unique_ptr<QgsTileDownloadManagerReply> r2( manager.get( QNetworkRequest( url_2 ) ) );
 
   QSignalSpy spy2( r2.get(), &QgsTileDownloadManagerReply::finished );
   spy2.wait();

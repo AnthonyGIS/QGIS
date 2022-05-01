@@ -36,7 +36,7 @@ QgsMarkerSymbol::QgsMarkerSymbol( const QgsSymbolLayerList &layers )
     mLayers.append( new QgsSimpleMarkerSymbolLayer() );
 }
 
-void QgsMarkerSymbol::setAngle( double symbolAngle )
+void QgsMarkerSymbol::setAngle( double symbolAngle ) const
 {
   double origAngle = angle();
   double angleDiff = symbolAngle - origAngle;
@@ -61,7 +61,7 @@ double QgsMarkerSymbol::angle() const
   return 0;
 }
 
-void QgsMarkerSymbol::setLineAngle( double lineAng )
+void QgsMarkerSymbol::setLineAngle( double lineAng ) const
 {
   const auto constMLayers = mLayers;
   for ( QgsSymbolLayer *layer : constMLayers )
@@ -149,7 +149,7 @@ QgsProperty QgsMarkerSymbol::dataDefinedAngle() const
 }
 
 
-void QgsMarkerSymbol::setSize( double s )
+void QgsMarkerSymbol::setSize( double s ) const
 {
   double origSize = size();
 
@@ -205,7 +205,7 @@ double QgsMarkerSymbol::size( const QgsRenderContext &context ) const
   return maxSize;
 }
 
-void QgsMarkerSymbol::setSizeUnit( QgsUnitTypes::RenderUnit unit )
+void QgsMarkerSymbol::setSizeUnit( QgsUnitTypes::RenderUnit unit ) const
 {
   const auto constMLayers = mLayers;
   for ( QgsSymbolLayer *layer : constMLayers )
@@ -243,7 +243,7 @@ QgsUnitTypes::RenderUnit QgsMarkerSymbol::sizeUnit() const
   return unit;
 }
 
-void QgsMarkerSymbol::setSizeMapUnitScale( const QgsMapUnitScale &scale )
+void QgsMarkerSymbol::setSizeMapUnitScale( const QgsMapUnitScale &scale ) const
 {
   const auto constMLayers = mLayers;
   for ( QgsSymbolLayer *layer : constMLayers )
@@ -270,7 +270,7 @@ QgsMapUnitScale QgsMarkerSymbol::sizeMapUnitScale() const
   return QgsMapUnitScale();
 }
 
-void QgsMarkerSymbol::setDataDefinedSize( const QgsProperty &property )
+void QgsMarkerSymbol::setDataDefinedSize( const QgsProperty &property ) const
 {
   const double symbolSize = size();
 
@@ -363,7 +363,7 @@ QgsProperty QgsMarkerSymbol::dataDefinedSize() const
   return symbolDD;
 }
 
-void QgsMarkerSymbol::setScaleMethod( Qgis::ScaleMethod scaleMethod )
+void QgsMarkerSymbol::setScaleMethod( Qgis::ScaleMethod scaleMethod ) const
 {
   const auto constMLayers = mLayers;
   for ( QgsSymbolLayer *layer : constMLayers )
@@ -375,7 +375,7 @@ void QgsMarkerSymbol::setScaleMethod( Qgis::ScaleMethod scaleMethod )
   }
 }
 
-Qgis::ScaleMethod QgsMarkerSymbol::scaleMethod()
+Qgis::ScaleMethod QgsMarkerSymbol::scaleMethod() const
 {
   const auto constMLayers = mLayers;
   for ( QgsSymbolLayer *layer : constMLayers )
@@ -413,7 +413,8 @@ void QgsMarkerSymbol::renderPointUsingLayer( QgsMarkerSymbolLayer *layer, QPoint
 
 void QgsMarkerSymbol::renderPoint( QPointF point, const QgsFeature *f, QgsRenderContext &context, int layerIdx, bool selected )
 {
-  const double opacity = dataDefinedProperties().valueAsDouble( QgsSymbol::PropertyOpacity, context.expressionContext(), mOpacity * 100 ) * 0.01;
+  const double opacity = dataDefinedProperties().hasActiveProperties() ? dataDefinedProperties().valueAsDouble( QgsSymbol::PropertyOpacity, context.expressionContext(), mOpacity * 100 ) * 0.01
+                         : mOpacity;
 
   QgsSymbolRenderContext symbolContext( context, QgsUnitTypes::RenderUnknownUnit, opacity, selected, mRenderHints, f );
   symbolContext.setGeometryPartCount( symbolRenderContext()->geometryPartCount() );
@@ -430,7 +431,11 @@ void QgsMarkerSymbol::renderPoint( QPointF point, const QgsFeature *f, QgsRender
         renderPointUsingLayer( markerLayer, point, symbolContext );
       }
       else
-        renderUsingLayer( symbolLayer, symbolContext );
+      {
+        QPolygonF points;
+        points.append( point );
+        renderUsingLayer( symbolLayer, symbolContext, QgsWkbTypes::PointGeometry, &points );
+      }
     }
     return;
   }
@@ -450,7 +455,11 @@ void QgsMarkerSymbol::renderPoint( QPointF point, const QgsFeature *f, QgsRender
       renderPointUsingLayer( markerLayer, point, symbolContext );
     }
     else
-      renderUsingLayer( symbolLayer, symbolContext );
+    {
+      QPolygonF points;
+      points.append( point );
+      renderUsingLayer( symbolLayer, symbolContext, QgsWkbTypes::PointGeometry, &points );
+    }
   }
 }
 
@@ -489,6 +498,7 @@ QgsMarkerSymbol *QgsMarkerSymbol::clone() const
   cloneSymbol->setForceRHR( mForceRHR );
   cloneSymbol->setDataDefinedProperties( dataDefinedProperties() );
   cloneSymbol->setFlags( mSymbolFlags );
+  cloneSymbol->setAnimationSettings( mAnimationSettings );
   return cloneSymbol;
 }
 

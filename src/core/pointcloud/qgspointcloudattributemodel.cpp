@@ -72,7 +72,7 @@ QModelIndex QgsPointCloudAttributeModel::indexFromName( const QString &name )
 {
   if ( !name.isEmpty() )
   {
-    int idx = mAttributes.indexOf( name );
+    const int idx = mAttributes.indexOf( name );
     if ( idx >= 0 )
     {
       if ( mAllowEmpty )
@@ -229,6 +229,9 @@ QIcon QgsPointCloudAttributeModel::iconForAttributeType( QgsPointCloudAttribute:
     case QgsPointCloudAttribute::Short:
     case QgsPointCloudAttribute::UShort:
     case QgsPointCloudAttribute::Int32:
+    case QgsPointCloudAttribute::Int64:
+    case QgsPointCloudAttribute::UInt32:
+    case QgsPointCloudAttribute::UInt64:
     {
       return QgsApplication::getThemeIcon( "/mIconFieldInteger.svg" );
     }
@@ -238,6 +241,7 @@ QIcon QgsPointCloudAttributeModel::iconForAttributeType( QgsPointCloudAttribute:
       return QgsApplication::getThemeIcon( "/mIconFieldFloat.svg" );
     }
     case QgsPointCloudAttribute::Char:
+    case QgsPointCloudAttribute::UChar:
     {
       return QgsApplication::getThemeIcon( "/mIconFieldText.svg" );
     }
@@ -266,7 +270,7 @@ QgsPointCloudAttributeProxyModel *QgsPointCloudAttributeProxyModel::setFilters( 
 
 bool QgsPointCloudAttributeProxyModel::filterAcceptsRow( int source_row, const QModelIndex &source_parent ) const
 {
-  QModelIndex index = sourceModel()->index( source_row, 0, source_parent );
+  const QModelIndex index = sourceModel()->index( source_row, 0, source_parent );
 
   if ( mFilters.testFlag( AllTypes ) )
     return true;
@@ -281,9 +285,13 @@ bool QgsPointCloudAttributeProxyModel::filterAcceptsRow( int source_row, const Q
     return true;
 
   if ( ( mFilters.testFlag( Char ) && type == QgsPointCloudAttribute::Char ) ||
+       ( mFilters.testFlag( Char ) && type == QgsPointCloudAttribute::UChar ) ||
        ( mFilters.testFlag( Short ) && type == QgsPointCloudAttribute::Short ) ||
        ( mFilters.testFlag( Short ) && type == QgsPointCloudAttribute::UShort ) ||
        ( mFilters.testFlag( Int32 ) && type == QgsPointCloudAttribute::Int32 ) ||
+       ( mFilters.testFlag( Int32 ) && type == QgsPointCloudAttribute::UInt32 ) ||
+       ( mFilters.testFlag( Int32 ) && type == QgsPointCloudAttribute::Int64 ) ||
+       ( mFilters.testFlag( Int32 ) && type == QgsPointCloudAttribute::UInt64 ) ||
        ( mFilters.testFlag( Float ) && type == QgsPointCloudAttribute::Float ) ||
        ( mFilters.testFlag( Double ) && type == QgsPointCloudAttribute::Double ) )
     return true;
@@ -301,8 +309,8 @@ bool QgsPointCloudAttributeProxyModel::lessThan( const QModelIndex &left, const 
 
   // order is attribute order
   bool lok, rok;
-  int leftId = sourceModel()->data( left, QgsPointCloudAttributeModel::AttributeIndexRole ).toInt( &lok );
-  int rightId = sourceModel()->data( right, QgsPointCloudAttributeModel::AttributeIndexRole ).toInt( &rok );
+  const int leftId = sourceModel()->data( left, QgsPointCloudAttributeModel::AttributeIndexRole ).toInt( &lok );
+  const int rightId = sourceModel()->data( right, QgsPointCloudAttributeModel::AttributeIndexRole ).toInt( &rok );
 
   if ( !lok )
     return false;

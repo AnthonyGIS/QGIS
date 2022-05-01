@@ -47,7 +47,8 @@
 #include "qgslocatorwidget.h"
 #include "qgslocator.h"
 #include "qgsmessagebar.h"
-
+#include "qgsappmaptools.h"
+#include "qgsmaptoolmodifyannotation.h"
 
 QgisAppInterface::QgisAppInterface( QgisApp *_qgis )
   : qgis( _qgis )
@@ -136,7 +137,7 @@ QgsVectorLayer *QgisAppInterface::addVectorLayer( const QString &vectorLayerPath
   QString nonNullBaseBame = baseName;
   if ( nonNullBaseBame.isEmpty() )
   {
-    QFileInfo fi( vectorLayerPath );
+    const QFileInfo fi( vectorLayerPath );
     nonNullBaseBame = fi.completeBaseName();
   }
   return qgis->addVectorLayer( vectorLayerPath, nonNullBaseBame, providerKey );
@@ -147,7 +148,7 @@ QgsRasterLayer *QgisAppInterface::addRasterLayer( const QString &rasterLayerPath
   QString nonNullBaseName = baseName;
   if ( nonNullBaseName.isEmpty() )
   {
-    QFileInfo fi( rasterLayerPath );
+    const QFileInfo fi( rasterLayerPath );
     nonNullBaseName = fi.completeBaseName();
   }
   return qgis->addRasterLayer( rasterLayerPath, nonNullBaseName, QString() );
@@ -266,6 +267,16 @@ void QgisAppInterface::addPluginToWebMenu( const QString &name, QAction *action 
 void QgisAppInterface::removePluginWebMenu( const QString &name, QAction *action )
 {
   qgis->removePluginWebMenu( name, action );
+}
+
+void QgisAppInterface::addPluginToMeshMenu( const QString &name, QAction *action )
+{
+  qgis->addPluginToMeshMenu( name, action );
+}
+
+void QgisAppInterface::removePluginMeshMenu( const QString &name, QAction *action )
+{
+  qgis->removePluginMeshMenu( name, action );
 }
 
 int QgisAppInterface::addToolBarIcon( QAction *qAction )
@@ -710,22 +721,6 @@ QAction *QgisAppInterface::actionMapTips() { return qgis->actionMapTips(); }
 QAction *QgisAppInterface::actionNewBookmark() { return qgis->actionNewBookmark(); }
 QAction *QgisAppInterface::actionShowBookmarks() { return qgis->actionShowBookmarks(); }
 QAction *QgisAppInterface::actionDraw() { return qgis->actionDraw(); }
-QAction *QgisAppInterface::actionCircle2Points() {  return qgis->actionCircle2Points();}
-QAction *QgisAppInterface::actionCircle3Points() {  return qgis->actionCircle3Points();}
-QAction *QgisAppInterface::actionCircle3Tangents() {  return qgis->actionCircle3Tangents();}
-QAction *QgisAppInterface::actionCircle2TangentsPoint() {  return qgis->actionCircle2TangentsPoint();}
-QAction *QgisAppInterface::actionCircleCenterPoint() {  return qgis->actionCircleCenterPoint();}
-QAction *QgisAppInterface::actionEllipseCenter2Points() {  return qgis->actionEllipseCenter2Points();}
-QAction *QgisAppInterface::actionEllipseCenterPoint() {  return qgis->actionEllipseCenterPoint();}
-QAction *QgisAppInterface::actionEllipseExtent() {  return qgis->actionEllipseExtent();}
-QAction *QgisAppInterface::actionEllipseFoci() {  return qgis->actionEllipseFoci();}
-QAction *QgisAppInterface::actionRectangleCenterPoint() {  return qgis->actionRectangleCenterPoint();}
-QAction *QgisAppInterface::actionRectangleExtent() {  return qgis->actionRectangleExtent();}
-QAction *QgisAppInterface::actionRectangle3PointsDistance() {  return qgis->actionRectangle3PointsDistance();}
-QAction *QgisAppInterface::actionRectangle3PointsProjected() {  return qgis->actionRectangle3PointsProjected();}
-QAction *QgisAppInterface::actionRegularPolygon2Points() {  return qgis->actionRegularPolygon2Points();}
-QAction *QgisAppInterface::actionRegularPolygonCenterPoint() {  return qgis->actionRegularPolygonCenterPoint();}
-QAction *QgisAppInterface::actionRegularPolygonCenterCorner() {  return qgis->actionRegularPolygonCenterCorner();}
 //! Layer menu actions
 QAction *QgisAppInterface::actionNewVectorLayer() { return qgis->actionNewVectorLayer(); }
 QAction *QgisAppInterface::actionAddOgrLayer() { return qgis->actionAddOgrLayer(); }
@@ -812,7 +807,7 @@ void QgisAppInterface::cacheloadForm( const QString &uifile )
   {
     QUiLoader loader;
 
-    QFileInfo fi( uifile );
+    const QFileInfo fi( uifile );
     loader.setWorkingDirectory( fi.dir() );
     QWidget *myWidget = loader.load( &file );
     file.close();
@@ -907,3 +902,4 @@ QList<QgsMapDecoration *> QgisAppInterface::activeDecorations()
 {
   return qgis->activeDecorations();
 }
+

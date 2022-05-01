@@ -28,6 +28,8 @@
 
 #include "qgspointcloudrgbrenderer.h"
 #include "qgslogger.h"
+#include "qgsproject.h"
+#include "qgsprojectutils.h"
 
 static bool _initRenderer( const QString &name, QgsPointCloudRendererWidgetFunc f, const QString &iconName = QString() )
 {
@@ -85,8 +87,8 @@ QgsPointCloudRendererPropertiesWidget::QgsPointCloudRendererPropertiesWidget( Qg
 
   cboRenderers->setCurrentIndex( -1 ); // set no current renderer
 
-  mPointStyleComboBox->addItem( tr( "Square" ), QgsPointCloudRenderer::Square );
-  mPointStyleComboBox->addItem( tr( "Circle" ), QgsPointCloudRenderer::Circle );
+  mPointStyleComboBox->addItem( tr( "Square" ), static_cast< int >( Qgis::PointCloudSymbol::Square ) );
+  mPointStyleComboBox->addItem( tr( "Circle" ), static_cast< int >( Qgis::PointCloudSymbol::Circle ) );
 
   connect( cboRenderers, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, &QgsPointCloudRendererPropertiesWidget::rendererChanged );
 
@@ -99,6 +101,10 @@ QgsPointCloudRendererPropertiesWidget::QgsPointCloudRendererPropertiesWidget( Qg
   connect( mPointSizeSpinBox, qOverload<double>( &QgsDoubleSpinBox::valueChanged ), this, &QgsPointCloudRendererPropertiesWidget::emitWidgetChanged );
   connect( mPointSizeUnitWidget, &QgsUnitSelectionWidget::changed, this, &QgsPointCloudRendererPropertiesWidget::emitWidgetChanged );
 
+  mDrawOrderComboBox->addItem( tr( "Default" ), static_cast< int >( Qgis::PointCloudDrawOrder::Default ) );
+  mDrawOrderComboBox->addItem( tr( "Bottom to Top" ), static_cast< int >( Qgis::PointCloudDrawOrder::BottomToTop ) );
+  mDrawOrderComboBox->addItem( tr( "Top to Bottom" ), static_cast< int >( Qgis::PointCloudDrawOrder::TopToBottom ) );
+
   mMaxErrorUnitWidget->setUnits( QgsUnitTypes::RenderUnitList() << QgsUnitTypes::RenderMillimeters << QgsUnitTypes::RenderMetersInMapUnits << QgsUnitTypes::RenderMapUnits << QgsUnitTypes::RenderPixels
                                  << QgsUnitTypes::RenderPoints << QgsUnitTypes::RenderInches );
   mMaxErrorSpinBox->setClearValue( 0.3 );
@@ -107,7 +113,7 @@ QgsPointCloudRendererPropertiesWidget::QgsPointCloudRendererPropertiesWidget( Qg
   connect( mMaxErrorUnitWidget, &QgsUnitSelectionWidget::changed, this, &QgsPointCloudRendererPropertiesWidget::emitWidgetChanged );
 
   connect( mPointStyleComboBox, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, &QgsPointCloudRendererPropertiesWidget::emitWidgetChanged );
-
+  connect( mDrawOrderComboBox, static_cast<void ( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, &QgsPointCloudRendererPropertiesWidget::emitWidgetChanged );
   syncToLayer( layer );
 }
 
@@ -127,14 +133,15 @@ void QgsPointCloudRendererPropertiesWidget::syncToLayer( QgsMapLayer *layer )
 
   mBlockChangedSignal = true;
   mOpacityWidget->setOpacity( mLayer->opacity() );
+  mBlendModeComboBox->setShowClippingModes( QgsProjectUtils::layerIsContainedInGroupLayer( QgsProject::instance(), mLayer ) );
   mBlendModeComboBox->setBlendMode( mLayer->blendMode() );
 
   if ( mLayer->renderer() )
   {
     // set current renderer from layer
-    QString rendererName = mLayer->renderer()->type();
+    const QString rendererName = mLayer->renderer()->type();
 
-    int rendererIdx = cboRenderers->findData( rendererName );
+    const int rendererIdx = cboRenderers->findData( rendererName );
     cboRenderers->setCurrentIndex( rendererIdx );
 
     // no renderer found... this mustn't happen
@@ -144,7 +151,8 @@ void QgsPointCloudRendererPropertiesWidget::syncToLayer( QgsMapLayer *layer )
     mPointSizeUnitWidget->setUnit( mLayer->renderer()->pointSizeUnit() );
     mPointSizeUnitWidget->setMapUnitScale( mLayer->renderer()->pointSizeMapUnitScale() );
 
-    mPointStyleComboBox->setCurrentIndex( mPointStyleComboBox->findData( mLayer->renderer()->pointSymbol() ) );
+    mPointStyleComboBox->setCurrentIndex( mPointStyleComboBox->findData( static_cast< int >( mLayer->renderer()->pointSymbol() ) ) );
+    mDrawOrderComboBox->setCurrentIndex( mDrawOrderComboBox->findData( static_cast< int >( mLayer->renderer()->drawOrder2d() ) ) );
 
     mMaxErrorSpinBox->setValue( mLayer->renderer()->maximumScreenError() );
     mMaxErrorUnitWidget->setUnit( mLayer->renderer()->maximumScreenErrorUnit() );
@@ -177,10 +185,11 @@ void QgsPointCloudRendererPropertiesWidget::apply()
   mLayer->renderer()->setPointSizeUnit( mPointSizeUnitWidget->unit() );
   mLayer->renderer()->setPointSizeMapUnitScale( mPointSizeUnitWidget->getMapUnitScale() );
 
-  mLayer->renderer()->setPointSymbol( static_cast< QgsPointCloudRenderer::PointSymbol >( mPointStyleComboBox->currentData().toInt() ) );
+  mLayer->renderer()->setPointSymbol( static_cast< Qgis::PointCloudSymbol >( mPointStyleComboBox->currentData().toInt() ) );
 
   mLayer->renderer()->setMaximumScreenError( mMaxErrorSpinBox->value() );
   mLayer->renderer()->setMaximumScreenErrorUnit( mMaxErrorUnitWidget->unit() );
+  mLayer->renderer()->setDrawOrder2d( static_cast< Qgis::PointCloudDrawOrder >( mDrawOrderComboBox->currentData().toInt() ) );
 }
 
 void QgsPointCloudRendererPropertiesWidget::rendererChanged()
@@ -191,7 +200,7 @@ void QgsPointCloudRendererPropertiesWidget::rendererChanged()
     return;
   }
 
-  QString rendererName = cboRenderers->currentData().toString();
+  const QString rendererName = cboRenderers->currentData().toString();
 
   //Retrieve the previous renderer: from the old active widget if possible, otherwise from the layer
   std::unique_ptr< QgsPointCloudRenderer > oldRenderer;

@@ -52,25 +52,25 @@ namespace geos
      * Destroys the GEOS geometry \a geom, using the static QGIS
      * geos context.
      */
-    void CORE_EXPORT operator()( GEOSGeometry *geom );
+    void CORE_EXPORT operator()( GEOSGeometry *geom ) const;
 
     /**
      * Destroys the GEOS prepared geometry \a geom, using the static QGIS
      * geos context.
      */
-    void CORE_EXPORT operator()( const GEOSPreparedGeometry *geom );
+    void CORE_EXPORT operator()( const GEOSPreparedGeometry *geom ) const;
 
     /**
      * Destroys the GEOS buffer params \a params, using the static QGIS
      * geos context.
      */
-    void CORE_EXPORT operator()( GEOSBufferParams *params );
+    void CORE_EXPORT operator()( GEOSBufferParams *params ) const;
 
     /**
      * Destroys the GEOS coordinate sequence \a sequence, using the static QGIS
      * geos context.
      */
-    void CORE_EXPORT operator()( GEOSCoordSequence *sequence );
+    void CORE_EXPORT operator()( GEOSCoordSequence *sequence ) const;
   };
 
   /**
@@ -137,7 +137,7 @@ class CORE_EXPORT QgsGeos: public QgsGeometryEngine
      * \param newPart part to add. Ownership is NOT transferred.
      * \returns OperationResult a result code: success or reason of failure
      */
-    static QgsGeometry::OperationResult addPart( QgsGeometry &geometry, GEOSGeometry *newPart );
+    static Qgis::GeometryOperationResult addPart( QgsGeometry &geometry, GEOSGeometry *newPart );
 
     void geometryChanged() override;
     void prepareGeometry() override;
@@ -172,7 +172,7 @@ class CORE_EXPORT QgsGeos: public QgsGeometryEngine
     QgsAbstractGeometry *combine( const QVector< QgsGeometry > &, QString *errorMsg = nullptr ) const override;
     QgsAbstractGeometry *symDifference( const QgsAbstractGeometry *geom, QString *errorMsg = nullptr ) const override;
     QgsAbstractGeometry *buffer( double distance, int segments, QString *errorMsg = nullptr ) const override;
-    QgsAbstractGeometry *buffer( double distance, int segments, int endCapStyle, int joinStyle, double miterLimit, QString *errorMsg = nullptr ) const override;
+    QgsAbstractGeometry *buffer( double distance, int segments, Qgis::EndCapStyle endCapStyle, Qgis::JoinStyle joinStyle, double miterLimit, QString *errorMsg = nullptr ) const override;
     QgsAbstractGeometry *simplify( double tolerance, QString *errorMsg = nullptr ) const override;
     QgsAbstractGeometry *interpolate( double distance, QString *errorMsg = nullptr ) const override;
     QgsAbstractGeometry *envelope( QString *errorMsg = nullptr ) const override;
@@ -180,6 +180,25 @@ class CORE_EXPORT QgsGeos: public QgsGeometryEngine
     QgsPoint *pointOnSurface( QString *errorMsg = nullptr ) const override;
     QgsAbstractGeometry *convexHull( QString *errorMsg = nullptr ) const override;
     double distance( const QgsAbstractGeometry *geom, QString *errorMsg = nullptr ) const override;
+    bool distanceWithin( const QgsAbstractGeometry *geom, double maxdistance, QString *errorMsg = nullptr ) const override;
+
+    /**
+     * Returns TRUE if the geometry contains the point at (\a x, \a y).
+     *
+     * This method is more efficient than creating a temporary QgsPoint object to test for containment.
+     *
+     * \since QGIS 3.26
+     */
+    bool contains( double x, double y, QString *errorMsg = nullptr ) const;
+
+    /**
+     * Returns the minimum distance from the geometry to the point at (\a x, \a y).
+     *
+     * This method is more efficient than creating a temporary QgsPoint object to test distance.
+     *
+     * \since QGIS 3.26
+     */
+    double distance( double x, double y, QString *errorMsg = nullptr ) const;
 
     /**
      * Returns the Hausdorff distance between this geometry and \a geom. This is basically a measure of how similar or dissimilar 2 geometries are.
@@ -276,7 +295,7 @@ class CORE_EXPORT QgsGeos: public QgsGeometryEngine
                                          QgsPointSequence &topologyTestPoints,
                                          QString *errorMsg = nullptr, bool skipIntersectionCheck = false ) const override;
 
-    QgsAbstractGeometry *offsetCurve( double distance, int segments, int joinStyle, double miterLimit, QString *errorMsg = nullptr ) const override;
+    QgsAbstractGeometry *offsetCurve( double distance, int segments, Qgis::JoinStyle joinStyle, double miterLimit, QString *errorMsg = nullptr ) const override;
 
     /**
      * Returns a single sided buffer for a geometry. The buffer is only
@@ -291,8 +310,8 @@ class CORE_EXPORT QgsGeos: public QgsGeometryEngine
      * calculated
      * \since QGIS 3.0
      */
-    std::unique_ptr< QgsAbstractGeometry > singleSidedBuffer( double distance, int segments, int side,
-        int joinStyle, double miterLimit,
+    std::unique_ptr< QgsAbstractGeometry > singleSidedBuffer( double distance, int segments, Qgis::BufferSide side,
+        Qgis::JoinStyle joinStyle, double miterLimit,
         QString *errorMsg = nullptr ) const;
 
     /**
@@ -478,6 +497,20 @@ class CORE_EXPORT QgsGeos: public QgsGeometryEngine
      * \note only valid for linestring geometries
      */
     double lineLocatePoint( const QgsPoint &point, QString *errorMsg = nullptr ) const;
+
+    /**
+     * Returns a distance representing the location along this linestring of the closest point
+     * on this linestring geometry to the point at (\a x, \a y). Ie, the returned value indicates
+     * how far along this linestring you need to traverse to get to the closest location
+     * where this linestring comes to the specified point.
+     *
+     * This method is more efficient than creating a temporary QgsPoint object to locate.
+     *
+     * \note only valid for linestring geometries
+     *
+     * \since QGIS 3.26
+     */
+    double lineLocatePoint( double x, double y, QString *errorMsg = nullptr ) const;
 
     /**
      * Creates a GeometryCollection geometry containing possible polygons formed from the constituent

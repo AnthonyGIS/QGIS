@@ -2,6 +2,11 @@
 
 set -e
 
+# Debug env
+echo "::group::Print env"
+env
+echo "::endgroup::"
+
 # Temporarily uncomment to debug ccache issues
 # cat /tmp/cache.debug
 
@@ -112,8 +117,9 @@ if [ ${RUN_ORACLE:-"NO"} == "YES" ]; then
   echo "${bold}Load Oracle database...🙏${endbold}"
 
   export ORACLE_HOST="oracle"
-  export QGIS_ORACLETEST_DBNAME="${ORACLE_HOST}/XEPDB1"
-  export QGIS_ORACLETEST_DB="host=${QGIS_ORACLETEST_DBNAME} port=1521 user='QGIS' password='qgis'"
+  export ORACLE_PDB="XEPDB1"
+  export QGIS_ORACLETEST_DBNAME="${ORACLE_HOST}/${ORACLE_PDB}"
+  export QGIS_ORACLETEST_DB="host=${ORACLE_HOST} dbname=${ORACLE_PDB} port=1521 user='QGIS' password='qgis'"
 
   echo "Wait a moment while loading Oracle database."
   COUNT=0
@@ -170,12 +176,33 @@ EOT
 
 fi
 
+#######################################
+# Wait for WebDAV container to be ready
+#######################################
 
+if [ $# -eq 0 ] || [ $1 = "ALL_BUT_PROVIDERS" ] || [ $1 = "ALL" ] ; then
+
+  echo "Wait for webdav to be ready..."
+  COUNT=0
+  while ! curl -f -X GET -u qgis:myPasswd! http://$QGIS_WEBDAV_HOST:$QGIS_WEBDAV_PORT/webdav_tests/ &> /dev/null;
+  do
+    printf "."
+    sleep 5
+    if [[ $(( COUNT++ )) -eq 40 ]]; then
+      break
+    fi
+  done
+  if [[ ${COUNT} -eq 41 ]]; then
+    echo "Error: WebDAV docker timeout!!!"
+  else
+    echo "done"
+  fi
+fi
 
 ###########
 # Run tests
 ###########
-EXCLUDE_TESTS=$(cat /root/QGIS/.ci/test_blocklist.txt | sed -r '/^(#.*?)?$/d' | paste -sd '|' -)
+EXCLUDE_TESTS=$(cat /root/QGIS/.ci/test_blocklist_qt${QT_VERSION}.txt | sed -r '/^(#.*?)?$/d' | paste -sd '|' -)
 if ! [[ ${RUN_FLAKY_TESTS} == true ]]; then
   echo "Flaky tests are skipped!"
   EXCLUDE_TESTS=${EXCLUDE_TESTS}"|"$(cat /root/QGIS/.ci/test_flaky.txt | sed -r '/^(#.*?)?$/d' | paste -sd '|' -)

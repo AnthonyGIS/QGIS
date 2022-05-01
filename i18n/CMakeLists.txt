@@ -27,7 +27,7 @@ file(MAKE_DIRECTORY ${QGIS_OUTPUT_DIRECTORY}/i18n)
 # qgis_et.ts qgis_eu.ts qgis_fi.ts qgis_fr.ts qgis_gl.ts qgis_hu.ts qgis_is.ts qgis_it.ts qgis_ja.ts qgis_ko.ts qgis_ky.ts
 # qgis_lt.ts qgis_nb.ts qgis_nl.ts qgis_pl.ts qgis_pt_BR.ts qgis_pt_PT.ts qgis_ro.ts qgis_ru.ts qgis_sl.ts qgis_sv.ts qgis_tr.ts
 # qgis_uk.ts qgis_vi.ts qgis_zh-Hans.ts qgis_zh-Hant.ts)
-SET(TS_FILES qgis_en.ts qgis_zh-Hans.ts)
+set(TS_FILES qgis_en.ts qgis_zh-Hans.ts)
 
 ADD_TRANSLATION_FILES (QM_FILES ${TS_FILES})
 

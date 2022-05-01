@@ -18,6 +18,7 @@
 #include <QHash>
 #include <QMap>
 #include <QNetworkRequest>
+#include <QSet>
 #include <QStringList>
 #include <QVector>
 
@@ -198,7 +199,7 @@ struct QgsWmsDimensionProperty
       QDateTime start = QDateTime::fromString( extentContent.at( 0 ), Qt::ISODateWithMs );
       QDateTime end = QDateTime::fromString( extentContent.at( extentSize - 2 ), Qt::ISODateWithMs );
 
-      if ( start.isValid() & end.isValid() )
+      if ( start.isValid() && end.isValid() )
         return QgsDateTimeRange( start, end );
     }
 
@@ -348,7 +349,7 @@ struct QgsWmsLayerProperty
   int                fixedHeight;
 
   // TODO need to expand this to cover more of layer properties
-  bool equal( const QgsWmsLayerProperty &layerProperty )
+  bool equal( const QgsWmsLayerProperty &layerProperty ) const
   {
     if ( !( name == layerProperty.name ) )
       return false;
@@ -413,7 +414,7 @@ struct QgsWmstDates
 
   }
 
-  bool operator== ( const QgsWmstDates &other )
+  bool operator== ( const QgsWmstDates &other ) const
   {
     return dateTimes == other.dateTimes;
   }
@@ -436,7 +437,7 @@ struct QgsWmstExtentPair
   {
   }
 
-  bool operator ==( const QgsWmstExtentPair &other )
+  bool operator ==( const QgsWmstExtentPair &other ) const
   {
     return dates == other.dates &&
            resolution == other.resolution;
@@ -857,6 +858,8 @@ class QgsWmsSettings
 
     bool mEnableContextualLegend;
 
+    QString mInterpretation;
+
     friend class QgsWmsProvider;
 };
 
@@ -878,7 +881,7 @@ class QgsWmsCapabilities
     QString lastError() const { return mError; }
     QString lastErrorFormat() const { return mErrorFormat; }
 
-    QgsWmsCapabilitiesProperty capabilitiesProperty() { return mCapabilities; }
+    QgsWmsCapabilitiesProperty capabilitiesProperty() const { return mCapabilities; }
 
     /**
      * \brief   Returns a list of the supported layers of the WMS server
@@ -1033,6 +1036,22 @@ class QgsWmsCapabilitiesDownload : public QObject
     bool downloadCapabilities();
 
     bool downloadCapabilities( const QString &baseUrl, const QgsWmsAuthorization &auth );
+
+    /**
+     * Returns the download refresh state.
+     * \see setForceRefresh()
+     *
+     * \since QGIS 3.22
+     */
+    bool forceRefresh();
+
+    /**
+     * Sets the download refresh state.
+     * \see forceRefresh()
+     *
+     * \since QGIS 3.22
+     */
+    void setForceRefresh( bool forceRefresh );
 
     QString lastError() const { return mError; }
 

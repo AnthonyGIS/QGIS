@@ -102,6 +102,15 @@ class CORE_EXPORT QgsGdalUtils
     static gdal::dataset_unique_ptr imageToMemoryDataset( const QImage &image );
 
     /**
+     * Converts an raster \a block to a  single band GDAL memory dataset.
+     *
+     * \warning The \a block must stay allocated for the lifetime of the returned gdal dataset.
+     *
+     * \since QGIS 3.26
+     */
+    static gdal::dataset_unique_ptr blockToSingleBandMemoryDataset( int pixelWidth, int pixelHeight, const QgsRectangle &extent, void *block,  GDALDataType dataType );
+
+    /**
      * This is a copy of GDALAutoCreateWarpedVRT optimized for imagery using RPC georeferencing
      * that also sets RPC_HEIGHT in GDALCreateGenImgProjTransformer2 based on HEIGHT_OFF.
      * By default GDAL would assume that the imagery has zero elevation - if that is not the case,
@@ -148,13 +157,13 @@ class CORE_EXPORT QgsGdalUtils
      */
     static bool pathIsCheapToOpen( const QString &path, int smallFileSizeLimit = 50000 );
 
-
     /**
-     * File extensions for formats supported by GDAL which may contain multiple layers
-     * and should be treated as a potential layer container.
+     * Returns a list of file extensions which potentially contain multiple layers representing
+     * GDAL raster or vector layers.
+     *
      * \since QGIS 3.22
      */
-    static const QStringList SUPPORTED_DB_LAYERS_EXTENSIONS;
+    static QStringList multiLayerFileExtensions();
 
     /**
      * Returns TRUE if the VRT file at the specified path is a VRT matching

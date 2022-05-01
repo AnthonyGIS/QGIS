@@ -102,7 +102,7 @@ class CORE_EXPORT QgsCircularString: public QgsCurve
     QDomElement asGml3( QDomDocument &doc, int precision = 17, const QString &ns = "gml", QgsAbstractGeometry::AxisOrder axisOrder = QgsAbstractGeometry::AxisOrder::XY ) const override;
     json asJsonObject( int precision = 17 ) const override SIP_SKIP;
     bool isEmpty() const override SIP_HOLDGIL;
-    bool isValid( QString &error SIP_OUT, int flags = 0 ) const override;
+    bool isValid( QString &error SIP_OUT, Qgis::GeometryValidityFlags flags = Qgis::GeometryValidityFlags() ) const override;
     int numPoints() const override SIP_HOLDGIL;
     int indexOf( const QgsPoint &point ) const final;
 
@@ -138,7 +138,7 @@ class CORE_EXPORT QgsCircularString: public QgsCurve
     bool removeDuplicateNodes( double epsilon = 4 * std::numeric_limits<double>::epsilon(), bool useZValues = false ) override;
 
     void draw( QPainter &p ) const override;
-    void transform( const QgsCoordinateTransform &ct, QgsCoordinateTransform::TransformDirection d = QgsCoordinateTransform::ForwardTransform, bool transformZ = false ) override SIP_THROW( QgsCsException );
+    void transform( const QgsCoordinateTransform &ct, Qgis::TransformDirection d = Qgis::TransformDirection::Forward, bool transformZ = false ) override SIP_THROW( QgsCsException );
     void transform( const QTransform &t, double zTranslate = 0.0, double zScale = 1.0, double mTranslate = 0.0, double mScale = 1.0 ) override;
     void addToPainterPath( QPainterPath &path ) const override;
     void drawAsPolygon( QPainter &p ) const override;
@@ -146,7 +146,7 @@ class CORE_EXPORT QgsCircularString: public QgsCurve
     bool moveVertex( QgsVertexId position, const QgsPoint &newPos ) override;
     bool deleteVertex( QgsVertexId position ) override;
     double closestSegment( const QgsPoint &pt, QgsPoint &segmentPt SIP_OUT, QgsVertexId &vertexAfter SIP_OUT, int *leftOf SIP_OUT = nullptr, double epsilon = 4 * std::numeric_limits<double>::epsilon() ) const override;
-    bool pointAt( int node, QgsPoint &point, QgsVertexId::VertexType &type ) const override;
+    bool pointAt( int node, QgsPoint &point, Qgis::VertexType &type ) const override;
     void sumUpArea( double &sum SIP_OUT ) const override;
     bool hasCurvedSegments() const override;
     double vertexAngle( QgsVertexId vertex ) const override;

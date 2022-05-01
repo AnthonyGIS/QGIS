@@ -295,29 +295,6 @@
                     <item>
                      <widget class="QLineEdit" name="mLayerOrigNameLineEd"/>
                     </item>
-                    <item>
-                     <widget class="QLabel" name="label_13">
-                      <property name="text">
-                       <string>displayed as</string>
-                      </property>
-                     </widget>
-                    </item>
-                    <item>
-                     <widget class="QLineEdit" name="leDisplayName">
-                      <property name="enabled">
-                       <bool>true</bool>
-                      </property>
-                      <property name="styleSheet">
-                       <string notr="true">color: #505050;
-background-color: #F0F0F0;
-border: 1px solid #B0B0B0;
-border-radius: 2px;</string>
-                      </property>
-                      <property name="readOnly">
-                       <bool>true</bool>
-                      </property>
-                     </widget>
-                    </item>
                    </layout>
                   </item>
                   <item>
@@ -399,19 +376,15 @@ border-radius: 2px;</string>
                 <widget class="QgsMeshDatasetGroupTreeWidget" name="mDatasetGroupTreeWidget" native="true"/>
                </item>
                <item>
-                <widget class="QCheckBox" name="mTemporalStaticDatasetCheckBox">
-                 <property name="toolTip">
-                  <string>Static dataset even if the temporal navigation is on</string>
-                 </property>
-                 <property name="text">
-                  <string>Always treat as a static dataset, regardless of temporal properties</string>
-                 </property>
-                </widget>
-               </item>
-               <item>
                 <widget class="QgsCollapsibleGroupBoxBasic" name="mStaticDatasetGroupBox">
+                 <property name="toolTip">
+                  <string>Always treat as a static dataset even if the temporal navigation is on</string>
+                 </property>
                  <property name="title">
-                  <string>Static Dataset</string>
+                  <string>Treat as Static Dataset</string>
+                 </property>
+                 <property name="checkable">
+                  <bool>true</bool>
                  </property>
                  <layout class="QVBoxLayout" name="verticalLayout_7">
                   <item>
@@ -532,14 +505,14 @@ border-radius: 2px;</string>
               <item row="1" column="0">
                <widget class="QLabel" name="label_2">
                 <property name="text">
-                 <string>Maximal mesh resolution</string>
+                 <string>Minimum triangle size</string>
                 </property>
                </widget>
               </item>
               <item row="1" column="2">
                <widget class="QgsSpinBox" name="mSimplifyMeshResolutionSpinBox">
                 <property name="suffix">
-                 <string> pixels/triangle</string>
+                 <string> pixels</string>
                 </property>
                 <property name="minimum">
                  <number>1</number>
@@ -902,10 +875,9 @@ border-radius: 2px;</string>
   <tabstop>mInformationTextBrowser</tabstop>
   <tabstop>scrollArea_3</tabstop>
   <tabstop>mLayerOrigNameLineEd</tabstop>
-  <tabstop>leDisplayName</tabstop>
   <tabstop>mCrsGroupBox</tabstop>
   <tabstop>mCrsSelector</tabstop>
-  <tabstop>mTemporalStaticDatasetCheckBox</tabstop>
+  <tabstop>mStaticDatasetGroupBox</tabstop>
   <tabstop>scrollArea</tabstop>
   <tabstop>mSimplifyMeshGroupBox</tabstop>
   <tabstop>mSimplifyReductionFactorSpinBox</tabstop>
@@ -918,6 +890,7 @@ border-radius: 2px;</string>
   <tabstop>mTemporalProviderTimeUnitComboBox</tabstop>
  </tabstops>
  <resources>
+  <include location="../../../images/images.qrc"/>
   <include location="../../../images/images.qrc"/>
  </resources>
  <connections>

@@ -1259,6 +1259,28 @@ QgsFields QgsAbstractDatabaseProviderConnection::fields( const QString &schema, 
   }
 }
 
+QStringList QgsAbstractDatabaseProviderConnection::fieldDomainNames() const
+{
+  checkCapability( Capability::ListFieldDomains );
+  return QStringList();
+}
+
+QgsFieldDomain *QgsAbstractDatabaseProviderConnection::fieldDomain( const QString & ) const
+{
+  checkCapability( Capability::RetrieveFieldDomain );
+  return nullptr;
+}
+
+void QgsAbstractDatabaseProviderConnection::setFieldDomainName( const QString &, const QString &, const QString &, const QString & ) const
+{
+  checkCapability( Capability::SetFieldDomain );
+}
+
+void QgsAbstractDatabaseProviderConnection::addFieldDomain( const QgsFieldDomain &, const QString & ) const
+{
+  checkCapability( Capability::AddFieldDomain );
+}
+
 QString QgsAbstractDatabaseProviderConnection::TableProperty::defaultName() const
 {
   QString n = mTableName;
@@ -1476,7 +1498,7 @@ QgsAbstractDatabaseProviderConnection::QueryResult::QueryResult( std::shared_ptr
   : mResultIterator( iterator )
 {}
 
-double QgsAbstractDatabaseProviderConnection::QueryResult::queryExecutionTime()
+double QgsAbstractDatabaseProviderConnection::QueryResult::queryExecutionTime() const
 {
   return mQueryExecutionTime;
 }

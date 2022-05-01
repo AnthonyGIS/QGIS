@@ -180,16 +180,27 @@ class CORE_EXPORT QgsPointCloudRenderContext
      * \a type indicates the original data type for the attribute.
      */
     template <typename T>
-    void getAttribute( const char *data, std::size_t offset, QgsPointCloudAttribute::DataType type, T &value ) const
+    static void getAttribute( const char *data, std::size_t offset, QgsPointCloudAttribute::DataType type, T &value )
     {
       switch ( type )
       {
+        case QgsPointCloudAttribute::UChar:
         case QgsPointCloudAttribute::Char:
           value = *( data + offset );
           return;
 
+        case QgsPointCloudAttribute::UInt32:
+          value = *reinterpret_cast< const quint32 * >( data + offset );
+          return;
         case QgsPointCloudAttribute::Int32:
           value = *reinterpret_cast< const qint32 * >( data + offset );
+          return;
+
+        case QgsPointCloudAttribute::UInt64:
+          value = *reinterpret_cast< const quint64 * >( data + offset );
+          return;
+        case QgsPointCloudAttribute::Int64:
+          value = *reinterpret_cast< const qint64 * >( data + offset );
           return;
 
         case QgsPointCloudAttribute::Short:
@@ -231,6 +242,48 @@ class CORE_EXPORT QgsPointCloudRenderContext
     QgsFeedback *mFeedback = nullptr;
 };
 
+#ifndef SIP_RUN
+
+/**
+ * \ingroup core
+ * \class QgsPreparedPointCloudRendererData
+ *
+ * \brief Base class for 2d point cloud renderer prepared data containers.
+ * \note Not available in Python bindings
+ *
+ * \since QGIS 3.26
+ */
+class CORE_EXPORT QgsPreparedPointCloudRendererData
+{
+  public:
+
+    virtual ~QgsPreparedPointCloudRendererData();
+
+    /**
+     * Returns the set of attributes used by the prepared point cloud renderer.
+     */
+    virtual QSet< QString > usedAttributes() const = 0;
+
+    /**
+     * Prepares the renderer for using the specified \a block.
+     *
+     * Returns FALSE if preparation failed.
+     */
+    virtual bool prepareBlock( const QgsPointCloudBlock *block ) = 0;
+
+    /**
+     * An optimised method of retrieving the color of a point from a point cloud block.
+     *
+     * Before calling this method prepareBlock() must be called for each incoming point cloud block.
+     *
+     * \since QGIS 3.26
+     */
+    virtual QColor pointColor( const QgsPointCloudBlock *block, int i, double z ) = 0;
+
+};
+
+#endif
+
 
 /**
  * \ingroup core
@@ -262,15 +315,6 @@ class CORE_EXPORT QgsPointCloudRenderer
 #endif
 
   public:
-
-    /**
-     * Rendering symbols for points.
-     */
-    enum PointSymbol
-    {
-      Square, //!< Renders points as squares
-      Circle, //!< Renders points as circles
-    };
 
     /**
      * Constructor for QgsPointCloudRenderer.
@@ -346,6 +390,14 @@ class CORE_EXPORT QgsPointCloudRenderer
      * returned here.
      */
     virtual QSet< QString > usedAttributes( const QgsPointCloudRenderContext &context ) const;
+
+    /**
+     * Returns prepared data container for bulk point color retrieval.
+     *
+     * \note Not available in Python bindings.
+     * \since QGIS 3.26
+     */
+    virtual std::unique_ptr< QgsPreparedPointCloudRendererData > prepare() SIP_SKIP;
 
     /**
      * Must be called when a new render cycle is started. A call to startRender() must always
@@ -437,18 +489,34 @@ class CORE_EXPORT QgsPointCloudRenderer
     const QgsMapUnitScale &pointSizeMapUnitScale() const { return mPointSizeMapUnitScale; }
 
     /**
+     * Returns the drawing order used by the renderer for drawing points.
+     *
+     * \see setDrawOrder2d()
+     * \since QGIS 3.24
+     */
+    Qgis::PointCloudDrawOrder drawOrder2d() const;
+
+    /**
+     * Sets the drawing \a order used by the renderer for drawing points.
+     *
+     * \see drawOrder2d()
+     * \since QGIS 3.24
+     */
+    void setDrawOrder2d( Qgis::PointCloudDrawOrder order );
+
+    /**
      * Returns the symbol used by the renderer for drawing points.
      *
      * \see setPointSymbol()
      */
-    PointSymbol pointSymbol() const;
+    Qgis::PointCloudSymbol pointSymbol() const;
 
     /**
      * Sets the \a symbol used by the renderer for drawing points.
      *
      * \see pointSymbol()
      */
-    void setPointSymbol( PointSymbol symbol );
+    void setPointSymbol( Qgis::PointCloudSymbol symbol );
 
     /**
      * Returns the maximum screen error allowed when rendering the point cloud.
@@ -531,18 +599,18 @@ class CORE_EXPORT QgsPointCloudRenderer
      */
     void drawPoint( double x, double y, const QColor &color, QgsPointCloudRenderContext &context ) const
     {
-      QPointF originalXY( x, y );
+      const QPointF originalXY( x, y );
       context.renderContext().mapToPixel().transformInPlace( x, y );
       QPainter *painter = context.renderContext().painter();
       switch ( mPointSymbol )
       {
-        case Square:
+        case Qgis::PointCloudSymbol::Square:
           painter->fillRect( QRectF( x - mPainterPenWidth * 0.5,
                                      y - mPainterPenWidth * 0.5,
                                      mPainterPenWidth, mPainterPenWidth ), color );
           break;
 
-        case Circle:
+        case Qgis::PointCloudSymbol::Circle:
           painter->setBrush( QBrush( color ) );
           painter->setPen( Qt::NoPen );
           painter->drawEllipse( QRectF( x - mPainterPenWidth * 0.5,
@@ -590,8 +658,9 @@ class CORE_EXPORT QgsPointCloudRenderer
     QgsUnitTypes::RenderUnit mPointSizeUnit = QgsUnitTypes::RenderMillimeters;
     QgsMapUnitScale mPointSizeMapUnitScale;
 
-    PointSymbol mPointSymbol = Square;
+    Qgis::PointCloudSymbol mPointSymbol = Qgis::PointCloudSymbol::Square;
     int mPainterPenWidth = 1;
+    Qgis::PointCloudDrawOrder mDrawOrder2d = Qgis::PointCloudDrawOrder::Default;
 };
 
 #endif // QGSPOINTCLOUDRENDERER_H

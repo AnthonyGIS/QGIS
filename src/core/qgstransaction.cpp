@@ -36,14 +36,14 @@ QgsTransaction *QgsTransaction::create( const QSet<QgsVectorLayer *> &layers )
 
   QgsVectorLayer *firstLayer = *layers.constBegin();
 
-  QString connStr = connectionString( firstLayer->source() );
-  QString providerKey = firstLayer->providerType();
+  const QString connStr = connectionString( firstLayer->source() );
+  const QString providerKey = firstLayer->providerType();
   std::unique_ptr<QgsTransaction> transaction( QgsTransaction::create( connStr, providerKey ) );
   if ( transaction )
   {
     for ( QgsVectorLayer *layer : layers )
     {
-      if ( !transaction->addLayer( layer ) )
+      if ( !transaction->addLayer( layer, false ) )
       {
         transaction.reset();
         break;
@@ -66,6 +66,11 @@ QgsTransaction::~QgsTransaction()
   setLayerTransactionIds( nullptr );
 }
 
+QString QgsTransaction::connectionString() const
+{
+  return mConnString;
+}
+
 // For the needs of the OGR provider with GeoPackage datasources, remove
 // any reference to layers in the connection string
 QString QgsTransaction::removeLayerIdOrName( const QString &str )
@@ -74,10 +79,10 @@ QString QgsTransaction::removeLayerIdOrName( const QString &str )
 
   for ( int i = 0; i < 2; i++ )
   {
-    int pos = res.indexOf( i == 0 ? QLatin1String( "|layername=" ) :  QLatin1String( "|layerid=" ) );
+    const int pos = res.indexOf( i == 0 ? QLatin1String( "|layername=" ) :  QLatin1String( "|layerid=" ) );
     if ( pos >= 0 )
     {
-      int end = res.indexOf( '|', pos + 1 );
+      const int end = res.indexOf( '|', pos + 1 );
       if ( end >= 0 )
       {
         res = res.mid( 0, pos ) + res.mid( end );
@@ -106,12 +111,13 @@ QString QgsTransaction::connectionString( const QString &layerUri )
 }
 ///@endcond
 
-bool QgsTransaction::addLayer( QgsVectorLayer *layer )
+bool QgsTransaction::addLayer( QgsVectorLayer *layer, bool addLayersInEditMode )
 {
   if ( !layer )
     return false;
 
-  if ( layer->isEditable() )
+  if ( ! addLayersInEditMode
+       && layer->isEditable() )
     return false;
 
   //test if provider supports transactions
@@ -223,16 +229,7 @@ QString QgsTransaction::createSavepoint( QString &error SIP_OUT )
   }
 
   const QString name( QStringLiteral( "qgis" ) + ( QUuid::createUuid().toString().mid( 1, 24 ).replace( '-', QString() ) ) );
-
-  if ( !executeSql( QStringLiteral( "SAVEPOINT %1" ).arg( QgsExpression::quotedColumnRef( name ) ), error ) )
-  {
-    QgsMessageLog::logMessage( tr( "Could not create savepoint (%1)" ).arg( error ) );
-    return QString();
-  }
-
-  mSavepoints.push( name );
-  mLastSavePointIsDirty = false;
-  return name;
+  return createSavepoint( name, error );
 }
 
 QString QgsTransaction::createSavepoint( const QString &savePointId, QString &error SIP_OUT )

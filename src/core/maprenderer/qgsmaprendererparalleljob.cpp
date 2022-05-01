@@ -21,7 +21,7 @@
 #include "qgsmaplayerrenderer.h"
 #include "qgsproject.h"
 #include "qgsmaplayer.h"
-#include "qgsmaplayerlistutils.h"
+#include "qgsmaplayerlistutils_p.h"
 
 #include <QtConcurrentMap>
 #include <QtConcurrentRun>
@@ -51,13 +51,13 @@ void QgsMapRendererParallelJob::startPrivate()
 
   mLabelingEngineV2.reset();
 
-  if ( mSettings.testFlag( QgsMapSettings::DrawLabeling ) )
+  if ( mSettings.testFlag( Qgis::MapSettingsFlag::DrawLabeling ) )
   {
     mLabelingEngineV2.reset( new QgsDefaultLabelingEngine() );
     mLabelingEngineV2->setMapSettings( mSettings );
   }
 
-  bool canUseLabelCache = prepareLabelCache();
+  const bool canUseLabelCache = prepareLabelCache();
   mLayerJobs = prepareJobs( nullptr, mLabelingEngineV2.get() );
   mLabelJob = prepareLabelingJob( nullptr, mLabelingEngineV2.get(), canUseLabelCache );
   mSecondPassLayerJobs = prepareSecondPassJobs( mLayerJobs, mLabelJob );
@@ -240,7 +240,7 @@ void QgsMapRendererParallelJob::renderLayersFinished()
 
   QgsDebugMsgLevel( QStringLiteral( "PARALLEL layers finished" ), 2 );
 
-  if ( mSettings.testFlag( QgsMapSettings::DrawLabeling ) && !mLabelJob.context.renderingStopped() )
+  if ( mSettings.testFlag( Qgis::MapSettingsFlag::DrawLabeling ) && !mLabelJob.context.renderingStopped() )
   {
     mStatus = RenderingLabels;
 
@@ -288,9 +288,9 @@ void QgsMapRendererParallelJob::renderingFinished()
   {
     mStatus = RenderingSecondPass;
     // We have a second pass to do.
+    connect( &mSecondPassFutureWatcher, &QFutureWatcher<void>::finished, this, &QgsMapRendererParallelJob::renderLayersSecondPassFinished );
     mSecondPassFuture = QtConcurrent::map( mSecondPassLayerJobs, renderLayerStatic );
     mSecondPassFutureWatcher.setFuture( mSecondPassFuture );
-    connect( &mSecondPassFutureWatcher, &QFutureWatcher<void>::finished, this, &QgsMapRendererParallelJob::renderLayersSecondPassFinished );
   }
   else
   {

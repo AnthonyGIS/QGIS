@@ -47,7 +47,7 @@ QgsNewsFeedParser::QgsNewsFeedParser( const QUrl &feedUrl, const QString &authcf
   QString feedLanguage = settingsFeedLanguage.value( mSettingsKey );
   if ( feedLanguage.isEmpty() )
   {
-    feedLanguage = QgsApplication::settingsLocaleUserLocale.value( QString(), true, QStringLiteral( "en" ) );
+    feedLanguage = QgsApplication::settingsLocaleUserLocale.valueWithDefaultOverride( QStringLiteral( "en" ) );
   }
   if ( !feedLanguage.isEmpty() && feedLanguage != QLatin1String( "C" ) )
     query.addQueryItem( QStringLiteral( "lang" ), feedLanguage.mid( 0, 2 ) );
@@ -278,7 +278,7 @@ void QgsNewsFeedParser::fetchImageForEntry( const QgsNewsFeedParser::Entry &entr
   QgsNetworkContentFetcher *fetcher = new QgsNetworkContentFetcher();
   connect( fetcher, &QgsNetworkContentFetcher::finished, this, [ = ]
   {
-    auto findIter = std::find_if( mEntries.begin(), mEntries.end(), [entry]( const QgsNewsFeedParser::Entry & candidate )
+    const auto findIter = std::find_if( mEntries.begin(), mEntries.end(), [entry]( const QgsNewsFeedParser::Entry & candidate )
     {
       return candidate.key == entry.key;
     } );
@@ -334,7 +334,7 @@ void QgsNewsFeedParser::fetchImageForEntry( const QgsNewsFeedParser::Entry &entr
 
 QString QgsNewsFeedParser::keyForFeed( const QString &baseUrl )
 {
-  static QRegularExpression sRegexp( QStringLiteral( "[^a-zA-Z0-9]" ) );
+  static const QRegularExpression sRegexp( QStringLiteral( "[^a-zA-Z0-9]" ) );
   QString res = baseUrl;
   res = res.replace( sRegexp, QString() );
   return QStringLiteral( "NewsFeed/%1" ).arg( res );

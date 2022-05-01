@@ -164,28 +164,6 @@ void TestQgsDataSourceUri::checkparser_data()
       << "" // myparam
       << "public" // schema
       ;
-
-  QTest::newRow( "DB2" )
-      << "host=localhost port=50000 dbname=OSTEST user='osuser' password='osuserpw' estimatedmetadata=true srid=4326 key=OBJECTID table=TEST.ZIPPOINT (GEOM) myparam='myvalue' driver='IBM DB2 ODBC DRIVER' sql="
-      << "TEST.ZIPPOINT" // table
-      << "GEOM" // geometrycolumn
-      << "OBJECTID" // key
-      << true // estimatedmetadata
-      << "4326" // srid
-      << QgsWkbTypes::Unknown // type
-      << false // selectatid
-      << "" // service
-      << "osuser" // user
-      << "osuserpw" // password
-      << "OSTEST" // dbname
-      << "localhost" // host
-      << "50000" // port
-      << "IBM DB2 ODBC DRIVER" // driver
-      << QgsDataSourceUri::SslPrefer // sslmode
-      << "" // sql
-      << "myvalue" // myparam
-      << "TEST"  // schema
-      ;
 }
 
 void TestQgsDataSourceUri::checkparser()
@@ -210,7 +188,7 @@ void TestQgsDataSourceUri::checkparser()
   QFETCH( QString, myparam );
   QFETCH( QString, schema );
 
-  QgsDataSourceUri ds( uri );
+  const QgsDataSourceUri ds( uri );
   QCOMPARE( ds.table(), table );
   QCOMPARE( ds.geometryColumn(), geometrycolumn );
   QCOMPARE( ds.keyColumn(), key );
@@ -249,7 +227,7 @@ void TestQgsDataSourceUri::checkAuthParams()
   QCOMPARE( uri.param( QStringLiteral( "authcfg" ) ), QStringLiteral( "syl" ) );
 
   // round trip through encodedUri should not lose username/password/authcfg
-  QByteArray encoded = uri.encodedUri();
+  const QByteArray encoded = uri.encodedUri();
   QgsDataSourceUri uri2;
   uri2.setEncodedUri( encoded );
 

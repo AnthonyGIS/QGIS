@@ -83,6 +83,7 @@ QgsCoordinateTransformPrivate::QgsCoordinateTransformPrivate( const QgsCoordinat
   , mAvailableOpCount( other.mAvailableOpCount )
   , mIsValid( other.mIsValid )
   , mShortCircuit( other.mShortCircuit )
+  , mGeographicToWebMercator( other.mGeographicToWebMercator )
   , mSourceCRS( other.mSourceCRS )
   , mDestCRS( other.mDestCRS )
   , mSourceDatumTransform( other.mSourceDatumTransform )
@@ -157,6 +158,10 @@ bool QgsCoordinateTransformPrivate::initialize()
     mShortCircuit = true;
     return true;
   }
+
+  mGeographicToWebMercator =
+    mSourceCRS.isGeographic() &&
+    mDestCRS.authid() == QLatin1String( "EPSG:3857" );
 
   mSourceIsDynamic = mSourceCRS.isDynamic();
   mSourceCoordinateEpoch = mSourceCRS.coordinateEpoch();
@@ -267,7 +272,7 @@ ProjData QgsCoordinateTransformPrivate::threadLocalProjData()
   QgsReadWriteLocker locker( mProjLock, QgsReadWriteLocker::Read );
 
   PJ_CONTEXT *context = QgsProjContext::get();
-  QMap < uintptr_t, ProjData >::const_iterator it = mProjProjections.constFind( reinterpret_cast< uintptr_t>( context ) );
+  const QMap < uintptr_t, ProjData >::const_iterator it = mProjProjections.constFind( reinterpret_cast< uintptr_t>( context ) );
 
   if ( it != mProjProjections.constEnd() )
   {
@@ -288,7 +293,20 @@ ProjData QgsCoordinateTransformPrivate::threadLocalProjData()
   if ( !mProjCoordinateOperation.isEmpty() )
   {
     transform.reset( proj_create( context, mProjCoordinateOperation.toUtf8().constData() ) );
-    if ( !transform || !proj_coordoperation_is_instantiable( context, transform.get() ) )
+    // Only use proj_coordoperation_is_instantiable() if PROJ networking is enabled.
+    // The reason is that proj_coordoperation_is_instantiable() in PROJ < 9.0
+    // does not work properly when a coordinate operation refers to a PROJ < 7 grid name (gtx/gsb)
+    // but the user has installed PROJ >= 7 GeoTIFF grids.
+    // Cf https://github.com/OSGeo/PROJ/pull/3025.
+    // When networking is not enabled, proj_create() will check that all grids are
+    // present, so proj_coordoperation_is_instantiable() is not necessary.
+    if ( !transform
+#if PROJ_VERSION_MAJOR >= 7
+         || (
+           proj_context_is_network_enabled( context ) &&
+           !proj_coordoperation_is_instantiable( context, transform.get() ) )
+#endif
+       )
     {
       if ( sMissingGridUsedByContextHandler )
       {
@@ -337,7 +355,7 @@ ProjData QgsCoordinateTransformPrivate::threadLocalProjData()
       if ( mAvailableOpCount < 1 )
       {
         // huh?
-        int errNo = proj_context_errno( context );
+        const int errNo = proj_context_errno( context );
         if ( errNo && errNo != -61 )
         {
           nonAvailableError = QString( proj_errno_string( errNo ) );
@@ -419,7 +437,7 @@ ProjData QgsCoordinateTransformPrivate::threadLocalProjData()
           if ( stillLookingForPreferred && transform && !isInstantiable )
           {
             // uh oh :( something is missing blocking us from the preferred operation!
-            QgsDatumTransform::TransformDetails candidate = QgsDatumTransform::transformDetailsFromPj( transform.get() );
+            const QgsDatumTransform::TransformDetails candidate = QgsDatumTransform::transformDetailsFromPj( transform.get() );
             if ( !candidate.proj.isEmpty() )
             {
               preferred = candidate;
@@ -438,7 +456,7 @@ ProjData QgsCoordinateTransformPrivate::threadLocalProjData()
         if ( transform && missingPreferred )
         {
           // found a transform, but it's not the preferred
-          QgsDatumTransform::TransformDetails available = QgsDatumTransform::transformDetailsFromPj( transform.get() );
+          const QgsDatumTransform::TransformDetails available = QgsDatumTransform::transformDetailsFromPj( transform.get() );
           if ( sMissingPreferredGridHandler )
           {
             sMissingPreferredGridHandler( mSourceCRS, mDestCRS, preferred, available );
@@ -470,7 +488,7 @@ ProjData QgsCoordinateTransformPrivate::threadLocalProjData()
 
   if ( !transform && nonAvailableError.isEmpty() )
   {
-    int errNo = proj_context_errno( context );
+    const int errNo = proj_context_errno( context );
     if ( errNo && errNo != -61 )
     {
       nonAvailableError = QString( proj_errno_string( errNo ) );
@@ -525,7 +543,7 @@ ProjData QgsCoordinateTransformPrivate::threadLocalFallbackProjData()
   QgsReadWriteLocker locker( mProjLock, QgsReadWriteLocker::Read );
 
   PJ_CONTEXT *context = QgsProjContext::get();
-  QMap < uintptr_t, ProjData >::const_iterator it = mProjFallbackProjections.constFind( reinterpret_cast< uintptr_t>( context ) );
+  const QMap < uintptr_t, ProjData >::const_iterator it = mProjFallbackProjections.constFind( reinterpret_cast< uintptr_t>( context ) );
 
   if ( it != mProjFallbackProjections.constEnd() )
   {
@@ -572,7 +590,7 @@ void QgsCoordinateTransformPrivate::setDynamicCrsToDynamicCrsWarningHandler( con
 
 void QgsCoordinateTransformPrivate::freeProj()
 {
-  QgsReadWriteLocker locker( mProjLock, QgsReadWriteLocker::Write );
+  const QgsReadWriteLocker locker( mProjLock, QgsReadWriteLocker::Write );
   if ( mProjProjections.isEmpty() && mProjFallbackProjections.isEmpty() )
     return;
   QMap < uintptr_t, ProjData >::const_iterator it = mProjProjections.constBegin();
@@ -603,7 +621,7 @@ void QgsCoordinateTransformPrivate::freeProj()
 
 bool QgsCoordinateTransformPrivate::removeObjectsBelongingToCurrentThread( void *pj_context )
 {
-  QgsReadWriteLocker locker( mProjLock, QgsReadWriteLocker::Write );
+  const QgsReadWriteLocker locker( mProjLock, QgsReadWriteLocker::Write );
 
   QMap < uintptr_t, ProjData >::iterator it = mProjProjections.find( reinterpret_cast< uintptr_t>( pj_context ) );
   if ( it != mProjProjections.end() )

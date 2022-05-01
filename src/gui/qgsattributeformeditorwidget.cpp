@@ -46,7 +46,7 @@ QgsAttributeFormEditorWidget::QgsAttributeFormEditorWidget( QgsEditorWidgetWrapp
 
   mMultiEditButton->setField( mEditorWidget->field() );
   mAggregateButton = new QgsAggregateToolButton();
-  mAggregateButton->setType( editorWidget->field().type() );
+  mAggregateButton->setType( mEditorWidget->field().type() );
   connect( mAggregateButton, &QgsAggregateToolButton::aggregateChanged, this, &QgsAttributeFormEditorWidget::onAggregateChanged );
 
   if ( mEditorWidget->widget() )
@@ -229,7 +229,7 @@ void QgsAttributeFormEditorWidget::onAggregateChanged()
 void QgsAttributeFormEditorWidget::updateWidgets()
 {
   //first update the tool buttons
-  bool hasMultiEditButton = ( editPage()->layout()->indexOf( mMultiEditButton ) >= 0 );
+  const bool hasMultiEditButton = ( editPage()->layout()->indexOf( mMultiEditButton ) >= 0 );
 
   bool shouldShowMultiEditButton = false;
   switch ( mode() )

@@ -165,7 +165,7 @@ of rendered text.
 .. seealso:: :py:func:`toQFont`
 %End
 
-    QFont scaledFont( const QgsRenderContext &context, double scaleFactor = 1.0 ) const;
+    QFont scaledFont( const QgsRenderContext &context, double scaleFactor = 1.0) const;
 %Docstring
 Returns a font with the size scaled to match the format's size settings (including
 units and map unit scale) for a specified render context.
@@ -216,6 +216,70 @@ Sets the named style for the font used for rendering text.
 .. seealso:: :py:func:`namedStyle`
 
 .. seealso:: :py:func:`setFont`
+%End
+
+    bool forcedBold() const;
+%Docstring
+Returns ``True`` if the format is set to force a bold style.
+
+.. warning::
+
+   Unlike setting a font's style via :py:func:`~QgsTextFormat.setNamedStyle`, this will ensure that a font is
+   always rendered in bold regardless of whether the font family actually has a bold variant. A
+   "faux bold" effect will be emulated, which may result in poor quality font rendering. For this
+   reason it is greatly preferred to call :py:func:`~QgsTextFormat.setNamedStyle` instead.
+
+.. seealso:: :py:func:`setForcedBold`
+
+.. versionadded:: 3.26
+%End
+
+    void setForcedBold( bool forced );
+%Docstring
+Sets whether the format is set to force a bold style.
+
+.. warning::
+
+   Unlike setting a font's style via :py:func:`~QgsTextFormat.setNamedStyle`, this will ensure that a font is
+   always rendered in bold regardless of whether the font family actually has a bold variant. A
+   "faux bold" effect will be emulated, which may result in poor quality font rendering. For this
+   reason it is greatly preferred to call :py:func:`~QgsTextFormat.setNamedStyle` instead.
+
+.. seealso:: :py:func:`forcedBold`
+
+.. versionadded:: 3.26
+%End
+
+    bool forcedItalic() const;
+%Docstring
+Returns ``True`` if the format is set to force an italic style.
+
+.. warning::
+
+   Unlike setting a font's style via :py:func:`~QgsTextFormat.setNamedStyle`, this will ensure that a font is
+   always rendered in italic regardless of whether the font family actually has an italic variant. A
+   "faux italic" slanted text effect will be emulated, which may result in poor quality font rendering. For this
+   reason it is greatly preferred to call :py:func:`~QgsTextFormat.setNamedStyle` instead.
+
+.. seealso:: :py:func:`setForcedItalic`
+
+.. versionadded:: 3.26
+%End
+
+    void setForcedItalic( bool forced );
+%Docstring
+Sets whether the format is set to force an italic style.
+
+.. warning::
+
+   Unlike setting a font's style via :py:func:`~QgsTextFormat.setNamedStyle`, this will ensure that a font is
+   always rendered in italic regardless of whether the font family actually has an italic variant. A
+   "faux italic" slanted text effect will be emulated, which may result in poor quality font rendering. For this
+   reason it is greatly preferred to call :py:func:`~QgsTextFormat.setNamedStyle` instead.
+
+.. seealso:: :py:func:`forcedItalic`
+
+.. versionadded:: 3.26
 %End
 
     QStringList families() const;
@@ -348,6 +412,36 @@ Sets the text's opacity.
 .. seealso:: :py:func:`opacity`
 %End
 
+    int stretchFactor() const;
+%Docstring
+Returns the text's stretch factor.
+
+The stretch factor matches a condensed or expanded version of the font or applies a stretch
+transform that changes the width of all characters in the font by factor percent.
+
+For example, a factor of 150 results in all characters in the font being 1.5 times
+(ie. 150%) wider. The minimum stretch factor is 1, and the maximum stretch factor is 4000.
+
+.. seealso:: :py:func:`setStretchFactor`
+
+.. versionadded:: 3.24
+%End
+
+    void setStretchFactor( int factor );
+%Docstring
+Sets the text's stretch ``factor``.
+
+The stretch factor matches a condensed or expanded version of the font or applies a stretch
+transform that changes the width of all characters in the font by factor percent.
+
+For example, setting ``factor`` to 150 results in all characters in the font being 1.5 times
+(ie. 150%) wider. The minimum stretch factor is 1, and the maximum stretch factor is 4000.
+
+.. seealso:: :py:func:`stretchFactor`
+
+.. versionadded:: 3.24
+%End
+
     QPainter::CompositionMode blendMode() const;
 %Docstring
 Returns the blending mode used for drawing the text.
@@ -402,7 +496,7 @@ Sets the ``orientation`` for the text.
 .. versionadded:: 3.10
 %End
 
-    QgsStringUtils::Capitalization capitalization() const;
+    Qgis::Capitalization capitalization() const;
 %Docstring
 Returns the text capitalization style.
 
@@ -411,7 +505,7 @@ Returns the text capitalization style.
 .. versionadded:: 3.16
 %End
 
-    void setCapitalization( QgsStringUtils::Capitalization capitalization );
+    void setCapitalization( Qgis::Capitalization capitalization );
 %Docstring
 Sets the text ``capitalization`` style.
 

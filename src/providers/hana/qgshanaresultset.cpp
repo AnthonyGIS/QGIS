@@ -24,7 +24,7 @@
 #include "odbc/PreparedStatement.h"
 #include "odbc/Statement.h"
 
-using namespace odbc;
+using namespace NS_ODBC;
 
 QgsHanaResultSet::QgsHanaResultSet( ResultSetRef &&resultSet )
   : mResultSet( std::move( resultSet ) )
@@ -198,19 +198,19 @@ QgsGeometry QgsHanaResultSet::getGeometry( unsigned short columnIndex )
     return  static_cast<int>( size );
   };
 
-  size_t bufLength = mResultSet->getBinaryLength( columnIndex );
+  const size_t bufLength = mResultSet->getBinaryLength( columnIndex );
   if ( bufLength == ResultSet::UNKNOWN_LENGTH )
   {
     Binary wkb = mResultSet->getBinary( columnIndex );
     if ( !wkb.isNull() && wkb->size() > 0 )
     {
-      QByteArray wkbBytes( wkb->data(), toWkbSize( wkb->size() ) );
+      const QByteArray wkbBytes( wkb->data(), toWkbSize( wkb->size() ) );
       QgsGeometry geom;
       geom.fromWkb( wkbBytes );
       return geom;
     }
   }
-  else if ( bufLength != 0 && bufLength != odbc::ResultSet::NULL_DATA )
+  else if ( bufLength != 0 && bufLength != ResultSet::NULL_DATA )
   {
     QByteArray wkbBytes( toWkbSize( bufLength ), '0' );
     mResultSet->getBinaryData( columnIndex, wkbBytes.data(), bufLength );

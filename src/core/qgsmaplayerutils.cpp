@@ -25,6 +25,7 @@
 #include "qgsreferencedgeometry.h"
 #include "qgslogger.h"
 #include "qgsmaplayer.h"
+#include "qgscoordinatetransform.h"
 
 QgsRectangle QgsMapLayerUtils::combinedExtent( const QList<QgsMapLayer *> &layers, const QgsCoordinateReferenceSystem &crs, const QgsCoordinateTransformContext &transformContext )
 {
@@ -74,12 +75,12 @@ QgsRectangle QgsMapLayerUtils::combinedExtent( const QList<QgsMapLayer *> &layer
     else
     {
       const double padFactor = 1e-8;
-      double widthPad = fullExtent.xMinimum() * padFactor;
-      double heightPad = fullExtent.yMinimum() * padFactor;
-      double xmin = fullExtent.xMinimum() - widthPad;
-      double xmax = fullExtent.xMaximum() + widthPad;
-      double ymin = fullExtent.yMinimum() - heightPad;
-      double ymax = fullExtent.yMaximum() + heightPad;
+      const double widthPad = fullExtent.xMinimum() * padFactor;
+      const double heightPad = fullExtent.yMinimum() * padFactor;
+      const double xmin = fullExtent.xMinimum() - widthPad;
+      const double xmax = fullExtent.xMaximum() + widthPad;
+      const double ymin = fullExtent.yMinimum() - heightPad;
+      const double ymax = fullExtent.yMaximum() + heightPad;
       fullExtent.set( xmin, ymin, xmax, ymax );
     }
   }
@@ -120,4 +121,36 @@ bool QgsMapLayerUtils::layerSourceMatchesPath( const QgsMapLayer *layer, const Q
 
   const QVariantMap parts = QgsProviderRegistry::instance()->decodeUri( layer->providerType(), layer->source() );
   return parts.value( QStringLiteral( "path" ) ).toString() == path;
+}
+
+bool QgsMapLayerUtils::updateLayerSourcePath( QgsMapLayer *layer, const QString &newPath )
+{
+  if ( !layer || newPath.isEmpty() )
+    return false;
+
+  QVariantMap parts = QgsProviderRegistry::instance()->decodeUri( layer->providerType(), layer->source() );
+  if ( !parts.contains( QStringLiteral( "path" ) ) )
+    return false;
+
+  parts.insert( QStringLiteral( "path" ), newPath );
+  const QString newUri = QgsProviderRegistry::instance()->encodeUri( layer->providerType(), parts );
+  layer->setDataSource( newUri, layer->name(), layer->providerType() );
+  return true;
+}
+
+QList<QgsMapLayer *> QgsMapLayerUtils::sortLayersByType( const QList<QgsMapLayer *> &layers, const QList<QgsMapLayerType> &order )
+{
+  QList< QgsMapLayer * > res = layers;
+  std::sort( res.begin(), res.end(), [&order]( const QgsMapLayer * a, const QgsMapLayer * b ) -> bool
+  {
+    for ( QgsMapLayerType type : order )
+    {
+      if ( a->type() == type && b->type() != type )
+        return true;
+      else if ( b->type() == type )
+        return false;
+    }
+    return false;
+  } );
+  return res;
 }

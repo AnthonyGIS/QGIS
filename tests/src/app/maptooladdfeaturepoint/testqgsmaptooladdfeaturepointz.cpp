@@ -92,7 +92,7 @@ void TestQgsMapToolAddFeaturePointZ::initTestCase()
 
   mLayerPointZ->startEditing();
   QgsFeature pointFZ;
-  QString pointWktZ = "PointZ(7 7 4)";
+  const QString pointWktZ = "PointZ(7 7 4)";
   pointFZ.setGeometry( QgsGeometry::fromWkt( pointWktZ ) );
 
   mLayerPointZ->addFeature( pointFZ );
@@ -105,7 +105,7 @@ void TestQgsMapToolAddFeaturePointZ::initTestCase()
 
   mLayerPointZSnap->startEditing();
   QgsFeature pointF;
-  QString pointWktZSnap = "PointZ(6 6 3)";
+  const QString pointWktZSnap = "PointZ(6 6 3)";
   pointF.setGeometry( QgsGeometry::fromWkt( pointWktZSnap ) );
 
   mLayerPointZSnap->addFeature( pointF );
@@ -124,9 +124,9 @@ void TestQgsMapToolAddFeaturePointZ::initTestCase()
   QCOMPARE( mLayerLineZSnap->featureCount(), ( long )1 );
 
   QgsSnappingConfig cfg = mCanvas->snappingUtils()->config();
-  cfg.setMode( QgsSnappingConfig::AllLayers );
+  cfg.setMode( Qgis::SnappingMode::AllLayers );
   cfg.setTolerance( 100 );
-  cfg.setTypeFlag( static_cast<QgsSnappingConfig::SnappingTypeFlag>( QgsSnappingConfig::VertexFlag | QgsSnappingConfig::SegmentFlag ) );
+  cfg.setTypeFlag( static_cast<Qgis::SnappingTypes>( Qgis::SnappingType::Vertex | Qgis::SnappingType::Segment ) );
   cfg.setEnabled( true );
   mCanvas->snappingUtils()->setConfig( cfg );
 
@@ -138,7 +138,7 @@ void TestQgsMapToolAddFeaturePointZ::initTestCase()
   mCanvas->snappingUtils()->locatorForLayer( mLayerLineZSnap )->init();
 
   // create the tool
-  mCaptureTool = new QgsMapToolAddFeature( mCanvas, /*mAdvancedDigitizingDockWidget, */ QgsMapToolCapture::CapturePoint );
+  mCaptureTool = new QgsMapToolAddFeature( mCanvas, QgisApp::instance()->cadDockWidget(), QgsMapToolCapture::CapturePoint );
   mCanvas->setMapTool( mCaptureTool );
 
   QCOMPARE( mCanvas->mapSettings().outputSize(), QSize( 512, 512 ) );
@@ -184,7 +184,7 @@ void TestQgsMapToolAddFeaturePointZ::testPointZ()
 
 void TestQgsMapToolAddFeaturePointZ::testTopologicalEditingZ()
 {
-  bool topologicalEditing = QgsProject::instance()->topologicalEditing();
+  const bool topologicalEditing = QgsProject::instance()->topologicalEditing();
   QgsProject::instance()->setTopologicalEditing( true );
 
   TestQgsMapToolAdvancedDigitizingUtils utils( mCaptureTool );
@@ -192,10 +192,10 @@ void TestQgsMapToolAddFeaturePointZ::testTopologicalEditingZ()
   // test with default Z value = 333
   QgsSettingsRegistryCore::settingsDigitizingDefaultZValue.setValue( 333 );
 
-  QSet<QgsFeatureId> oldFids = utils.existingFeatureIds();
+  const QSet<QgsFeatureId> oldFids = utils.existingFeatureIds();
 
   utils.mouseClick( 3, 3, Qt::LeftButton, Qt::KeyboardModifiers(), true );
-  QgsFeatureId newFid = utils.newFeatureId( oldFids );
+  const QgsFeatureId newFid = utils.newFeatureId( oldFids );
 
   QCOMPARE( mLayerPointZ->featureCount(), ( long )2 );
 

@@ -104,7 +104,7 @@ QgsFeatureList QgsDrapeAlgorithmBase::processFeature( const QgsFeature &feature,
     // whether individual vector geometries are actually covered by the raster
     try
     {
-      mRasterExtent = mTransform.transform( mRasterExtent, QgsCoordinateTransform::ReverseTransform );
+      mRasterExtent = mTransform.transform( mRasterExtent, Qgis::TransformDirection::Reverse );
     }
     catch ( QgsCsException & )
     {
@@ -209,7 +209,7 @@ bool QgsDrapeToZAlgorithm::supportInPlaceEdit( const QgsMapLayer *l ) const
 
 QgsWkbTypes::Type QgsDrapeToZAlgorithm::outputWkbType( QgsWkbTypes::Type inputWkbType ) const
 {
-  QgsWkbTypes::Type wkb = inputWkbType;
+  const QgsWkbTypes::Type wkb = inputWkbType;
   return QgsWkbTypes::addZ( wkb );
 }
 
@@ -272,7 +272,7 @@ bool QgsDrapeToMAlgorithm::supportInPlaceEdit( const QgsMapLayer *l ) const
 
 QgsWkbTypes::Type QgsDrapeToMAlgorithm::outputWkbType( QgsWkbTypes::Type inputWkbType ) const
 {
-  QgsWkbTypes::Type wkb = inputWkbType;
+  const QgsWkbTypes::Type wkb = inputWkbType;
   return QgsWkbTypes::addM( wkb );
 }
 

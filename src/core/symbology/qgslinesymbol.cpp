@@ -36,9 +36,9 @@ QgsLineSymbol::QgsLineSymbol( const QgsSymbolLayerList &layers )
     mLayers.append( new QgsSimpleLineSymbolLayer() );
 }
 
-void QgsLineSymbol::setWidth( double w )
+void QgsLineSymbol::setWidth( double w ) const
 {
-  double origWidth = width();
+  const double origWidth = width();
 
   const auto constMLayers = mLayers;
   for ( QgsSymbolLayer *layer : constMLayers )
@@ -63,7 +63,7 @@ void QgsLineSymbol::setWidth( double w )
   }
 }
 
-void QgsLineSymbol::setWidthUnit( QgsUnitTypes::RenderUnit unit )
+void QgsLineSymbol::setWidthUnit( QgsUnitTypes::RenderUnit unit ) const
 {
   const auto constLLayers = mLayers;
   for ( QgsSymbolLayer *layer : constLLayers )
@@ -88,7 +88,7 @@ double QgsLineSymbol::width() const
     const QgsLineSymbolLayer *lineLayer = dynamic_cast<QgsLineSymbolLayer *>( symbolLayer );
     if ( lineLayer )
     {
-      double width = lineLayer->width();
+      const double width = lineLayer->width();
       if ( width > maxWidth )
         maxWidth = width;
     }
@@ -111,7 +111,7 @@ double QgsLineSymbol::width( const QgsRenderContext &context ) const
   return maxWidth;
 }
 
-void QgsLineSymbol::setDataDefinedWidth( const QgsProperty &property )
+void QgsLineSymbol::setDataDefinedWidth( const QgsProperty &property ) const
 {
   const double symbolWidth = width();
 
@@ -175,8 +175,8 @@ QgsProperty QgsLineSymbol::dataDefinedWidth() const
       continue;
     const QgsLineSymbolLayer *lineLayer = static_cast<const QgsLineSymbolLayer *>( layer );
 
-    QgsProperty layerWidthDD = lineLayer->dataDefinedProperties().property( QgsSymbolLayer::PropertyStrokeWidth );
-    QgsProperty layerOffsetDD = lineLayer->dataDefinedProperties().property( QgsSymbolLayer::PropertyOffset );
+    const QgsProperty layerWidthDD = lineLayer->dataDefinedProperties().property( QgsSymbolLayer::PropertyStrokeWidth );
+    const QgsProperty layerOffsetDD = lineLayer->dataDefinedProperties().property( QgsSymbolLayer::PropertyOffset );
 
     if ( qgsDoubleNear( lineLayer->width(), symbolWidth ) )
     {
@@ -188,12 +188,12 @@ QgsProperty QgsLineSymbol::dataDefinedWidth() const
       if ( qgsDoubleNear( symbolWidth, 0.0 ) )
         return QgsProperty();
 
-      QgsProperty scaledDD( QgsSymbolLayerUtils::scaleWholeSymbol( lineLayer->width() / symbolWidth, symbolDD ) );
+      const QgsProperty scaledDD( QgsSymbolLayerUtils::scaleWholeSymbol( lineLayer->width() / symbolWidth, symbolDD ) );
       if ( !layerWidthDD || layerWidthDD != scaledDD )
         return QgsProperty();
     }
 
-    QgsProperty scaledOffsetDD( QgsSymbolLayerUtils::scaleWholeSymbol( lineLayer->offset() / symbolWidth, symbolDD ) );
+    const QgsProperty scaledOffsetDD( QgsSymbolLayerUtils::scaleWholeSymbol( lineLayer->offset() / symbolWidth, symbolDD ) );
     if ( layerOffsetDD && layerOffsetDD != scaledOffsetDD )
       return QgsProperty();
   }
@@ -203,7 +203,8 @@ QgsProperty QgsLineSymbol::dataDefinedWidth() const
 
 void QgsLineSymbol::renderPolyline( const QPolygonF &points, const QgsFeature *f, QgsRenderContext &context, int layerIdx, bool selected )
 {
-  const double opacity = dataDefinedProperties().valueAsDouble( QgsSymbol::PropertyOpacity, context.expressionContext(), mOpacity * 100 ) * 0.01;
+  const double opacity = dataDefinedProperties().hasActiveProperties() ? dataDefinedProperties().valueAsDouble( QgsSymbol::PropertyOpacity, context.expressionContext(), mOpacity * 100 ) * 0.01
+                         : mOpacity;
 
   //save old painter
   QPainter *renderPainter = context.painter();
@@ -223,7 +224,7 @@ void QgsLineSymbol::renderPolyline( const QPolygonF &points, const QgsFeature *f
         renderPolylineUsingLayer( lineLayer, points, symbolContext );
       }
       else
-        renderUsingLayer( symbolLayer, symbolContext );
+        renderUsingLayer( symbolLayer, symbolContext, QgsWkbTypes::LineGeometry, &points );
     }
     return;
   }
@@ -244,7 +245,7 @@ void QgsLineSymbol::renderPolyline( const QPolygonF &points, const QgsFeature *f
     }
     else
     {
-      renderUsingLayer( symbolLayer, symbolContext );
+      renderUsingLayer( symbolLayer, symbolContext, QgsWkbTypes::LineGeometry, &points );
     }
   }
 
@@ -282,5 +283,6 @@ QgsLineSymbol *QgsLineSymbol::clone() const
   cloneSymbol->setForceRHR( mForceRHR );
   cloneSymbol->setDataDefinedProperties( dataDefinedProperties() );
   cloneSymbol->setFlags( mSymbolFlags );
+  cloneSymbol->setAnimationSettings( mAnimationSettings );
   return cloneSymbol;
 }

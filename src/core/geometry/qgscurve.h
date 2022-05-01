@@ -153,7 +153,7 @@ class CORE_EXPORT QgsCurve: public QgsAbstractGeometry SIP_ABSTRACT
      * \param type will be set to the vertex type of the node
      * \returns TRUE if node exists within the curve
      */
-    virtual bool pointAt( int node, QgsPoint &point SIP_OUT, QgsVertexId::VertexType &type SIP_OUT ) const = 0;
+    virtual bool pointAt( int node, QgsPoint &point SIP_OUT, Qgis::VertexType &type SIP_OUT ) const = 0;
 
     /**
      * Returns the index of the first vertex matching the given \a point, or -1 if a matching
@@ -192,7 +192,7 @@ class CORE_EXPORT QgsCurve: public QgsAbstractGeometry SIP_ABSTRACT
     void normalize() final SIP_HOLDGIL;
 
     QgsRectangle boundingBox() const override;
-    bool isValid( QString &error SIP_OUT, int flags = 0 ) const override;
+    bool isValid( QString &error SIP_OUT, Qgis::GeometryValidityFlags flags = Qgis::GeometryValidityFlags() ) const override;
 
     /**
      * Returns the x-coordinate of the specified node in the line string.
@@ -260,13 +260,6 @@ class CORE_EXPORT QgsCurve: public QgsAbstractGeometry SIP_ABSTRACT
      */
     double sinuosity() const;
 
-    //! Curve orientation
-    enum Orientation
-    {
-      Clockwise, //!< Clockwise orientation
-      CounterClockwise, //!< Counter-clockwise orientation
-    };
-
     /**
      * Returns the curve's orientation, e.g. clockwise or counter-clockwise.
      *
@@ -274,7 +267,7 @@ class CORE_EXPORT QgsCurve: public QgsAbstractGeometry SIP_ABSTRACT
      *
      * \since QGIS 3.6
      */
-    Orientation orientation() const;
+    Qgis::AngularDirection orientation() const;
 
     /**
      * Scrolls the curve vertices so that they start with the vertex at the given index.
@@ -303,7 +296,7 @@ class CORE_EXPORT QgsCurve: public QgsAbstractGeometry SIP_ABSTRACT
       if ( !geom )
         return nullptr;
 
-      QgsWkbTypes::Type type = geom->wkbType();
+      const QgsWkbTypes::Type type = geom->wkbType();
       if ( QgsWkbTypes::geometryType( type ) == QgsWkbTypes::LineGeometry && QgsWkbTypes::isSingleType( type ) )
       {
         return static_cast<const QgsCurve *>( geom );

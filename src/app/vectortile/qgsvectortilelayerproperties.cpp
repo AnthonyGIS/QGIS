@@ -171,7 +171,7 @@ void QgsVectorTileLayerProperties::syncToLayer()
 void QgsVectorTileLayerProperties::loadDefaultStyle()
 {
   bool defaultLoadedFlag = false;
-  QString myMessage = mLayer->loadDefaultStyle( defaultLoadedFlag );
+  const QString myMessage = mLayer->loadDefaultStyle( defaultLoadedFlag );
   // reset if the default style was loaded OK only
   if ( defaultLoadedFlag )
   {
@@ -195,7 +195,7 @@ void QgsVectorTileLayerProperties::saveDefaultStyle()
   bool defaultSavedFlag = false;
   // after calling this the above flag will be set true for success
   // or false if the save operation failed
-  QString myMessage = mLayer->saveDefaultStyle( defaultSavedFlag );
+  const QString myMessage = mLayer->saveDefaultStyle( defaultSavedFlag );
   if ( !defaultSavedFlag )
   {
     // let the user know what went wrong
@@ -208,9 +208,8 @@ void QgsVectorTileLayerProperties::saveDefaultStyle()
 
 void QgsVectorTileLayerProperties::loadStyle()
 {
-  QgsSettings settings;  // where we keep last used filter in persistent state
+  const QgsSettings settings;  // where we keep last used filter in persistent state
 
-  QString errorMsg;
   QStringList ids, names, descriptions;
 
   QgsMapLayerLoadStyleDialog dlg( mLayer );
@@ -218,13 +217,13 @@ void QgsVectorTileLayerProperties::loadStyle()
   if ( dlg.exec() )
   {
     mOldStyle = mLayer->styleManager()->style( mLayer->styleManager()->currentStyle() );
-    QgsMapLayer::StyleCategories categories = dlg.styleCategories();
+    const QgsMapLayer::StyleCategories categories = dlg.styleCategories();
     const QString type = dlg.fileExtension();
     if ( type.compare( QLatin1String( "qml" ), Qt::CaseInsensitive ) == 0 )
     {
       QString message;
       bool defaultLoadedFlag = false;
-      QString filePath = dlg.filePath();
+      const QString filePath = dlg.filePath();
       message = mLayer->loadNamedStyle( filePath, defaultLoadedFlag, categories );
 
       //reset if the default style was loaded OK only
@@ -284,7 +283,7 @@ void QgsVectorTileLayerProperties::loadStyle()
 void QgsVectorTileLayerProperties::saveStyleAs()
 {
   QgsSettings settings;
-  QString lastUsedDir = settings.value( QStringLiteral( "style/lastStyleDir" ), QDir::homePath() ).toString();
+  const QString lastUsedDir = settings.value( QStringLiteral( "style/lastStyleDir" ), QDir::homePath() ).toString();
 
   QString outputFileName = QFileDialog::getSaveFileName(
                              this,
@@ -325,10 +324,10 @@ void QgsVectorTileLayerProperties::aboutToShowStyleMenu()
 void QgsVectorTileLayerProperties::loadMetadata()
 {
   QgsSettings myQSettings;  // where we keep last used filter in persistent state
-  QString myLastUsedDir = myQSettings.value( QStringLiteral( "style/lastStyleDir" ), QDir::homePath() ).toString();
+  const QString myLastUsedDir = myQSettings.value( QStringLiteral( "style/lastStyleDir" ), QDir::homePath() ).toString();
 
-  QString myFileName = QFileDialog::getOpenFileName( this, tr( "Load layer metadata from metadata file" ), myLastUsedDir,
-                       tr( "QGIS Layer Metadata File" ) + " (*.qmd)" );
+  const QString myFileName = QFileDialog::getOpenFileName( this, tr( "Load layer metadata from metadata file" ), myLastUsedDir,
+                             tr( "QGIS Layer Metadata File" ) + " (*.qmd)" );
   if ( myFileName.isNull() )
   {
     return;
@@ -349,8 +348,8 @@ void QgsVectorTileLayerProperties::loadMetadata()
     QMessageBox::warning( this, tr( "Load Metadata" ), myMessage );
   }
 
-  QFileInfo myFI( myFileName );
-  QString myPath = myFI.path();
+  const QFileInfo myFI( myFileName );
+  const QString myPath = myFI.path();
   myQSettings.setValue( QStringLiteral( "style/lastStyleDir" ), myPath );
 
   activateWindow(); // set focus back to properties dialog
@@ -359,7 +358,7 @@ void QgsVectorTileLayerProperties::loadMetadata()
 void QgsVectorTileLayerProperties::saveMetadataAs()
 {
   QgsSettings myQSettings;  // where we keep last used filter in persistent state
-  QString myLastUsedDir = myQSettings.value( QStringLiteral( "style/lastStyleDir" ), QDir::homePath() ).toString();
+  const QString myLastUsedDir = myQSettings.value( QStringLiteral( "style/lastStyleDir" ), QDir::homePath() ).toString();
 
   QString myOutputFileName = QFileDialog::getSaveFileName( this, tr( "Save Layer Metadata as QMD" ),
                              myLastUsedDir, tr( "QMD File" ) + " (*.qmd)" );
@@ -377,7 +376,7 @@ void QgsVectorTileLayerProperties::saveMetadataAs()
   }
 
   bool defaultLoadedFlag = false;
-  QString message = mLayer->saveNamedMetadata( myOutputFileName, defaultLoadedFlag );
+  const QString message = mLayer->saveNamedMetadata( myOutputFileName, defaultLoadedFlag );
   if ( defaultLoadedFlag )
     myQSettings.setValue( QStringLiteral( "style/lastStyleDir" ), QFileInfo( myOutputFileName ).absolutePath() );
   else
@@ -400,9 +399,9 @@ void QgsVectorTileLayerProperties::showHelp()
 
 void QgsVectorTileLayerProperties::urlClicked( const QUrl &url )
 {
-  QFileInfo file( url.toLocalFile() );
+  const QFileInfo file( url.toLocalFile() );
   if ( file.exists() && !file.isDir() )
-    QgsGui::instance()->nativePlatformInterface()->openFileExplorerAndSelectFile( url.toLocalFile() );
+    QgsGui::nativePlatformInterface()->openFileExplorerAndSelectFile( url.toLocalFile() );
   else
     QDesktopServices::openUrl( url );
 }
@@ -411,7 +410,7 @@ void QgsVectorTileLayerProperties::optionsStackedWidget_CurrentChanged( int inde
 {
   QgsOptionsDialogBase::optionsStackedWidget_CurrentChanged( index );
 
-  bool isMetadataPanel = ( index == mOptStackedWidget->indexOf( mOptsPage_Metadata ) );
+  const bool isMetadataPanel = ( index == mOptStackedWidget->indexOf( mOptsPage_Metadata ) );
   mBtnStyle->setVisible( ! isMetadataPanel );
   mBtnMetadata->setVisible( isMetadataPanel );
 }

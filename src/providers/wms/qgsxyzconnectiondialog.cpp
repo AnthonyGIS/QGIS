@@ -52,6 +52,7 @@ void QgsXyzConnectionDialog::setConnection( const QgsXyzConnection &conn )
   mSourceWidget->setReferer( conn.referer );
   mSourceWidget->setTilePixelRatio( conn.tilePixelRatio );
   mSourceWidget->setAuthCfg( conn.authCfg );
+  mSourceWidget->setInterpretation( conn.interpretation );
 }
 
 QgsXyzConnection QgsXyzConnectionDialog::connection() const
@@ -66,12 +67,13 @@ QgsXyzConnection QgsXyzConnectionDialog::connection() const
   conn.referer = mSourceWidget->referer();
   conn.tilePixelRatio = mSourceWidget->tilePixelRatio();
   conn.authCfg = mSourceWidget->authcfg( );
+  conn.interpretation = mSourceWidget->interpretation();
   return conn;
 }
 
 void QgsXyzConnectionDialog::updateOkButtonState()
 {
-  bool enabled = !mEditName->text().isEmpty() && !mSourceWidget->url().isEmpty();
+  const bool enabled = !mEditName->text().isEmpty() && !mSourceWidget->url().isEmpty();
   buttonBox->button( QDialogButtonBox::Ok )->setEnabled( enabled );
 }
 

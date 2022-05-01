@@ -59,7 +59,8 @@ from qgis.core import (
     QgsMeshLayer,
     QgsDataSourceUri,
     QgsDoubleRange,
-    QgsIntRange
+    QgsIntRange,
+    QgsDefaultValue
 )
 
 start_app()
@@ -303,11 +304,11 @@ class TestPython__repr__(unittest.TestCase):
 
     def testQgsVertexId(self):
         v = QgsVertexId()
-        self.assertEqual(v.__repr__(), '<QgsVertexId: -1,-1,-1>')
+        self.assertEqual(v.__repr__(), '<QgsVertexId: -1,-1,-1 Segment>')
         v = QgsVertexId(1, 2, 3)
-        self.assertEqual(v.__repr__(), '<QgsVertexId: 1,2,3>')
+        self.assertEqual(v.__repr__(), '<QgsVertexId: 1,2,3 Segment>')
         v = QgsVertexId(1, 2, 3, _type=QgsVertexId.CurveVertex)
-        self.assertEqual(v.__repr__(), '<QgsVertexId: 1,2,3 CurveVertex>')
+        self.assertEqual(v.__repr__(), '<QgsVertexId: 1,2,3 Curve>')
 
     def testProviderMetadata(self):
         self.assertEqual(QgsProviderRegistry.instance().providerMetadata('ogr').__repr__(), '<QgsProviderMetadata: ogr>')
@@ -330,6 +331,10 @@ class TestPython__repr__(unittest.TestCase):
                          "<QgsIntRange: (1, 10]>")
         self.assertEqual(QgsIntRange(1, 10, True, False).__repr__(),
                          "<QgsIntRange: [1, 10)>")
+
+    def testDefaultValue(self):
+        self.assertEqual(QgsDefaultValue().__repr__(), '<QgsDefaultValue: invalid>')
+        self.assertEqual(QgsDefaultValue('1+3').__repr__(), '<QgsDefaultValue: 1+3>')
 
 
 if __name__ == "__main__":

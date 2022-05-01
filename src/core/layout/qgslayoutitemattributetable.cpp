@@ -25,6 +25,8 @@
 #include "qgslayoutframe.h"
 #include "qgsproject.h"
 #include "qgsrelationmanager.h"
+#include "qgsfieldformatter.h"
+#include "qgsfieldformatterregistry.h"
 #include "qgsgeometry.h"
 #include "qgsexception.h"
 #include "qgsmapsettings.h"
@@ -32,6 +34,7 @@
 #include "qgsexpressionnodeimpl.h"
 #include "qgsgeometryengine.h"
 #include "qgsconditionalstyle.h"
+#include "qgsfontutils.h"
 
 //
 // QgsLayoutItemAttributeTable
@@ -387,6 +390,7 @@ void QgsLayoutItemAttributeTable::restoreFieldAliasMap( const QMap<int, QString>
 bool QgsLayoutItemAttributeTable::getTableContents( QgsLayoutTableContents &contents )
 {
   contents.clear();
+  mLayerCache.clear();
 
   QgsVectorLayer *layer = sourceLayer();
   if ( !layer )
@@ -431,11 +435,13 @@ bool QgsLayoutItemAttributeTable::getTableContents( QgsLayoutTableContents &cont
     visibleRegion = QgsGeometry::fromQPolygonF( mMap->visibleExtentPolygon() );
     selectionRect = visibleRegion.boundingBox();
     //transform back to layer CRS
-    QgsCoordinateTransform coordTransform( layer->crs(), mMap->crs(), mLayout->project() );
+    const QgsCoordinateTransform coordTransform( layer->crs(), mMap->crs(), mLayout->project() );
+    QgsCoordinateTransform extentTransform = coordTransform;
+    extentTransform.setBallparkTransformsAreAppropriate( true );
     try
     {
-      selectionRect = coordTransform.transformBoundingBox( selectionRect, QgsCoordinateTransform::ReverseTransform );
-      visibleRegion.transform( coordTransform, QgsCoordinateTransform::ReverseTransform );
+      selectionRect = extentTransform.transformBoundingBox( selectionRect, Qgis::TransformDirection::Reverse );
+      visibleRegion.transform( coordTransform, Qgis::TransformDirection::Reverse );
     }
     catch ( QgsCsException &cse )
     {
@@ -566,7 +572,8 @@ bool QgsLayoutItemAttributeTable::getTableContents( QgsLayoutTableContents &cont
 
       if ( idx != -1 )
       {
-        const QVariant val = f.attributes().at( idx );
+
+        QVariant val = f.attributes().at( idx );
 
         if ( mUseConditionalStyling )
         {
@@ -576,7 +583,28 @@ bool QgsLayoutItemAttributeTable::getTableContents( QgsLayoutTableContents &cont
           style = QgsConditionalStyle::compressStyles( styles );
         }
 
-        QVariant v = replaceWrapChar( val );
+        const QgsEditorWidgetSetup setup = layer->fields().at( idx ).editorWidgetSetup();
+
+        if ( ! setup.isNull() )
+        {
+          QgsFieldFormatter *fieldFormatter = QgsApplication::fieldFormatterRegistry()->fieldFormatter( setup.type() );
+          QVariant cache;
+
+          auto it = mLayerCache.constFind( column.attribute() );
+          if ( it != mLayerCache.constEnd() )
+          {
+            cache = it.value();
+          }
+          else
+          {
+            cache = fieldFormatter->createCache( mVectorLayer.get(), idx, setup.config() );
+            mLayerCache.insert( column.attribute(), cache );
+          }
+
+          val = fieldFormatter->representValue( mVectorLayer.get(), idx, setup.config(), cache, val );
+        }
+
+        QVariant v = val.isNull() ? QString() : replaceWrapChar( val );
         currentRow << Cell( v, style, f );
         rowContents << v;
       }
@@ -636,6 +664,47 @@ QgsConditionalStyle QgsLayoutItemAttributeTable::conditionalCellStyle( int row, 
     return QgsConditionalStyle();
 
   return mConditionalStyles.at( row ).at( column );
+}
+
+QgsTextFormat QgsLayoutItemAttributeTable::textFormatForCell( int row, int column ) const
+{
+  QgsTextFormat format = mContentTextFormat;
+
+  const QgsConditionalStyle style = conditionalCellStyle( row, column );
+  if ( style.isValid() )
+  {
+    // apply conditional style formatting to text format
+    const QFont styleFont = style.font();
+    if ( styleFont != QFont() )
+    {
+      QFont newFont = format.font();
+      // we want to keep all the other font settings, like word/letter spacing
+      newFont.setFamily( styleFont.family() );
+
+      // warning -- there's a potential trap here! We can't just read QFont::styleName(), as that may be blank even when
+      // the font has the bold or italic attributes set! Reading the style name via QFontInfo avoids this and always returns
+      // a correct style name
+      const QString styleName = QgsFontUtils::resolveFontStyleName( styleFont );
+      if ( !styleName.isEmpty() )
+        newFont.setStyleName( styleName );
+
+      newFont.setStrikeOut( styleFont.strikeOut() );
+      newFont.setUnderline( styleFont.underline() );
+      format.setFont( newFont );
+      if ( styleName.isEmpty() )
+      {
+        // we couldn't find a direct match for the conditional font's bold/italic settings as a font style name.
+        // This means the conditional style is using Qt's "faux bold/italic" mode. Even though it causes reduced quality font
+        // rendering, we'll apply it here anyway just to ensure that the rendered font styling matches the conditional style.
+        if ( styleFont.bold() )
+          format.setForcedBold( true );
+        if ( styleFont.italic() )
+          format.setForcedItalic( true );
+      }
+    }
+  }
+
+  return format;
 }
 
 QgsExpressionContextScope *QgsLayoutItemAttributeTable::scopeForCell( int row, int column ) const

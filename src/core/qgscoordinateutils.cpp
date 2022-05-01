@@ -17,12 +17,15 @@
 
 #include "qgscoordinateutils.h"
 #include "qgscoordinatereferencesystem.h"
+#include "qgscoordinatereferencesystemutils.h"
 #include "qgscoordinatetransform.h"
 #include "qgsproject.h"
 #include "qgis.h"
 #include "qgsexception.h"
 #include "qgscoordinateformatter.h"
 #include "qgsrectangle.h"
+#include "qgsprojectdisplaysettings.h"
+#include "qgscoordinatenumericformat.h"
 #include <QRegularExpression>
 
 ///@cond NOT_STABLE_API
@@ -32,13 +35,14 @@ int QgsCoordinateUtils::calculateCoordinatePrecision( double mapUnitsPerPixel, c
   if ( !project )
     project = QgsProject::instance();
   // Get the display precision from the project settings
-  bool automatic = project->readBoolEntry( QStringLiteral( "PositionPrecision" ), QStringLiteral( "/Automatic" ) );
+  const bool automatic = project->readBoolEntry( QStringLiteral( "PositionPrecision" ), QStringLiteral( "/Automatic" ) );
   int dp = 0;
 
   if ( automatic )
   {
-    QString format = project->readEntry( QStringLiteral( "PositionPrecision" ), QStringLiteral( "/DegreeFormat" ), QStringLiteral( "MU" ) );
-    bool formatGeographic = ( format == QLatin1String( "DM" ) || format == QLatin1String( "DMS" ) || format == QLatin1String( "D" ) );
+    const QString format = project->readEntry( QStringLiteral( "PositionPrecision" ), QStringLiteral( "/DegreeFormat" ), QStringLiteral( "MU" ) );
+    // only MU or D is used now, but older projects may have DM/DMS
+    const bool formatGeographic = format == QLatin1String( "D" ) || format == QLatin1String( "DM" ) || format == QLatin1String( "DMS" );
 
     // we can only calculate an automatic precision if one of these is true:
     // - both map CRS and format are geographic
@@ -54,10 +58,16 @@ int QgsCoordinateUtils::calculateCoordinatePrecision( double mapUnitsPerPixel, c
     }
     else
     {
-      if ( format == QLatin1String( "D" ) )
-        dp = 4;
-      else
-        dp = 2;
+      switch ( project->displaySettings()->geographicCoordinateFormat()->angleFormat() )
+      {
+        case QgsGeographicCoordinateNumericFormat::AngleFormat::DegreesMinutesSeconds:
+        case QgsGeographicCoordinateNumericFormat::AngleFormat::DegreesMinutes:
+          dp = 2;
+          break;
+        case QgsGeographicCoordinateNumericFormat::AngleFormat::DecimalDegrees:
+          dp = 4;
+          break;
+      }
     }
   }
   else
@@ -78,13 +88,13 @@ int QgsCoordinateUtils::calculateCoordinatePrecisionForCrs( const QgsCoordinateR
     prj = QgsProject::instance();
   }
 
-  bool automatic = prj->readBoolEntry( QStringLiteral( "PositionPrecision" ), QStringLiteral( "/Automatic" ) );
+  const bool automatic = prj->readBoolEntry( QStringLiteral( "PositionPrecision" ), QStringLiteral( "/Automatic" ) );
   if ( !automatic )
   {
     return prj->readNumEntry( QStringLiteral( "PositionPrecision" ), QStringLiteral( "/DecimalPlaces" ), 6 );
   }
 
-  QgsUnitTypes::DistanceUnit unit = crs.mapUnits();
+  const QgsUnitTypes::DistanceUnit unit = crs.mapUnits();
   if ( unit == QgsUnitTypes::DistanceDegrees )
   {
     return 8;
@@ -100,16 +110,23 @@ QString QgsCoordinateUtils::formatCoordinateForProject( QgsProject *project, con
   if ( !project )
     return QString();
 
-  QString format = project->readEntry( QStringLiteral( "PositionPrecision" ), QStringLiteral( "/DegreeFormat" ), QStringLiteral( "MU" ) );
+  const QString format = project->readEntry( QStringLiteral( "PositionPrecision" ), QStringLiteral( "/DegreeFormat" ), QStringLiteral( "MU" ) );
+  const Qgis::CoordinateOrder axisOrder = qgsEnumKeyToValue( project->readEntry( QStringLiteral( "PositionPrecision" ), QStringLiteral( "/CoordinateOrder" ) ), Qgis::CoordinateOrder::Default );
+
+  // only MU or D is used now, but older projects may have DM/DMS
+  const bool formatGeographic = format == QLatin1String( "D" ) || format == QLatin1String( "DM" ) || format == QLatin1String( "DMS" );
 
   QgsPointXY geo = point;
-  if ( format == QLatin1String( "DM" ) || format == QLatin1String( "DMS" ) || format == QLatin1String( "D" ) )
+  if ( formatGeographic )
   {
     // degrees
+    QgsCoordinateReferenceSystem geographicCrs = destCrs;
     if ( destCrs.isValid() && !destCrs.isGeographic() )
     {
+      // default to EPSG:4326 if the project CRS isn't already geographic
+      geographicCrs = QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:4326" ) );
       // need to transform to geographic coordinates
-      QgsCoordinateTransform ct( destCrs, QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:4326" ) ), project );
+      const QgsCoordinateTransform ct( destCrs, geographicCrs, project );
       try
       {
         geo = ct.transform( point );
@@ -120,17 +137,33 @@ QString QgsCoordinateUtils::formatCoordinateForProject( QgsProject *project, con
       }
     }
 
-    if ( format == QLatin1String( "DM" ) )
-      return QgsCoordinateFormatter::format( geo, QgsCoordinateFormatter::FormatDegreesMinutes, precision, QgsCoordinateFormatter::FlagDegreesPadMinutesSeconds | QgsCoordinateFormatter::FlagDegreesUseStringSuffix );
-    else if ( format == QLatin1String( "DMS" ) )
-      return QgsCoordinateFormatter::format( geo, QgsCoordinateFormatter::FormatDegreesMinutesSeconds, precision, QgsCoordinateFormatter::FlagDegreesPadMinutesSeconds | QgsCoordinateFormatter::FlagDegreesUseStringSuffix );
-    else
-      return QgsCoordinateFormatter::asPair( geo.x(), geo.y(), precision );
+    const Qgis::CoordinateOrder order = axisOrder == Qgis::CoordinateOrder::Default ? QgsCoordinateReferenceSystemUtils::defaultCoordinateOrderForCrs( geographicCrs ) : axisOrder;
+
+    std::unique_ptr< QgsGeographicCoordinateNumericFormat > format( project->displaySettings()->geographicCoordinateFormat()->clone() );
+    format->setNumberDecimalPlaces( precision );
+
+    QgsNumericFormatContext context;
+    context.setInterpretation( QgsNumericFormatContext::Interpretation::Longitude );
+    const QString formattedX = format->formatDouble( geo.x(), context );
+    context.setInterpretation( QgsNumericFormatContext::Interpretation::Latitude );
+    const QString formattedY = format->formatDouble( geo.y(), context );
+
+    switch ( order )
+    {
+      case Qgis::CoordinateOrder::Default:
+      case Qgis::CoordinateOrder::XY:
+        return QStringLiteral( "%1%2%3" ).arg( formattedX, QgsCoordinateFormatter::separator(), formattedY );
+
+      case Qgis::CoordinateOrder::YX:
+        return QStringLiteral( "%1%2%3" ).arg( formattedY, QgsCoordinateFormatter::separator(), formattedX );
+    }
+    BUILTIN_UNREACHABLE
   }
   else
   {
     // coordinates in map units
-    return QgsCoordinateFormatter::asPair( point.x(), point.y(), precision );
+    const Qgis::CoordinateOrder order = axisOrder == Qgis::CoordinateOrder::Default ? QgsCoordinateReferenceSystemUtils::defaultCoordinateOrderForCrs( destCrs ) : axisOrder;
+    return QgsCoordinateFormatter::asPair( point.x(), point.y(), precision, order );
   }
 }
 
@@ -140,6 +173,40 @@ QString QgsCoordinateUtils::formatExtentForProject( QgsProject *project, const Q
   const QgsPointXY p2( extent.xMaximum(), extent.yMaximum() );
   return QStringLiteral( "%1 : %2" ).arg( QgsCoordinateUtils::formatCoordinateForProject( project, p1, destCrs, precision ),
                                           QgsCoordinateUtils::formatCoordinateForProject( project, p2, destCrs, precision ) );
+}
+
+double QgsCoordinateUtils::degreeToDecimal( const QString &string, bool *ok, bool *isEasting )
+{
+  const QString negative( QStringLiteral( "swSW" ) );
+  const QString easting( QStringLiteral( "eEwW" ) );
+  double value = 0.0;
+  bool okValue = false;
+
+  if ( ok )
+  {
+    *ok = false;
+  }
+  else
+  {
+    ok = &okValue;
+  }
+
+  QRegularExpression degreeWithSuffix( QStringLiteral( "^\\s*([0-9\\-\\.]*)\\s*([NSEWnsew])\\s*$" ) );
+  QRegularExpressionMatch match = degreeWithSuffix.match( string );
+  if ( match.hasMatch() )
+  {
+    const QString suffix = match.captured( 2 );
+    value = std::abs( match.captured( 1 ).toDouble( ok ) );
+    if ( ok )
+    {
+      value *= ( negative.contains( suffix ) ? -1 : 1 );
+      if ( isEasting )
+      {
+        *isEasting = easting.contains( suffix );
+      }
+    }
+  }
+  return value;
 }
 
 double QgsCoordinateUtils::dmsToDecimal( const QString &string, bool *ok, bool *isEasting )
@@ -158,13 +225,13 @@ double QgsCoordinateUtils::dmsToDecimal( const QString &string, bool *ok, bool *
     ok = &okValue;
   }
 
-  QRegularExpression dms( "^\\s*(?:([-+nsew])\\s*)?(\\d{1,3})(?:[^0-9.]+([0-5]?\\d))?[^0-9.]+([0-5]?\\d(?:\\.\\d+)?)[^0-9.,]*?([-+nsew])?\\s*$", QRegularExpression::CaseInsensitiveOption );
-  QRegularExpressionMatch match = dms.match( string.trimmed() );
+  const QRegularExpression dms( "^\\s*(?:([-+nsew])\\s*)?(\\d{1,3})(?:[^0-9.]+([0-5]?\\d))?[^0-9.]+([0-5]?\\d(?:\\.\\d+)?)[^0-9.,]*?([-+nsew])?\\s*$", QRegularExpression::CaseInsensitiveOption );
+  const QRegularExpressionMatch match = dms.match( string.trimmed() );
   if ( match.hasMatch() )
   {
-    QString dms1 = match.captured( 2 );
-    QString dms2 = match.captured( 3 );
-    QString dms3 = match.captured( 4 );
+    const QString dms1 = match.captured( 2 );
+    const QString dms2 = match.captured( 3 );
+    const QString dms3 = match.captured( 4 );
 
     double v = dms3.toDouble( ok );
     if ( *ok == false )
@@ -180,8 +247,8 @@ double QgsCoordinateUtils::dmsToDecimal( const QString &string, bool *ok, bool *
     if ( *ok == false )
       return value;
 
-    QString sign1 = match.captured( 1 );
-    QString sign2 = match.captured( 5 );
+    const QString sign1 = match.captured( 1 );
+    const QString sign2 = match.captured( 5 );
 
     if ( sign1.isEmpty() )
     {

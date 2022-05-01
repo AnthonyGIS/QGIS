@@ -66,12 +66,20 @@ QgsProviderMetadata = PyProviderMetadata
 
 # monkey patch deprecated enum values to maintain API
 # TODO - remove for QGIS 4.0
-QgsMarkerLineSymbolLayer.Interval = QgsTemplatedLineSymbolLayerBase.Interval
-QgsMarkerLineSymbolLayer.Vertex = QgsTemplatedLineSymbolLayerBase.Vertex
-QgsMarkerLineSymbolLayer.LastVertex = QgsTemplatedLineSymbolLayerBase.LastVertex
-QgsMarkerLineSymbolLayer.FirstVertex = QgsTemplatedLineSymbolLayerBase.FirstVertex
-QgsMarkerLineSymbolLayer.CentralPoint = QgsTemplatedLineSymbolLayerBase.CentralPoint
-QgsMarkerLineSymbolLayer.CurvePoint = QgsTemplatedLineSymbolLayerBase.CurvePoint
+QgsMarkerLineSymbolLayer.Interval = Qgis.MarkerLinePlacement.Interval
+QgsMarkerLineSymbolLayer.Vertex = Qgis.MarkerLinePlacement.Vertex
+QgsMarkerLineSymbolLayer.LastVertex = Qgis.MarkerLinePlacement.LastVertex
+QgsMarkerLineSymbolLayer.FirstVertex = Qgis.MarkerLinePlacement.FirstVertex
+QgsMarkerLineSymbolLayer.CentralPoint = Qgis.MarkerLinePlacement.CentralPoint
+QgsMarkerLineSymbolLayer.CurvePoint = Qgis.MarkerLinePlacement.CurvePoint
+
+QgsRasterFillSymbolLayer.FillCoordinateMode = Qgis.SymbolCoordinateReference
+QgsRasterFillSymbolLayer.Feature = Qgis.SymbolCoordinateReference.Feature
+QgsRasterFillSymbolLayer.Viewport = Qgis.SymbolCoordinateReference.Viewport
+
+QgsShapeburstFillSymbolLayer.ShapeburstColorType = Qgis.GradientColorSource
+QgsShapeburstFillSymbolLayer.SimpleTwoColor = Qgis.GradientColorSource.SimpleTwoColor
+QgsShapeburstFillSymbolLayer.ColorRamp = Qgis.GradientColorSource.ColorRamp
 
 QgsVectorLayer.VertexMarkerType = Qgis.VertexMarkerType
 QgsVectorLayer.SemiTransparentCircle = Qgis.VertexMarkerType.SemiTransparentCircle
@@ -83,6 +91,11 @@ QgsVectorLayer.Cross.__doc__ = "Cross marker"
 QgsVectorLayer.NoMarker = Qgis.VertexMarkerType.NoMarker
 QgsVectorLayer.NoMarker.is_monkey_patched = True
 QgsVectorLayer.NoMarker.__doc__ = "No marker"
+
+QgsSymbol.RenderHints = Qgis.SymbolRenderHints
+QgsSymbol.PreviewFlags = Qgis.SymbolPreviewFlags
+QgsDataItem.Capabilities = Qgis.BrowserItemCapabilities
+QgsGeometry.ValidityFlags = Qgis.GeometryValidityFlags
 
 # Monkey patch static const "QgsDataProvider.SUBLAYER_SEPARATOR" which was removed for QGIS 3.12
 QgsDataProvider.SUBLAYER_SEPARATOR = QgsDataProvider.sublayerSeparator()

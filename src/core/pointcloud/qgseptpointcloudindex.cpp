@@ -27,12 +27,14 @@
 #include <QQueue>
 
 #include "qgseptdecoder.h"
+#include "qgslazdecoder.h"
 #include "qgscoordinatereferencesystem.h"
 #include "qgspointcloudrequest.h"
 #include "qgspointcloudattribute.h"
 #include "qgslogger.h"
 #include "qgsfeedback.h"
 #include "qgsmessagelog.h"
+#include "qgspointcloudexpression.h"
 
 ///@cond PRIVATE
 
@@ -154,7 +156,7 @@ bool QgsEptPointCloudIndex::loadSchema( const QByteArray &dataJson )
     const QString name = schemaObj.value( QLatin1String( "name" ) ).toString();
     const QString type = schemaObj.value( QLatin1String( "type" ) ).toString();
 
-    int size = schemaObj.value( QLatin1String( "size" ) ).toInt();
+    const int size = schemaObj.value( QLatin1String( "size" ) ).toInt();
 
     if ( type == QLatin1String( "float" ) && ( size == 4 ) )
     {
@@ -243,12 +245,12 @@ bool QgsEptPointCloudIndex::loadSchema( const QByteArray &dataJson )
   // save mRootBounds
 
   // bounds (cube - octree volume)
-  double xmin = bounds[0].toDouble();
-  double ymin = bounds[1].toDouble();
-  double zmin = bounds[2].toDouble();
-  double xmax = bounds[3].toDouble();
-  double ymax = bounds[4].toDouble();
-  double zmax = bounds[5].toDouble();
+  const double xmin = bounds[0].toDouble();
+  const double ymin = bounds[1].toDouble();
+  const double zmin = bounds[2].toDouble();
+  const double xmax = bounds[3].toDouble();
+  const double ymax = bounds[4].toDouble();
+  const double zmax = bounds[5].toDouble();
 
   mRootBounds = QgsPointCloudDataBounds(
                   ( xmin - mOffset.x() ) / mScale.x(),
@@ -274,25 +276,32 @@ bool QgsEptPointCloudIndex::loadSchema( const QByteArray &dataJson )
 QgsPointCloudBlock *QgsEptPointCloudIndex::nodeData( const IndexedPointCloudNode &n, const QgsPointCloudRequest &request )
 {
   mHierarchyMutex.lock();
-  bool found = mHierarchy.contains( n );
+  const bool found = mHierarchy.contains( n );
   mHierarchyMutex.unlock();
   if ( !found )
     return nullptr;
 
+  // we need to create a copy of the expression to pass to the decoder
+  // as the same QgsPointCloudExpression object mighgt be concurrently
+  // used on another thread, for example in a 3d view
+  QgsPointCloudExpression filterExpression = mFilterExpression;
+  QgsPointCloudAttributeCollection requestAttributes = request.attributes();
+  requestAttributes.extend( attributes(), filterExpression.referencedAttributes() );
+
   if ( mDataType == QLatin1String( "binary" ) )
   {
-    QString filename = QStringLiteral( "%1/ept-data/%2.bin" ).arg( mDirectory, n.toString() );
-    return QgsEptDecoder::decompressBinary( filename, attributes(), request.attributes(), scale(), offset() );
+    const QString filename = QStringLiteral( "%1/ept-data/%2.bin" ).arg( mDirectory, n.toString() );
+    return QgsEptDecoder::decompressBinary( filename, attributes(), requestAttributes, scale(), offset(), filterExpression );
   }
   else if ( mDataType == QLatin1String( "zstandard" ) )
   {
-    QString filename = QStringLiteral( "%1/ept-data/%2.zst" ).arg( mDirectory, n.toString() );
-    return QgsEptDecoder::decompressZStandard( filename, attributes(), request.attributes(), scale(), offset() );
+    const QString filename = QStringLiteral( "%1/ept-data/%2.zst" ).arg( mDirectory, n.toString() );
+    return QgsEptDecoder::decompressZStandard( filename, attributes(), request.attributes(), scale(), offset(), filterExpression );
   }
   else if ( mDataType == QLatin1String( "laszip" ) )
   {
-    QString filename = QStringLiteral( "%1/ept-data/%2.laz" ).arg( mDirectory, n.toString() );
-    return QgsEptDecoder::decompressLaz( filename, attributes(), request.attributes(), scale(), offset() );
+    const QString filename = QStringLiteral( "%1/ept-data/%2.laz" ).arg( mDirectory, n.toString() );
+    return QgsLazDecoder::decompressLaz( filename, requestAttributes, filterExpression );
   }
   else
   {
@@ -398,7 +407,7 @@ bool QgsEptPointCloudIndex::loadHierarchy()
       return false;
     }
 
-    QByteArray dataJsonH = fH.readAll();
+    const QByteArray dataJsonH = fH.readAll();
     QJsonParseError errH;
     const QJsonDocument docH = QJsonDocument::fromJson( dataJsonH, &errH );
     if ( errH.error != QJsonParseError::NoError )
@@ -410,15 +419,15 @@ bool QgsEptPointCloudIndex::loadHierarchy()
     const QJsonObject rootHObj = docH.object();
     for ( auto it = rootHObj.constBegin(); it != rootHObj.constEnd(); ++it )
     {
-      QString nodeIdStr = it.key();
-      int nodePointCount = it.value().toInt();
+      const QString nodeIdStr = it.key();
+      const int nodePointCount = it.value().toInt();
       if ( nodePointCount < 0 )
       {
         queue.enqueue( nodeIdStr );
       }
       else
       {
-        IndexedPointCloudNode nodeId = IndexedPointCloudNode::fromString( nodeIdStr );
+        const IndexedPointCloudNode nodeId = IndexedPointCloudNode::fromString( nodeIdStr );
         mHierarchyMutex.lock();
         mHierarchy[nodeId] = nodePointCount;
         mHierarchyMutex.unlock();

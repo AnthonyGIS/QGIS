@@ -20,7 +20,8 @@
 #include "qgslogger.h"
 #include "qgsproject.h"
 #include "qgsmaplayerrenderer.h"
-#include "qgsmaplayerlistutils.h"
+#include "qgsmaplayerlistutils_p.h"
+#include "qgsrendereditemresults.h"
 
 QgsMapRendererStagedRenderJob::QgsMapRendererStagedRenderJob( const QgsMapSettings &settings, Flags flags )
   : QgsMapRendererAbstractCustomPainterJob( settings )
@@ -47,7 +48,7 @@ void QgsMapRendererStagedRenderJob::startPrivate()
 
   mLabelingEngineV2.reset();
 
-  if ( mSettings.testFlag( QgsMapSettings::DrawLabeling ) )
+  if ( mSettings.testFlag( Qgis::MapSettingsFlag::DrawLabeling ) )
   {
     if ( mFlags & RenderLabelsByMapLayer )
       mLabelingEngineV2.reset( new QgsStagedRenderLabelingEngine() );
@@ -102,6 +103,7 @@ bool QgsMapRendererStagedRenderJob::renderCurrentPart( QPainter *painter )
   if ( mJobIt != mLayerJobs.end() )
   {
     LayerRenderJob &job = *mJobIt;
+    emit layerRenderingStarted( job.layerId );
     job.renderer->renderContext()->setPainter( painter );
 
     if ( job.context()->useAdvancedEffects() )
@@ -127,6 +129,8 @@ bool QgsMapRendererStagedRenderJob::renderCurrentPart( QPainter *painter )
       painter->setOpacity( 1.0 );
     }
     job.context()->setPainter( nullptr );
+
+    emit layerRendered( job.layerId );
   }
   else
   {
@@ -226,7 +230,7 @@ QString QgsMapRendererStagedRenderJob::currentLayerId() const
 {
   if ( mJobIt != mLayerJobs.end() )
   {
-    LayerRenderJob &job = *mJobIt;
+    const LayerRenderJob &job = *mJobIt;
     return job.layerId;
   }
   else if ( mFlags & RenderLabelsByMapLayer && mPreparedStagedLabelJob )
@@ -241,7 +245,7 @@ double QgsMapRendererStagedRenderJob::currentLayerOpacity() const
 {
   if ( mJobIt != mLayerJobs.end() )
   {
-    LayerRenderJob &job = *mJobIt;
+    const LayerRenderJob &job = *mJobIt;
     return job.opacity;
   }
   return 1.0;
@@ -251,7 +255,7 @@ QPainter::CompositionMode QgsMapRendererStagedRenderJob::currentLayerComposition
 {
   if ( mJobIt != mLayerJobs.end() )
   {
-    LayerRenderJob &job = *mJobIt;
+    const LayerRenderJob &job = *mJobIt;
     return job.blendMode;
   }
   return QPainter::CompositionMode_SourceOver;

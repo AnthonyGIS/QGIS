@@ -49,7 +49,7 @@ void QgsHanaDataItemGuiProvider::populateContextMenu(
     connect( actionEdit, &QAction::triggered, this, [connItem] { editConnection( connItem ); } );
     menu->addAction( actionEdit );
 
-    QAction *actionDelete = new QAction( tr( "Delete Connection" ), this );
+    QAction *actionDelete = new QAction( tr( "Remove Connection" ), this );
     connect( actionDelete, &QAction::triggered, this, [connItem] { deleteConnection( connItem ); } );
     menu->addAction( actionDelete );
 
@@ -112,7 +112,7 @@ bool QgsHanaDataItemGuiProvider::deleteLayer( QgsLayerItem *item, QgsDataItemGui
     QString errorMsg;
     try
     {
-      QgsHanaProviderConnection providerConn( layerItem->uri(), {} );
+      const QgsHanaProviderConnection providerConn( layerItem->uri(), {} );
       providerConn.dropVectorTable( layerInfo.schemaName, layerInfo.tableName );
     }
     catch ( const QgsProviderConnectionException &ex )
@@ -197,8 +197,8 @@ void QgsHanaDataItemGuiProvider::editConnection( QgsDataItem *item )
 
 void QgsHanaDataItemGuiProvider::deleteConnection( QgsDataItem *item )
 {
-  if ( QMessageBox::question( nullptr, tr( "Delete Connection" ),
-                              tr( "Are you sure you want to delete the connection to %1?" ).arg( item->name() ),
+  if ( QMessageBox::question( nullptr, tr( "Remove Connection" ),
+                              tr( "Are you sure you want to remove the connection to %1?" ).arg( item->name() ),
                               QMessageBox::Yes | QMessageBox::No, QMessageBox::No ) != QMessageBox::Yes )
     return;
 
@@ -225,7 +225,7 @@ void QgsHanaDataItemGuiProvider::createSchema( QgsDataItem *item, QgsDataItemGui
   QString errorMsg;
   try
   {
-    QgsHanaProviderConnection providerConn( item->name() );
+    const QgsHanaProviderConnection providerConn( item->name() );
     providerConn.createSchema( schemaName );
   }
   catch ( const QgsProviderConnectionException &ex )
@@ -257,7 +257,7 @@ void QgsHanaDataItemGuiProvider::deleteSchema( QgsHanaSchemaItem *schemaItem, Qg
   QString errorMsg;
   try
   {
-    QgsHanaProviderConnection providerConn( schemaItem->connectionName() );
+    const QgsHanaProviderConnection providerConn( schemaItem->connectionName() );
     const auto tables = providerConn.tables( schemaName );
     if ( tables.empty() )
     {
@@ -322,7 +322,7 @@ void QgsHanaDataItemGuiProvider::renameSchema( QgsHanaSchemaItem *schemaItem, Qg
   QString errorMsg;
   try
   {
-    QgsHanaProviderConnection providerConn( schemaItem->connectionName() );
+    const QgsHanaProviderConnection providerConn( schemaItem->connectionName() );
     providerConn.renameSchema( schemaName, newSchemaName );
   }
   catch ( const QgsProviderConnectionException &ex )
@@ -357,7 +357,7 @@ void QgsHanaDataItemGuiProvider::renameLayer( QgsHanaLayerItem *layerItem, QgsDa
   QString errorMsg;
   try
   {
-    QgsHanaProviderConnection providerConn( layerItem->uri(), {} );
+    const QgsHanaProviderConnection providerConn( layerItem->uri(), {} );
     providerConn.renameVectorTable( layerInfo.schemaName, layerInfo.tableName, newLayerName );
   }
   catch ( const QgsProviderConnectionException &ex )

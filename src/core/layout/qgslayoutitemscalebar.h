@@ -619,7 +619,7 @@ class CORE_EXPORT QgsLayoutItemScaleBar: public QgsLayoutItem
      *
      * The \a name parameter gives the (untranslated) style name.
      * Possibilities are: 'Single Box', 'Double Box', 'Line Ticks Middle',
-     * 'Line Ticks Down', 'Line Ticks Up', 'Numeric'
+     * 'Line Ticks Down', 'Line Ticks Up', 'Stepped Line', 'Hollow', 'Numeric'.
      *
      * \see style()
     */
@@ -683,7 +683,7 @@ class CORE_EXPORT QgsLayoutItemScaleBar: public QgsLayoutItem
     //! Width of a segment (in mm)
     double mSegmentMillimeters = 0.0;
 
-    //! Calculates with of a segment in mm and stores it in mSegmentMillimeters
+    //! Calculates width of a segment in mm and stores it in mSegmentMillimeters
     void refreshSegmentMillimeters();
 
     //! Returns diagonal of layout map in selected units (map units / meters / feet / nautical miles)

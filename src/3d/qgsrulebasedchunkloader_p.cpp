@@ -26,6 +26,7 @@
 #include "qgsrulebased3drenderer.h"
 
 #include <QtConcurrent>
+#include <Qt3DCore/QTransform>
 
 ///@cond PRIVATE
 
@@ -66,16 +67,18 @@ QgsRuleBasedChunkLoader::QgsRuleBasedChunkLoader( const QgsRuleBasedChunkLoaderF
   req.setSubsetOfAttributes( attributeNames, layer->fields() );
 
   // only a subset of data to be queried
-  QgsRectangle rect = Qgs3DUtils::worldToMapExtent( node->bbox(), map.origin() );
+  const QgsRectangle rect = Qgs3DUtils::worldToMapExtent( node->bbox(), map.origin() );
   req.setFilterRect( rect );
 
   //
   // this will be run in a background thread
   //
+  mFutureWatcher = new QFutureWatcher<void>( this );
+  connect( mFutureWatcher, &QFutureWatcher<void>::finished, this, &QgsChunkQueueJob::finished );
 
-  QFuture<void> future = QtConcurrent::run( [req, this]
+  const QFuture<void> future = QtConcurrent::run( [req, this]
   {
-    QgsEventTracing::ScopedEvent e( QStringLiteral( "3D" ), QStringLiteral( "RB chunk load" ) );
+    const QgsEventTracing::ScopedEvent e( QStringLiteral( "3D" ), QStringLiteral( "RB chunk load" ) );
 
     QgsFeature f;
     QgsFeatureIterator fi = mSource->getFeatures( req );
@@ -89,9 +92,7 @@ QgsRuleBasedChunkLoader::QgsRuleBasedChunkLoader( const QgsRuleBasedChunkLoaderF
   } );
 
   // emit finished() as soon as the handler is populated with features
-  mFutureWatcher = new QFutureWatcher<void>( this );
   mFutureWatcher->setFuture( future );
-  connect( mFutureWatcher, &QFutureWatcher<void>::finished, this, &QgsChunkQueueJob::finished );
 }
 
 QgsRuleBasedChunkLoader::~QgsRuleBasedChunkLoader()
@@ -138,6 +139,7 @@ Qt3DCore::QEntity *QgsRuleBasedChunkLoader::createEntity( Qt3DCore::QEntity *par
     box.yMin = zMin;
     box.yMax = zMax;
     mNode->setExactBbox( box );
+    mNode->updateParentBoundingBoxesRecursively();
   }
 
   return entity;
@@ -153,7 +155,7 @@ QgsRuleBasedChunkLoaderFactory::QgsRuleBasedChunkLoaderFactory( const Qgs3DMapSe
   , mRootRule( rootRule->clone() )
   , mLeafLevel( leafLevel )
 {
-  QgsAABB rootBbox = Qgs3DUtils::layerToWorldExtent( vl->extent(), zMin, zMax, vl->crs(), map.origin(), map.crs(), map.transformContext() );
+  const QgsAABB rootBbox = Qgs3DUtils::layerToWorldExtent( vl->extent(), zMin, zMax, vl->crs(), map.origin(), map.crs(), map.transformContext() );
   setupQuadtree( rootBbox, -1, leafLevel );  // negative root error means that the node does not contain anything
 }
 

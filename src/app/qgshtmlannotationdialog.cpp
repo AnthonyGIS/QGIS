@@ -34,6 +34,10 @@ QgsHtmlAnnotationDialog::QgsHtmlAnnotationDialog( QgsMapCanvasAnnotationItem *it
   setupUi( this );
   connect( mBrowseToolButton, &QToolButton::clicked, this, &QgsHtmlAnnotationDialog::mBrowseToolButton_clicked );
   connect( mButtonBox, &QDialogButtonBox::clicked, this, &QgsHtmlAnnotationDialog::mButtonBox_clicked );
+
+  connect( mFileRadioButton, &QToolButton::toggled, this, &QgsHtmlAnnotationDialog::fileRadioButtonToggled );
+  connect( mSourceRadioButton, &QToolButton::toggled, this, &QgsHtmlAnnotationDialog::sourceRadioButtonToggled );
+
   setWindowTitle( tr( "HTML Annotation" ) );
   mEmbeddedWidget = new QgsAnnotationWidget( mItem );
   mStackedWidget->addWidget( mEmbeddedWidget );
@@ -42,7 +46,7 @@ QgsHtmlAnnotationDialog::QgsHtmlAnnotationDialog( QgsMapCanvasAnnotationItem *it
   if ( item && item->annotation() )
   {
     QgsHtmlAnnotation *annotation = static_cast< QgsHtmlAnnotation * >( item->annotation() );
-    QString file = annotation->sourceFile();
+    const QString file = annotation->sourceFile();
     if ( !file.isEmpty() )
     {
       mFileLineEdit->setText( file );
@@ -75,7 +79,6 @@ void QgsHtmlAnnotationDialog::applySettingsToItem()
   if ( mItem && mItem->annotation() )
   {
     QgsHtmlAnnotation *annotation = static_cast< QgsHtmlAnnotation * >( mItem->annotation() );
-    QString file = mFileLineEdit->text();
     if ( mFileRadioButton->isChecked() )
     {
       annotation->setSourceFile( mFileLineEdit->text() );
@@ -91,7 +94,7 @@ void QgsHtmlAnnotationDialog::applySettingsToItem()
 void QgsHtmlAnnotationDialog::mBrowseToolButton_clicked()
 {
   QString directory;
-  QFileInfo fi( mFileLineEdit->text() );
+  const QFileInfo fi( mFileLineEdit->text() );
   if ( fi.exists() )
   {
     directory = fi.absolutePath();
@@ -100,16 +103,16 @@ void QgsHtmlAnnotationDialog::mBrowseToolButton_clicked()
   {
     directory = QDir::homePath();
   }
-  QString filename = QFileDialog::getOpenFileName( nullptr, tr( "html" ), directory, QStringLiteral( "HTML (*.html *.htm);;All files (*.*)" ) );
+  const QString filename = QFileDialog::getOpenFileName( nullptr, tr( "html" ), directory, QStringLiteral( "HTML (*.html *.htm);;All files (*.*)" ) );
   mFileLineEdit->setText( filename );
 }
 
-void QgsHtmlAnnotationDialog::on_mFileRadioButton_toggled( bool checked )
+void QgsHtmlAnnotationDialog::fileRadioButtonToggled( bool checked )
 {
   mFileLineEdit->setEnabled( checked );
 }
 
-void QgsHtmlAnnotationDialog::on_mSourceRadioButton_toggled( bool checked )
+void QgsHtmlAnnotationDialog::sourceRadioButtonToggled( bool checked )
 {
   mHtmlSourceTextEdit->setEnabled( checked );
 }

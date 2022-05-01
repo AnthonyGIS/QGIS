@@ -206,10 +206,10 @@ QVariantMap QgsAngleToNearestAlgorithm::processAlgorithm( const QVariantMap &par
     throw QgsProcessingException( invalidSinkError( parameters, QStringLiteral( "OUTPUT" ) ) );
 
   // make spatial index
-  QgsFeatureIterator f2 = referenceSource->getFeatures( QgsFeatureRequest().setDestinationCrs( input->sourceCrs(), context.transformContext() ).setNoAttributes() );
+  const QgsFeatureIterator f2 = referenceSource->getFeatures( QgsFeatureRequest().setDestinationCrs( input->sourceCrs(), context.transformContext() ).setNoAttributes() );
   double step = referenceSource->featureCount() > 0 ? 50.0 / referenceSource->featureCount() : 1;
   int i = 0;
-  QgsSpatialIndex index( f2, [&]( const QgsFeature & )->bool
+  const QgsSpatialIndex index( f2, [&]( const QgsFeature & )->bool
   {
     i++;
     if ( feedback->isCanceled() )
@@ -266,7 +266,7 @@ QVariantMap QgsAngleToNearestAlgorithm::processAlgorithm( const QVariantMap &par
       {
         if ( nearest.count() > 1 )
         {
-          feedback->pushInfo( QObject::tr( "Multiple matching features found at same distance from search feature, found %1 features" ).arg( nearest.count() ) );
+          feedback->pushInfo( QObject::tr( "Multiple matching features found at same distance from search feature, found %n feature(s)", nullptr, nearest.count() ) );
         }
 
         const QgsGeometry joinLine = f.geometry().shortestLine( index.geometry( nearest.at( 0 ) ) );

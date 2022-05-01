@@ -21,13 +21,14 @@
 #include "qgsapplication.h"
 #include "qgsmessagelog.h"
 #include "qgsauthmanager.h"
+#include "qgscoordinatetransform.h"
 
 #include <QUrl>
 #include <QUrlQuery>
 #include <QImageReader>
 #include <QRegularExpression>
 
-QVariantMap QgsArcGisRestQueryUtils::getServiceInfo( const QString &baseurl, const QString &authcfg, QString &errorTitle, QString &errorText, const QgsStringMap &requestHeaders )
+QVariantMap QgsArcGisRestQueryUtils::getServiceInfo( const QString &baseurl, const QString &authcfg, QString &errorTitle, QString &errorText, const QgsHttpHeaders &requestHeaders )
 {
   // http://sampleserver5.arcgisonline.com/arcgis/rest/services/Energy/Geology/FeatureServer?f=json
   QUrl queryUrl( baseurl );
@@ -37,7 +38,7 @@ QVariantMap QgsArcGisRestQueryUtils::getServiceInfo( const QString &baseurl, con
   return queryServiceJSON( queryUrl, authcfg, errorTitle, errorText, requestHeaders );
 }
 
-QVariantMap QgsArcGisRestQueryUtils::getLayerInfo( const QString &layerurl, const QString &authcfg, QString &errorTitle, QString &errorText, const QgsStringMap &requestHeaders )
+QVariantMap QgsArcGisRestQueryUtils::getLayerInfo( const QString &layerurl, const QString &authcfg, QString &errorTitle, QString &errorText, const QgsHttpHeaders &requestHeaders )
 {
   // http://sampleserver5.arcgisonline.com/arcgis/rest/services/Energy/Geology/FeatureServer/1?f=json
   QUrl queryUrl( layerurl );
@@ -47,7 +48,7 @@ QVariantMap QgsArcGisRestQueryUtils::getLayerInfo( const QString &layerurl, cons
   return queryServiceJSON( queryUrl, authcfg, errorTitle, errorText, requestHeaders );
 }
 
-QVariantMap QgsArcGisRestQueryUtils::getObjectIds( const QString &layerurl, const QString &authcfg, QString &errorTitle, QString &errorText, const QgsStringMap &requestHeaders, const QgsRectangle &bbox )
+QVariantMap QgsArcGisRestQueryUtils::getObjectIds( const QString &layerurl, const QString &authcfg, QString &errorTitle, QString &errorText, const QgsHttpHeaders &requestHeaders, const QgsRectangle &bbox )
 {
   // http://sampleserver5.arcgisonline.com/arcgis/rest/services/Energy/Geology/FeatureServer/1/query?where=1%3D1&returnIdsOnly=true&f=json
   QUrl queryUrl( layerurl + "/query" );
@@ -71,10 +72,10 @@ QVariantMap QgsArcGisRestQueryUtils::getObjects( const QString &layerurl, const 
     bool fetchGeometry, const QStringList &fetchAttributes,
     bool fetchM, bool fetchZ,
     const QgsRectangle &filterRect,
-    QString &errorTitle, QString &errorText, const QgsStringMap &requestHeaders, QgsFeedback *feedback )
+    QString &errorTitle, QString &errorText, const QgsHttpHeaders &requestHeaders, QgsFeedback *feedback )
 {
   QStringList ids;
-  for ( int id : objectIds )
+  for ( const int id : objectIds )
   {
     ids.append( QString::number( id ) );
   }
@@ -82,7 +83,7 @@ QVariantMap QgsArcGisRestQueryUtils::getObjects( const QString &layerurl, const 
   QUrlQuery query( queryUrl );
   query.addQueryItem( QStringLiteral( "f" ), QStringLiteral( "json" ) );
   query.addQueryItem( QStringLiteral( "objectIds" ), ids.join( QLatin1Char( ',' ) ) );
-  QString wkid = crs.indexOf( QLatin1Char( ':' ) ) >= 0 ? crs.split( ':' )[1] : QString();
+  const QString wkid = crs.indexOf( QLatin1Char( ':' ) ) >= 0 ? crs.split( ':' )[1] : QString();
   query.addQueryItem( QStringLiteral( "inSR" ), wkid );
   query.addQueryItem( QStringLiteral( "outSR" ), wkid );
 
@@ -109,7 +110,7 @@ QVariantMap QgsArcGisRestQueryUtils::getObjects( const QString &layerurl, const 
   return queryServiceJSON( queryUrl,  authcfg, errorTitle, errorText, requestHeaders, feedback );
 }
 
-QList<quint32> QgsArcGisRestQueryUtils::getObjectIdsByExtent( const QString &layerurl, const QgsRectangle &filterRect, QString &errorTitle, QString &errorText, const QString &authcfg, const QgsStringMap &requestHeaders, QgsFeedback *feedback )
+QList<quint32> QgsArcGisRestQueryUtils::getObjectIdsByExtent( const QString &layerurl, const QgsRectangle &filterRect, QString &errorTitle, QString &errorText, const QString &authcfg, const QgsHttpHeaders &requestHeaders, QgsFeedback *feedback )
 {
   QUrl queryUrl( layerurl + "/query" );
   QUrlQuery query( queryUrl );
@@ -139,16 +140,13 @@ QList<quint32> QgsArcGisRestQueryUtils::getObjectIdsByExtent( const QString &lay
   return ids;
 }
 
-QByteArray QgsArcGisRestQueryUtils::queryService( const QUrl &u, const QString &authcfg, QString &errorTitle, QString &errorText, const QgsStringMap &requestHeaders, QgsFeedback *feedback, QString *contentType )
+QByteArray QgsArcGisRestQueryUtils::queryService( const QUrl &u, const QString &authcfg, QString &errorTitle, QString &errorText, const QgsHttpHeaders &requestHeaders, QgsFeedback *feedback, QString *contentType )
 {
-  QUrl url = parseUrl( u );
+  const QUrl url = parseUrl( u );
 
   QNetworkRequest request( url );
   QgsSetRequestInitiatorClass( request, QStringLiteral( "QgsArcGisRestUtils" ) );
-  for ( auto it = requestHeaders.constBegin(); it != requestHeaders.constEnd(); ++it )
-  {
-    request.setRawHeader( it.key().toUtf8(), it.value().toUtf8() );
-  }
+  requestHeaders.updateNetworkRequest( request );
 
   QgsBlockingNetworkRequest networkRequest;
   networkRequest.setAuthCfg( authcfg );
@@ -163,6 +161,16 @@ QByteArray QgsArcGisRestQueryUtils::queryService( const QUrl &u, const QString &
     QgsDebugMsg( QStringLiteral( "Network error: %1" ).arg( networkRequest.errorMessage() ) );
     errorTitle = QStringLiteral( "Network error" );
     errorText = networkRequest.errorMessage();
+
+    // try to get detailed error message from reply
+    const QString content = networkRequest.reply().content();
+    const thread_local QRegularExpression errorRx( QStringLiteral( "Error: <.*?>(.*?)<" ) );
+    const QRegularExpressionMatch match = errorRx.match( content );
+    if ( match.hasMatch() )
+    {
+      errorText = match.captured( 1 );
+    }
+
     return QByteArray();
   }
 
@@ -172,9 +180,9 @@ QByteArray QgsArcGisRestQueryUtils::queryService( const QUrl &u, const QString &
   return content.content();
 }
 
-QVariantMap QgsArcGisRestQueryUtils::queryServiceJSON( const QUrl &url, const QString &authcfg, QString &errorTitle, QString &errorText, const QgsStringMap &requestHeaders, QgsFeedback *feedback )
+QVariantMap QgsArcGisRestQueryUtils::queryServiceJSON( const QUrl &url, const QString &authcfg, QString &errorTitle, QString &errorText, const QgsHttpHeaders &requestHeaders, QgsFeedback *feedback )
 {
-  QByteArray reply = queryService( url, authcfg, errorTitle, errorText, requestHeaders, feedback );
+  const QByteArray reply = queryService( url, authcfg, errorTitle, errorText, requestHeaders, feedback );
   if ( !errorTitle.isEmpty() )
   {
     return QVariantMap();
@@ -184,7 +192,7 @@ QVariantMap QgsArcGisRestQueryUtils::queryServiceJSON( const QUrl &url, const QS
 
   // Parse data
   QJsonParseError err;
-  QJsonDocument doc = QJsonDocument::fromJson( reply, &err );
+  const QJsonDocument doc = QJsonDocument::fromJson( reply, &err );
   if ( doc.isNull() )
   {
     errorTitle = QStringLiteral( "Parsing error" );
@@ -304,7 +312,7 @@ void QgsArcGisRestQueryUtils::visitServiceItems( const std::function<void ( cons
     const ServiceTypeFilter type = serviceType == QLatin1String( "FeatureServer" ) ? Vector : Raster;
 
     const QString serviceName = serviceMap.value( QStringLiteral( "name" ) ).toString();
-    QString displayName = serviceName.split( '/' ).last();
+    const QString displayName = serviceName.split( '/' ).last();
     if ( !baseChecked )
     {
       adjustBaseUrl( base, serviceName );
@@ -476,7 +484,7 @@ void QgsArcGisAsyncQuery::handleReply()
   }
 
   // Handle HTTP redirects
-  QVariant redirect = mReply->attribute( QNetworkRequest::RedirectionTargetAttribute );
+  const QVariant redirect = mReply->attribute( QNetworkRequest::RedirectionTargetAttribute );
   if ( !redirect.isNull() )
   {
     QNetworkRequest request = mReply->request();
@@ -497,7 +505,7 @@ void QgsArcGisAsyncQuery::handleReply()
 // QgsArcGisAsyncParallelQuery
 //
 
-QgsArcGisAsyncParallelQuery::QgsArcGisAsyncParallelQuery( const QString &authcfg, const QgsStringMap &requestHeaders, QObject *parent )
+QgsArcGisAsyncParallelQuery::QgsArcGisAsyncParallelQuery( const QString &authcfg, const QgsHttpHeaders &requestHeaders, QObject *parent )
   : QObject( parent )
   , mAuthCfg( authcfg )
   , mRequestHeaders( requestHeaders )
@@ -515,10 +523,7 @@ void QgsArcGisAsyncParallelQuery::start( const QVector<QUrl> &urls, QVector<QByt
     QgsSetRequestInitiatorClass( request, QStringLiteral( "QgsArcGisAsyncParallelQuery" ) );
     QgsSetRequestInitiatorId( request, QString::number( i ) );
 
-    for ( auto it = mRequestHeaders.constBegin(); it != mRequestHeaders.constEnd(); ++it )
-    {
-      request.setRawHeader( it.key().toUtf8(), it.value().toUtf8() );
-    }
+    mRequestHeaders.updateNetworkRequest( request );
     if ( !mAuthCfg.isEmpty() && !QgsApplication::authManager()->updateNetworkRequest( request, mAuthCfg ) )
     {
       const QString error = tr( "network request update failed for authentication config" );
@@ -543,8 +548,8 @@ void QgsArcGisAsyncParallelQuery::start( const QVector<QUrl> &urls, QVector<QByt
 void QgsArcGisAsyncParallelQuery::handleReply()
 {
   QNetworkReply *reply = qobject_cast<QNetworkReply *>( QObject::sender() );
-  QVariant redirect = reply->attribute( QNetworkRequest::RedirectionTargetAttribute );
-  int idx = reply->property( "idx" ).toInt();
+  const QVariant redirect = reply->attribute( QNetworkRequest::RedirectionTargetAttribute );
+  const int idx = reply->property( "idx" ).toInt();
   reply->deleteLater();
   if ( reply->error() != QNetworkReply::NoError )
   {

@@ -357,7 +357,7 @@ void QgsDataItem::refresh( const QVector<QgsDataItem *> &children )
     if ( !child ) // should not happen
       continue;
 
-    int index = findItem( mChildren, child );
+    const int index = findItem( mChildren, child );
     if ( index >= 0 )
     {
       // Refresh recursively (some providers may create more generations of descendants)
@@ -365,6 +365,11 @@ void QgsDataItem::refresh( const QVector<QgsDataItem *> &children )
       {
         // The child cannot createChildren() itself
         mChildren.value( index )->refresh( child->children() );
+      }
+      else if ( mChildren.value( index )->state() == Qgis::BrowserItemState::Populated
+                && ( child->capabilities2() & Qgis::BrowserItemCapability::RefreshChildrenWhenItemIsRefreshed ) )
+      {
+        mChildren.value( index )->refresh();
       }
 
       child->deleteLater();
@@ -456,7 +461,7 @@ void QgsDataItem::addChildItem( QgsDataItem *child, bool refresh )
 void QgsDataItem::deleteChildItem( QgsDataItem *child )
 {
   QgsDebugMsgLevel( "mName = " + child->mName, 2 );
-  int i = mChildren.indexOf( child );
+  const int i = mChildren.indexOf( child );
   Q_ASSERT( i >= 0 );
   emit beginRemoveItems( this, i, i );
   mChildren.remove( i );
@@ -467,7 +472,7 @@ void QgsDataItem::deleteChildItem( QgsDataItem *child )
 QgsDataItem *QgsDataItem::removeChildItem( QgsDataItem *child )
 {
   QgsDebugMsgLevel( "mName = " + child->mName, 2 );
-  int i = mChildren.indexOf( child );
+  const int i = mChildren.indexOf( child );
   Q_ASSERT( i >= 0 );
   if ( i < 0 )
   {
@@ -512,7 +517,20 @@ bool QgsDataItem::handleDoubleClick()
 
 QgsMimeDataUtils::Uri QgsDataItem::mimeUri() const
 {
-  return mimeUris().isEmpty() ? QgsMimeDataUtils::Uri() : mimeUris().first();
+  return mimeUris().isEmpty() ? QgsMimeDataUtils::Uri() : mimeUris().constFirst();
+}
+
+QgsMimeDataUtils::UriList QgsDataItem::mimeUris() const
+{
+  if ( capabilities2() & Qgis::BrowserItemCapability::ItemRepresentsFile )
+  {
+    QgsMimeDataUtils::Uri uri;
+    uri.uri = path();
+    uri.filePath = path();
+    return { uri };
+  }
+
+  return {};
 }
 
 bool QgsDataItem::setCrs( const QgsCoordinateReferenceSystem &crs )
@@ -542,7 +560,7 @@ void QgsDataItem::setState( Qgis::BrowserItemState state )
   if ( state == mState )
     return;
 
-  Qgis::BrowserItemState oldState = mState;
+  const Qgis::BrowserItemState oldState = mState;
 
   if ( state == Qgis::BrowserItemState::Populating ) // start loading
   {

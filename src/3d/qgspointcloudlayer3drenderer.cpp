@@ -55,7 +55,7 @@ void QgsPointCloud3DRenderContext::setFilteredOutCategories( const QgsPointCloud
 QSet<int> QgsPointCloud3DRenderContext::getFilteredOutValues() const
 {
   QSet<int> filteredOut;
-  for ( QgsPointCloudCategory category : mFilteredOutCategories )
+  for ( const QgsPointCloudCategory &category : mFilteredOutCategories )
     filteredOut.insert( category.value() );
   return filteredOut;
 }
@@ -133,11 +133,12 @@ Qt3DCore::QEntity *QgsPointCloudLayer3DRenderer::createEntity( const Qgs3DMapSet
   if ( !mSymbol )
     return nullptr;
 
-  QgsCoordinateTransform coordinateTransform( pcl->crs(), map.crs(), map.transformContext() );
+  const QgsCoordinateTransform coordinateTransform( pcl->crs(), map.crs(), map.transformContext() );
 
-  return new QgsPointCloudLayerChunkedEntity( pcl->dataProvider()->index(), map, coordinateTransform, dynamic_cast<QgsPointCloud3DSymbol *>( mSymbol->clone() ), maximumScreenError(), showBoundingBoxes(),
-         static_cast< const QgsPointCloudLayerElevationProperties * >( pcl->elevationProperties() )->zScale(),
-         static_cast< const QgsPointCloudLayerElevationProperties * >( pcl->elevationProperties() )->zOffset(), mPointBudget );
+  QgsPointCloudLayerChunkedEntity *entity = new QgsPointCloudLayerChunkedEntity( pcl->dataProvider()->index(), map, coordinateTransform, dynamic_cast<QgsPointCloud3DSymbol *>( mSymbol->clone() ), maximumScreenError(), showBoundingBoxes(),
+      static_cast< const QgsPointCloudLayerElevationProperties * >( pcl->elevationProperties() )->zScale(),
+      static_cast< const QgsPointCloudLayerElevationProperties * >( pcl->elevationProperties() )->zOffset(), mPointBudget );
+  return entity;
 }
 
 void QgsPointCloudLayer3DRenderer::setSymbol( QgsPointCloud3DSymbol *symbol )
@@ -169,7 +170,7 @@ void QgsPointCloudLayer3DRenderer::readXml( const QDomElement &elem, const QgsRe
 {
   mLayerRef = QgsMapLayerRef( elem.attribute( QStringLiteral( "layer" ) ) );
 
-  QDomElement elemSymbol = elem.firstChildElement( QStringLiteral( "symbol" ) );
+  const QDomElement elemSymbol = elem.firstChildElement( QStringLiteral( "symbol" ) );
 
   const QString symbolType = elemSymbol.attribute( QStringLiteral( "type" ) );
   mShowBoundingBoxes = elem.attribute( QStringLiteral( "show-bounding-boxes" ), QStringLiteral( "0" ) ).toInt();
@@ -221,4 +222,22 @@ void QgsPointCloudLayer3DRenderer::setPointRenderingBudget( int budget )
   mPointBudget = budget;
 }
 
+bool QgsPointCloudLayer3DRenderer::convertFrom2DRenderer( QgsPointCloudRenderer *renderer )
+{
+  std::unique_ptr< QgsPointCloudLayer3DRenderer > renderer3D = Qgs3DUtils::convert2DPointCloudRendererTo3D( renderer );
+  if ( !renderer3D )
+  {
+    setSymbol( nullptr );
+    return false;
+  }
 
+  QgsPointCloud3DSymbol *newSymbol = const_cast<QgsPointCloud3DSymbol *>(
+                                       static_cast<QgsPointCloud3DSymbol *>( renderer3D->symbol()->clone() )
+                                     );
+  // we need to retain some settings from the previous symbol, like point size
+  const QgsPointCloud3DSymbol *oldSymbol = symbol();
+  if ( oldSymbol )
+    oldSymbol->copyBaseSettings( newSymbol );
+  setSymbol( newSymbol );
+  return true;
+}

@@ -16,12 +16,21 @@
 #include "qgis.h"
 #include "qgsexception.h"
 #include "qgsconfig.h"
+#include "qgsproviderregistry.h"
+#include "qgsprovidermetadata.h"
+
 #include <QObject>
 #include <QRegularExpression>
 #include <QFileInfo>
 #include <QDir>
 #include <QSet>
 #include <QDirIterator>
+
+#ifdef Q_OS_UNIX
+// For getrlimit()
+#include <sys/resource.h>
+#include <sys/time.h>
+#endif
 
 #ifdef MSVC
 #include <Windows.h>
@@ -35,14 +44,15 @@ QString QgsFileUtils::representFileSize( qint64 bytes )
   list << QObject::tr( "KB" ) << QObject::tr( "MB" ) << QObject::tr( "GB" ) << QObject::tr( "TB" );
 
   QStringListIterator i( list );
-  QString unit = QObject::tr( "bytes" );
+  QString unit = QObject::tr( "B" );
 
-  while ( bytes >= 1024.0 && i.hasNext() )
+  double fileSize = bytes;
+  while ( fileSize >= 1024.0 && i.hasNext() )
   {
+    fileSize /= 1024.0;
     unit = i.next();
-    bytes /= 1024.0;
   }
-  return QStringLiteral( "%1 %2" ).arg( QString::number( bytes ), unit );
+  return QStringLiteral( "%1 %2" ).arg( QString::number( fileSize, 'f', bytes >= 1048576 ? 2 : 0 ), unit );
 }
 
 QStringList QgsFileUtils::extensionsFromFilter( const QString &filter )
@@ -365,4 +375,129 @@ bool QgsFileUtils::pathIsSlowDevice( const QString &path )
 
   }
   return false;
+}
+
+QSet<QString> QgsFileUtils::sidecarFilesForPath( const QString &path )
+{
+  QSet< QString > res;
+  const QStringList providers = QgsProviderRegistry::instance()->providerList();
+  for ( const QString &provider : providers )
+  {
+    const QgsProviderMetadata *metadata = QgsProviderRegistry::instance()->providerMetadata( provider );
+    if ( metadata->providerCapabilities() & QgsProviderMetadata::FileBasedUris )
+    {
+      const QStringList possibleSidecars = metadata->sidecarFilesForUri( path );
+      for ( const QString &possibleSidecar : possibleSidecars )
+      {
+        if ( QFile::exists( possibleSidecar ) )
+          res.insert( possibleSidecar );
+      }
+    }
+  }
+  return res;
+}
+
+bool QgsFileUtils::renameDataset( const QString &oldPath, const QString &newPath, QString &error, Qgis::FileOperationFlags flags )
+{
+  if ( !QFile::exists( oldPath ) )
+  {
+    error = QObject::tr( "File does not exist" );
+    return false;
+  }
+
+  const QFileInfo oldPathInfo( oldPath );
+  QSet< QString > sidecars = sidecarFilesForPath( oldPath );
+  if ( flags & Qgis::FileOperationFlag::IncludeMetadataFile )
+  {
+    const QString qmdPath = oldPathInfo.dir().filePath( oldPathInfo.completeBaseName() + QStringLiteral( ".qmd" ) );
+    if ( QFile::exists( qmdPath ) )
+      sidecars.insert( qmdPath );
+  }
+  if ( flags & Qgis::FileOperationFlag::IncludeStyleFile )
+  {
+    const QString qmlPath = oldPathInfo.dir().filePath( oldPathInfo.completeBaseName() + QStringLiteral( ".qml" ) );
+    if ( QFile::exists( qmlPath ) )
+      sidecars.insert( qmlPath );
+  }
+
+  const QFileInfo newPathInfo( newPath );
+
+  bool res = true;
+  QStringList errors;
+  errors.reserve( sidecars.size() );
+  // first check if all sidecars CAN be renamed -- we don't want to get partly through the rename and then find a clash
+  for ( const QString &sidecar : std::as_const( sidecars ) )
+  {
+    const QFileInfo sidecarInfo( sidecar );
+    const QString newSidecarName = newPathInfo.dir().filePath( newPathInfo.completeBaseName() + '.' + sidecarInfo.suffix() );
+    if ( newSidecarName != sidecar && QFile::exists( newSidecarName ) )
+    {
+      res = false;
+      errors.append( QDir::toNativeSeparators( newSidecarName ) );
+    }
+  }
+  if ( !res )
+  {
+    error = QObject::tr( "Destination files already exist %1" ).arg( errors.join( QLatin1String( ", " ) ) );
+    return false;
+  }
+
+  if ( !QFile::rename( oldPath, newPath ) )
+  {
+    error = QObject::tr( "Could not rename %1" ).arg( QDir::toNativeSeparators( oldPath ) );
+    return false;
+  }
+
+  for ( const QString &sidecar : std::as_const( sidecars ) )
+  {
+    const QFileInfo sidecarInfo( sidecar );
+    const QString newSidecarName = newPathInfo.dir().filePath( newPathInfo.completeBaseName() + '.' + sidecarInfo.suffix() );
+    if ( newSidecarName == sidecar )
+      continue;
+
+    if ( !QFile::rename( sidecar, newSidecarName ) )
+    {
+      errors.append( QDir::toNativeSeparators( sidecar ) );
+      res = false;
+    }
+  }
+  if ( !res )
+  {
+    error = QObject::tr( "Could not rename %1" ).arg( errors.join( QLatin1String( ", " ) ) );
+  }
+
+  return res;
+}
+
+int QgsFileUtils::openedFileLimit()
+{
+#ifdef Q_OS_UNIX
+  struct rlimit rescLimit;
+  if ( getrlimit( RLIMIT_NOFILE, &rescLimit ) == 0 )
+  {
+    return rescLimit.rlim_cur;
+  }
+#endif
+  return -1;
+}
+
+int QgsFileUtils::openedFileCount()
+{
+#ifdef Q_OS_LINUX
+  int res = static_cast<int>( QDir( "/proc/self/fd" ).entryList().size() );
+  if ( res == 0 )
+    res = -1;
+  return res;
+#else
+  return -1;
+#endif
+}
+
+bool QgsFileUtils::isCloseToLimitOfOpenedFiles( int filesToBeOpened )
+{
+  const int nFileLimit = QgsFileUtils::openedFileLimit();
+  const int nFileCount = QgsFileUtils::openedFileCount();
+  // We need some margin as Qt will crash if it cannot create some file descriptors
+  constexpr int SOME_MARGIN = 20;
+  return nFileCount > 0 && nFileLimit > 0 && nFileCount + filesToBeOpened > nFileLimit - SOME_MARGIN;
 }

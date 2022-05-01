@@ -32,6 +32,8 @@
 #include "qgsembeddedsymbolrendererwidget.h"
 #include "qgspanelwidget.h"
 #include "qgspainteffect.h"
+#include "qgsproject.h"
+#include "qgsprojectutils.h"
 
 #include "qgsorderbydialog.h"
 #include "qgsapplication.h"
@@ -104,7 +106,7 @@ QgsRendererPropertiesDialog::QgsRendererPropertiesDialog( QgsVectorLayer *layer,
   _initRendererWidgetFunctions();
 
   QgsRendererRegistry *reg = QgsApplication::rendererRegistry();
-  QStringList renderers = reg->renderersList( mLayer );
+  const QStringList renderers = reg->renderersList( mLayer );
   const auto constRenderers = renderers;
   for ( const QString &name : constRenderers )
   {
@@ -226,7 +228,7 @@ void QgsRendererPropertiesDialog::rendererChanged()
     return;
   }
 
-  QString rendererName = cboRenderers->currentData().toString();
+  const QString rendererName = cboRenderers->currentData().toString();
 
   //Retrieve the previous renderer: from the old active widget if possible, otherwise from the layer
   QgsFeatureRenderer *oldRenderer = nullptr;
@@ -327,7 +329,7 @@ void QgsRendererPropertiesDialog::openPanel( QgsPanelWidget *panel )
   {
     // Show the dialog version if no one is connected
     QDialog *dlg = new QDialog();
-    QString key = QStringLiteral( "/UI/paneldialog/%1" ).arg( panel->panelTitle() );
+    const QString key = QStringLiteral( "/UI/paneldialog/%1" ).arg( panel->panelTitle() );
     QgsSettings settings;
     dlg->restoreGeometry( settings.value( key ).toByteArray() );
     dlg->setWindowTitle( panel->panelTitle() );
@@ -344,6 +346,9 @@ void QgsRendererPropertiesDialog::openPanel( QgsPanelWidget *panel )
 
 void QgsRendererPropertiesDialog::syncToLayer()
 {
+  mBlendModeComboBox->setShowClippingModes( QgsProjectUtils::layerIsContainedInGroupLayer( QgsProject::instance(), mLayer ) );
+  mFeatureBlendComboBox->setShowClippingModes( mBlendModeComboBox->showClippingModes() );
+
   // Blend mode
   mBlendModeComboBox->setBlendMode( mLayer->blendMode() );
 
@@ -381,9 +386,9 @@ void QgsRendererPropertiesDialog::syncToLayer()
   if ( mLayer->renderer() )
   {
     // set current renderer from layer
-    QString rendererName = mLayer->renderer()->type();
+    const QString rendererName = mLayer->renderer()->type();
 
-    int rendererIdx = cboRenderers->findData( rendererName );
+    const int rendererIdx = cboRenderers->findData( rendererName );
     cboRenderers->setCurrentIndex( rendererIdx );
 
     // no renderer found... this mustn't happen

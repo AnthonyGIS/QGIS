@@ -70,7 +70,7 @@ class QgsNetworkProxyFactory : public QNetworkProxyFactory
       const auto constProxyFactories = nam->proxyFactories();
       for ( QNetworkProxyFactory *f : constProxyFactories )
       {
-        QList<QNetworkProxy> systemproxies = f->systemProxyForQuery( query );
+        QList<QNetworkProxy> systemproxies = QNetworkProxyFactory::systemProxyForQuery( query );
         if ( !systemproxies.isEmpty() )
           return systemproxies;
 
@@ -83,7 +83,7 @@ class QgsNetworkProxyFactory : public QNetworkProxyFactory
       if ( query.queryType() != QNetworkProxyQuery::UrlRequest )
         return QList<QNetworkProxy>() << nam->fallbackProxy();
 
-      QString url = query.url().toString();
+      const QString url = query.url().toString();
 
       const auto constNoProxyList = nam->noProxyList();
       for ( const QString &noProxy : constNoProxyList )
@@ -139,7 +139,7 @@ class QgsNetworkCookieJar : public QNetworkCookieJar
 
     bool deleteCookie( const QNetworkCookie &cookie ) override
     {
-      QMutexLocker locker( &mMutex );
+      const QMutexLocker locker( &mMutex );
       if ( QNetworkCookieJar::deleteCookie( cookie ) )
       {
         emit mNam->cookiesChanged( allCookies() );
@@ -149,7 +149,7 @@ class QgsNetworkCookieJar : public QNetworkCookieJar
     }
     bool insertCookie( const QNetworkCookie &cookie ) override
     {
-      QMutexLocker locker( &mMutex );
+      const QMutexLocker locker( &mMutex );
       if ( QNetworkCookieJar::insertCookie( cookie ) )
       {
         emit mNam->cookiesChanged( allCookies() );
@@ -159,12 +159,12 @@ class QgsNetworkCookieJar : public QNetworkCookieJar
     }
     bool setCookiesFromUrl( const QList<QNetworkCookie> &cookieList, const QUrl &url ) override
     {
-      QMutexLocker locker( &mMutex );
+      const QMutexLocker locker( &mMutex );
       return QNetworkCookieJar::setCookiesFromUrl( cookieList, url );
     }
     bool updateCookie( const QNetworkCookie &cookie ) override
     {
-      QMutexLocker locker( &mMutex );
+      const QMutexLocker locker( &mMutex );
       if ( QNetworkCookieJar::updateCookie( cookie ) )
       {
         emit mNam->cookiesChanged( allCookies() );
@@ -176,12 +176,12 @@ class QgsNetworkCookieJar : public QNetworkCookieJar
     // Override these to make them public
     QList<QNetworkCookie> allCookies() const
     {
-      QMutexLocker locker( &mMutex );
+      const QMutexLocker locker( &mMutex );
       return QNetworkCookieJar::allCookies();
     }
     void setAllCookies( const QList<QNetworkCookie> &cookieList )
     {
-      QMutexLocker locker( &mMutex );
+      const QMutexLocker locker( &mMutex );
       QNetworkCookieJar::setAllCookies( cookieList );
     }
 
@@ -217,6 +217,7 @@ QgsNetworkAccessManager *QgsNetworkAccessManager::instance( Qt::ConnectionType c
 
 QgsNetworkAccessManager::QgsNetworkAccessManager( QObject *parent )
   : QNetworkAccessManager( parent )
+  , mAuthRequestHandlerSemaphore( 1 )
 {
   setProxyFactory( new QgsNetworkProxyFactory() );
   setCookieJar( new QgsNetworkCookieJar( this ) );
@@ -298,18 +299,18 @@ void QgsNetworkAccessManager::setFallbackProxyAndExcludes( const QNetworkProxy &
 
 QNetworkReply *QgsNetworkAccessManager::createRequest( QNetworkAccessManager::Operation op, const QNetworkRequest &req, QIODevice *outgoingData )
 {
-  QgsSettings s;
+  const QgsSettings s;
 
   QNetworkRequest *pReq( const_cast< QNetworkRequest * >( &req ) ); // hack user agent
 
   QString userAgent = s.value( QStringLiteral( "/qgis/networkAndProxy/userAgent" ), "Mozilla/5.0" ).toString();
   if ( !userAgent.isEmpty() )
     userAgent += ' ';
-  userAgent += QStringLiteral( "QGIS/%1" ).arg( Qgis::versionInt() );
+  userAgent += QStringLiteral( "QGIS/%1/%2" ).arg( Qgis::versionInt() ).arg( QSysInfo::prettyProductName() );
   pReq->setRawHeader( "User-Agent", userAgent.toLatin1() );
 
 #ifndef QT_NO_SSL
-  bool ishttps = pReq->url().scheme().compare( QLatin1String( "https" ), Qt::CaseInsensitive ) == 0;
+  const bool ishttps = pReq->url().scheme().compare( QLatin1String( "https" ), Qt::CaseInsensitive ) == 0;
   if ( ishttps && !QgsApplication::authManager()->isDisabled() )
   {
     QgsDebugMsgLevel( QStringLiteral( "Adding trusted CA certs to request" ), 3 );
@@ -317,10 +318,10 @@ QNetworkReply *QgsNetworkAccessManager::createRequest( QNetworkAccessManager::Op
     // Merge trusted CAs with any additional CAs added by the authentication methods
     sslconfig.setCaCertificates( QgsAuthCertUtils::casMerge( QgsApplication::authManager()->trustedCaCertsCache(), sslconfig.caCertificates( ) ) );
     // check for SSL cert custom config
-    QString hostport( QStringLiteral( "%1:%2" )
-                      .arg( pReq->url().host().trimmed() )
-                      .arg( pReq->url().port() != -1 ? pReq->url().port() : 443 ) );
-    QgsAuthConfigSslServer servconfig = QgsApplication::authManager()->sslCertCustomConfigByHost( hostport.trimmed() );
+    const QString hostport( QStringLiteral( "%1:%2" )
+                            .arg( pReq->url().host().trimmed() )
+                            .arg( pReq->url().port() != -1 ? pReq->url().port() : 443 ) );
+    const QgsAuthConfigSslServer servconfig = QgsApplication::authManager()->sslCertCustomConfigByHost( hostport.trimmed() );
     if ( !servconfig.isNull() )
     {
       QgsDebugMsg( QStringLiteral( "Adding SSL custom config to request for %1" ).arg( hostport ) );
@@ -466,23 +467,12 @@ void QgsNetworkAccessManager::afterSslErrorHandled( QNetworkReply *reply )
   }
 }
 
-void QgsNetworkAccessManager::unlockAfterAuthRequestHandled()
-{
-  Q_ASSERT( QThread::currentThread() == QApplication::instance()->thread() );
-  mAuthRequestWaitCondition.wakeOne();
-}
-
 void QgsNetworkAccessManager::afterAuthRequestHandled( QNetworkReply *reply )
 {
   if ( reply->manager() == this )
   {
     restartTimeout( reply );
     emit authRequestHandled( reply );
-  }
-  else if ( this == sMainNAM )
-  {
-    // notify other threads to allow them to handle the reply
-    qobject_cast< QgsNetworkAccessManager *>( reply->manager() )->unlockAfterAuthRequestHandled(); // safe to call directly - the other thread will be stuck waiting for us
   }
 }
 
@@ -534,6 +524,7 @@ void QgsNetworkAccessManager::onAuthRequired( QNetworkReply *reply, QAuthenticat
 
   emit requestRequiresAuth( getRequestId( reply ), auth->realm() );
 
+  mAuthRequestHandlerSemaphore.acquire();
   // in main thread this will trigger auth handler immediately and return once the request is satisfied,
   // while in worker thread the signal will be queued (and return immediately) -- hence the need to lock the thread in the next block
   emit authRequestOccurred( reply, auth );
@@ -542,9 +533,8 @@ void QgsNetworkAccessManager::onAuthRequired( QNetworkReply *reply, QAuthenticat
   {
     // lock thread and wait till error is handled. If we return from this slot now, then the reply will resume
     // without actually giving the main thread the chance to act on the ssl error and possibly ignore it.
-    mAuthRequestHandlerMutex.lock();
-    mAuthRequestWaitCondition.wait( &mAuthRequestHandlerMutex );
-    mAuthRequestHandlerMutex.unlock();
+    mAuthRequestHandlerSemaphore.acquire();
+    mAuthRequestHandlerSemaphore.release();
     afterAuthRequestHandled( reply );
   }
 }
@@ -587,6 +577,7 @@ void QgsNetworkAccessManager::handleAuthRequest( QNetworkReply *reply, QAuthenti
   emit requestAuthDetailsAdded( getRequestId( reply ), auth->realm(), auth->user(), auth->password() );
 
   afterAuthRequestHandled( reply );
+  qobject_cast<QgsNetworkAccessManager *>( reply->manager() )->mAuthRequestHandlerSemaphore.release();
 }
 
 QString QgsNetworkAccessManager::cacheLoadControlName( QNetworkRequest::CacheLoadControl control )
@@ -681,12 +672,12 @@ void QgsNetworkAccessManager::setupDefaultProxyAndCache( Qt::ConnectionType conn
   connect( this, &QNetworkAccessManager::finished, this, &QgsNetworkAccessManager::onReplyFinished );
 
   // check if proxy is enabled
-  QgsSettings settings;
+  const QgsSettings settings;
   QNetworkProxy proxy;
   QStringList excludes;
   QStringList noProxyURLs;
 
-  bool proxyEnabled = settings.value( QStringLiteral( "proxy/proxyEnabled" ), false ).toBool();
+  const bool proxyEnabled = settings.value( QStringLiteral( "proxy/proxyEnabled" ), false ).toBool();
   if ( proxyEnabled )
   {
     // This settings is keep for retrocompatibility, the returned proxy for these URL is the default one,
@@ -696,13 +687,13 @@ void QgsNetworkAccessManager::setupDefaultProxyAndCache( Qt::ConnectionType conn
     noProxyURLs = settings.value( QStringLiteral( "proxy/noProxyUrls" ), QStringList() ).toStringList();
 
     //read type, host, port, user, passw from settings
-    QString proxyHost = settings.value( QStringLiteral( "proxy/proxyHost" ), "" ).toString();
-    int proxyPort = settings.value( QStringLiteral( "proxy/proxyPort" ), "" ).toString().toInt();
+    const QString proxyHost = settings.value( QStringLiteral( "proxy/proxyHost" ), "" ).toString();
+    const int proxyPort = settings.value( QStringLiteral( "proxy/proxyPort" ), "" ).toString().toInt();
 
-    QString proxyUser = settings.value( QStringLiteral( "proxy/proxyUser" ), "" ).toString();
-    QString proxyPassword = settings.value( QStringLiteral( "proxy/proxyPassword" ), "" ).toString();
+    const QString proxyUser = settings.value( QStringLiteral( "proxy/proxyUser" ), "" ).toString();
+    const QString proxyPassword = settings.value( QStringLiteral( "proxy/proxyPassword" ), "" ).toString();
 
-    QString proxyTypeString = settings.value( QStringLiteral( "proxy/proxyType" ), "" ).toString();
+    const QString proxyTypeString = settings.value( QStringLiteral( "proxy/proxyType" ), "" ).toString();
 
     if ( proxyTypeString == QLatin1String( "DefaultProxy" ) )
     {
@@ -742,7 +733,7 @@ void QgsNetworkAccessManager::setupDefaultProxyAndCache( Qt::ConnectionType conn
       proxy = QNetworkProxy( proxyType, proxyHost, proxyPort, proxyUser, proxyPassword );
     }
     // Setup network proxy authentication configuration
-    QString authcfg = settings.value( QStringLiteral( "proxy/authcfg" ), "" ).toString();
+    const QString authcfg = settings.value( QStringLiteral( "proxy/authcfg" ), "" ).toString();
     if ( !authcfg.isEmpty( ) )
     {
       QgsDebugMsg( QStringLiteral( "setting proxy from stored authentication configuration %1" ).arg( authcfg ) );
@@ -761,7 +752,7 @@ void QgsNetworkAccessManager::setupDefaultProxyAndCache( Qt::ConnectionType conn
   QString cacheDirectory = settings.value( QStringLiteral( "cache/directory" ) ).toString();
   if ( cacheDirectory.isEmpty() )
     cacheDirectory = QStandardPaths::writableLocation( QStandardPaths::CacheLocation );
-  qint64 cacheSize = settings.value( QStringLiteral( "cache/size" ), 50 * 1024 * 1024 ).toLongLong();
+  const qint64 cacheSize = settings.value( QStringLiteral( "cache/size" ), 256 * 1024 * 1024 ).toLongLong();
   newcache->setCacheDirectory( cacheDirectory );
   newcache->setMaximumCacheSize( cacheSize );
   QgsDebugMsgLevel( QStringLiteral( "cacheDirectory: %1" ).arg( newcache->cacheDirectory() ), 4 );

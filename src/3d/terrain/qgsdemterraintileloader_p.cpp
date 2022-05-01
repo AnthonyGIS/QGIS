@@ -27,6 +27,7 @@
 #include "qgsterraingenerator.h"
 
 #include <Qt3DRender/QGeometryRenderer>
+#include <Qt3DCore/QTransform>
 #include <QMutexLocker>
 
 ///@cond PRIVATE
@@ -111,7 +112,7 @@ Qt3DCore::QEntity *QgsDemTerrainTileLoader::createEntity( Qt3DCore::QEntity *par
 
   // create material
 
-  createTextureComponent( entity, map.isTerrainShadingEnabled(), map.terrainShadingMaterial(), !map.terrainLayers().empty() );
+  createTextureComponent( entity, map.isTerrainShadingEnabled(), map.terrainShadingMaterial(), !map.layers().empty() );
 
   // create transform
 
@@ -123,6 +124,7 @@ Qt3DCore::QEntity *QgsDemTerrainTileLoader::createEntity( Qt3DCore::QEntity *par
   transform->setTranslation( QVector3D( x0 + half, 0, - ( y0 + half ) ) );
 
   mNode->setExactBbox( QgsAABB( x0, zMin * map.terrainVerticalScale(), -y0, x0 + side, zMax * map.terrainVerticalScale(), -( y0 + side ) ) );
+  mNode->updateParentBoundingBoxesRecursively();
 
   entity->setEnabled( false );
   entity->setParent( parent );
@@ -152,7 +154,7 @@ void QgsDemTerrainTileLoader::onHeightMapReady( int jobId, const QByteArray &hei
 
 QgsDemHeightMapGenerator::QgsDemHeightMapGenerator( QgsRasterLayer *dtm, const QgsTilingScheme &tilingScheme, int resolution, const QgsCoordinateTransformContext &transformContext )
   : mDtm( dtm )
-  , mClonedProvider( dtm ? ( QgsRasterDataProvider * )dtm->dataProvider()->clone() : nullptr )
+  , mClonedProvider( dtm ? qgis::down_cast<QgsRasterDataProvider *>( dtm->dataProvider()->clone() ) : nullptr )
   , mTilingScheme( tilingScheme )
   , mResolution( resolution )
   , mLastJobId( 0 )
@@ -228,16 +230,16 @@ int QgsDemHeightMapGenerator::render( const QgsChunkNodeId &nodeId )
   jd.tileId = nodeId;
   jd.extent = extent;
   jd.timer.start();
+  QFutureWatcher<QByteArray> *fw = new QFutureWatcher<QByteArray>( nullptr );
+  connect( fw, &QFutureWatcher<QByteArray>::finished, this, &QgsDemHeightMapGenerator::onFutureFinished );
+  connect( fw, &QFutureWatcher<QByteArray>::finished, fw, &QObject::deleteLater );
   // make a clone of the data provider so it is safe to use in worker thread
   if ( mDtm )
     jd.future = QtConcurrent::run( _readDtmData, mClonedProvider, extent, mResolution, mTilingScheme.crs() );
   else
     jd.future = QtConcurrent::run( _readOnlineDtm, mDownloader.get(), extent, mResolution, mTilingScheme.crs(), mTransformContext );
 
-  QFutureWatcher<QByteArray> *fw = new QFutureWatcher<QByteArray>( nullptr );
   fw->setFuture( jd.future );
-  connect( fw, &QFutureWatcher<QByteArray>::finished, this, &QgsDemHeightMapGenerator::onFutureFinished );
-  connect( fw, &QFutureWatcher<QByteArray>::finished, fw, &QObject::deleteLater );
 
   mJobs.insert( fw, jd );
 

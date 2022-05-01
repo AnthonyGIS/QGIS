@@ -43,6 +43,7 @@ class QgsOgrProviderMetadata final: public QgsProviderMetadata
     ProviderCapabilities providerCapabilities() const override;
     bool uriIsBlocklisted( const QString &uri ) const override;
     QList< QgsProviderSublayerDetails > querySublayers( const QString &uri, Qgis::SublayerQueryFlags flags = Qgis::SublayerQueryFlags(), QgsFeedback *feedback = nullptr ) const override;
+    QStringList sidecarFilesForUri( const QString &uri ) const override;
     Qgis::VectorExportResult createEmptyLayer(
       const QString &uri,
       const QgsFields &fields,
@@ -54,14 +55,15 @@ class QgsOgrProviderMetadata final: public QgsProviderMetadata
       const QMap<QString, QVariant> *options ) override;
 
     // -----
+    bool styleExists( const QString &uri, const QString &styleId, QString &errorCause ) override;
     bool saveStyle( const QString &uri, const QString &qmlStyle, const QString &sldStyle,
                     const QString &styleName, const QString &styleDescription,
                     const QString &uiFileContent, bool useAsDefault, QString &errCause ) override;
-    bool deleteStyleById( const QString &uri, QString styleId, QString &errCause ) override;
+    bool deleteStyleById( const QString &uri, const QString &styleId, QString &errCause ) override;
     QString loadStyle( const QString &uri, QString &errCause ) override;
     int listStyles( const QString &uri, QStringList &ids, QStringList &names,
                     QStringList &descriptions, QString &errCause ) override;
-    QString getStyleById( const QString &uri, QString styleId, QString &errCause ) override;
+    QString getStyleById( const QString &uri, const QString &styleId, QString &errCause ) override;
     bool saveLayerMetadata( const QString &uri, const QgsLayerMetadata &metadata, QString &errorMessage ) final;
 
     // -----

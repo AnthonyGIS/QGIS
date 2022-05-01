@@ -39,6 +39,15 @@ int QgsTerrainTextureGenerator::render( const QgsRectangle &extent, QgsChunkNode
   QgsMapSettings mapSettings( baseMapSettings() );
   mapSettings.setExtent( extent );
 
+  QList<QgsMapLayer *> layers = mMap.layers();
+  QList<QgsMapLayer *> toBeRenderedLayers;
+  for ( QgsMapLayer *l : layers )
+  {
+    if ( l->renderer3D() == nullptr )
+      toBeRenderedLayers.push_back( l );
+  }
+  mapSettings.setLayers( toBeRenderedLayers );
+
   QgsEventTracing::addEvent( QgsEventTracing::AsyncBegin, QStringLiteral( "3D" ), QStringLiteral( "Texture" ), tileId.text() );
 
   QgsMapRendererSequentialJob *job = new QgsMapRendererSequentialJob( mapSettings );
@@ -146,16 +155,17 @@ QgsMapSettings QgsTerrainTextureGenerator::baseMapSettings()
   mapSettings.setOutputSize( mTextureSize );
   mapSettings.setDestinationCrs( mMap.crs() );
   mapSettings.setBackgroundColor( mMap.backgroundColor() );
-  mapSettings.setFlag( QgsMapSettings::DrawLabeling, mMap.showLabels() );
-  mapSettings.setFlag( QgsMapSettings::Render3DMap );
+  mapSettings.setFlag( Qgis::MapSettingsFlag::DrawLabeling, mMap.showLabels() );
+  mapSettings.setFlag( Qgis::MapSettingsFlag::Render3DMap );
   mapSettings.setTransformContext( mMap.transformContext() );
   mapSettings.setPathResolver( mMap.pathResolver() );
+  mapSettings.setRendererUsage( mMap.rendererUsage() );
 
   QgsMapThemeCollection *mapThemes = mMap.mapThemeCollection();
   QString mapThemeName = mMap.terrainMapTheme();
   if ( mapThemeName.isEmpty() || !mapThemes || !mapThemes->hasMapTheme( mapThemeName ) )
   {
-    mapSettings.setLayers( mMap.terrainLayers() );
+    mapSettings.setLayers( mMap.layers() );
   }
   else
   {

@@ -121,6 +121,90 @@ QList<QgsGeometry> QgsServerParameterDefinition::toGeomList( bool &ok, const cha
   return geoms;
 }
 
+QStringList QgsServerParameterDefinition::toOgcFilterList() const
+{
+  int pos = 0;
+  QStringList filters;
+  const QString filter = toString();
+
+  while ( pos < filter.size() )
+  {
+    if ( pos + 1 < filter.size() && filter[pos] == '(' && filter[pos + 1] == '<' )
+    {
+      // OGC filter on multiple layers
+      int posEnd = filter.indexOf( "Filter>)", pos );
+      if ( posEnd < 0 )
+      {
+        posEnd = filter.size();
+      }
+      filters.append( filter.mid( pos + 1, posEnd - pos + 6 ) );
+      pos = posEnd + 8;
+    }
+    else if ( pos + 1 < filter.size() && filter[pos] == '(' && filter[pos + 1] == ')' )
+    {
+      // empty OGC filter
+      filters.append( "" );
+      pos += 2;
+    }
+    else if ( filter[pos] == '<' && pos + 7 < filter.size() && filter.mid( pos + 1, 6 ).compare( QLatin1String( "Filter" ) ) == 0 )
+    {
+      // Single OGC filter
+      filters.append( filter.mid( pos ) );
+      break;
+    }
+    else
+    {
+      pos += 1;
+    }
+  }
+
+  return filters;
+}
+
+QStringList QgsServerParameterDefinition::toExpressionList() const
+{
+  int pos = 0;
+  QStringList filters;
+  const QString filter = toString();
+
+  auto isOgcFilter = [filter]()
+  {
+    return filter.contains( QStringLiteral( "<Filter>" ) ) or filter.contains( QStringLiteral( "()" ) );
+  };
+
+  while ( pos < filter.size() )
+  {
+    int posEnd = filter.indexOf( ';', pos );
+
+    if ( posEnd == pos + 1 )
+    {
+      if ( ! isOgcFilter() )
+        filters.append( QString() );
+      pos = posEnd;
+      continue;
+    }
+
+    if ( ! isOgcFilter() )
+      filters.append( filter.mid( pos, posEnd - pos ) );
+
+    if ( posEnd < 0 )
+    {
+      pos = filter.size();
+    }
+    else
+    {
+      pos = posEnd + 1;
+    }
+  }
+
+  if ( ! filter.isEmpty() && filter.back() == ';' )
+  {
+    filters.append( QString() );
+  }
+
+  return filters;
+}
+
 QList<QColor> QgsServerParameterDefinition::toColorList( bool &ok, const char delimiter ) const
 {
   ok = true;
@@ -241,7 +325,7 @@ QString QgsServerParameterDefinition::loadUrl( bool &ok ) const
   ok = true;
 
   // Get URL
-  QUrl url = toUrl( ok );
+  const QUrl url = toUrl( ok );
   if ( !ok )
   {
     return QString();
@@ -273,7 +357,7 @@ QString QgsServerParameterDefinition::loadUrl( bool &ok ) const
     return QString();
   }
 
-  QVariant status = reply->attribute( QNetworkRequest::HttpStatusCodeAttribute );
+  const QVariant status = reply->attribute( QNetworkRequest::HttpStatusCodeAttribute );
   if ( !status.isNull() && status.toInt() >= 400 )
   {
     ok = false;
@@ -283,7 +367,7 @@ QString QgsServerParameterDefinition::loadUrl( bool &ok ) const
         QObject::tr( "Request failed [error: %1 - url: %2]" ).arg( reply->errorString(), reply->url().toString() ),
         QStringLiteral( "Server" ) );
     }
-    QVariant phrase = reply->attribute( QNetworkRequest::HttpReasonPhraseAttribute );
+    const QVariant phrase = reply->attribute( QNetworkRequest::HttpReasonPhraseAttribute );
     QgsMessageLog::logMessage(
       QObject::tr( "Request error [status: %1 - reason phrase: %2] for %3" ).arg( status.toInt() ).arg( phrase.toString(), reply->url().toString() ),
       QStringLiteral( "Server" ) );
@@ -454,7 +538,7 @@ QUrlQuery QgsServerParameters::urlQuery() const
     const auto constMap( toMap().toStdMap() );
     for ( const auto &param : constMap )
     {
-      const QString value = QString( param.second ).replace( '+', QLatin1String( "%2B" ) );
+      const QString value = QUrl::toPercentEncoding( QString( param.second ) );
       query.addQueryItem( param.first, value );
     }
   }
@@ -475,7 +559,7 @@ void QgsServerParameters::remove( const QString &key )
   }
   else
   {
-    QgsServerParameter::Name paramName = QgsServerParameter::name( key );
+    const QgsServerParameter::Name paramName = QgsServerParameter::name( key );
     if ( mParameters.contains( paramName ) )
     {
       mParameters.take( paramName );

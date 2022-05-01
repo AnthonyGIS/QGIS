@@ -50,6 +50,7 @@ enum QgsOraclePrimaryKeyType
   PktFidMap
 };
 
+
 /**
   * \class QgsOracleProvider
   * \brief Data provider for oracle layers.
@@ -173,7 +174,7 @@ class QgsOracleProvider final: public QgsVectorDataProvider
     QString description() const override;
     QgsFeatureIterator getFeatures( const QgsFeatureRequest &request = QgsFeatureRequest() ) const override;
 
-    static bool exec( QSqlQuery &qry, QString sql, const QVariantList &args );
+    static bool execLoggedStatic( QSqlQuery &qry, const QString &sql, const QVariantList &args, const QString &uri, const QString &originatorClass = QString(), const QString &queryOrigin = QString() );
 
     bool isSaveAndLoadStyleToDatabaseSupported() const override { return true; }
     void setTransaction( QgsTransaction *transaction ) override;
@@ -188,6 +189,10 @@ class QgsOracleProvider final: public QgsVectorDataProvider
      * Retrieve oracle workspace name
      */
     QString getWorkspace() const;
+
+    Qgis::VectorLayerTypeFlags vectorLayerTypeFlags() const override;
+
+    void handlePostCloneOperations( QgsVectorDataProvider *source ) override;
 
   private:
     QString whereClause( QgsFeatureId featureId, QVariantList &args ) const;
@@ -414,9 +419,10 @@ class QgsOracleProviderMetadata final: public QgsProviderMetadata
 
   public:
     QgsOracleProviderMetadata();
-    QString getStyleById( const QString &uri, QString styleId, QString &errCause ) override;
+    QString getStyleById( const QString &uri, const QString &styleId, QString &errCause ) override;
     int listStyles( const QString &uri, QStringList &ids, QStringList &names, QStringList &descriptions, QString &errCause ) override;
     QString loadStyle( const QString &uri, QString &errCause ) override;
+    bool styleExists( const QString &uri, const QString &styleId, QString &errorCause ) override;
     bool saveStyle( const QString &uri, const QString &qmlStyle, const QString &sldStyle, const QString &styleName,
                     const QString &styleDescription, const QString &uiFileContent, bool useAsDefault, QString &errCause ) override;
     void cleanupProvider() override;

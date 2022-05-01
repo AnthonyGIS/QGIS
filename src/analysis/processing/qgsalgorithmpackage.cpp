@@ -92,7 +92,7 @@ QVariantMap QgsPackageAlgorithm::processAlgorithm( const QVariantMap &parameters
   const bool saveStyles = parameterAsBoolean( parameters, QStringLiteral( "SAVE_STYLES" ), context );
   const bool saveMetadata = parameterAsBoolean( parameters, QStringLiteral( "SAVE_METADATA" ), context );
   const bool selectedFeaturesOnly = parameterAsBoolean( parameters, QStringLiteral( "SELECTED_FEATURES_ONLY" ), context );
-  QString packagePath = parameterAsString( parameters, QStringLiteral( "OUTPUT" ), context );
+  const QString packagePath = parameterAsString( parameters, QStringLiteral( "OUTPUT" ), context );
   if ( packagePath.isEmpty() )
     throw QgsProcessingException( QObject::tr( "No output file specified." ) );
 
@@ -157,7 +157,7 @@ QVariantMap QgsPackageAlgorithm::processAlgorithm( const QVariantMap &parameters
       case QgsMapLayerType::VectorLayer:
       {
         QgsVectorLayer *vectorLayer = qobject_cast<QgsVectorLayer *>( layer.get() );
-        bool onlySaveSelected = vectorLayer->selectedFeatureCount() > 0 && selectedFeaturesOnly;
+        const bool onlySaveSelected = vectorLayer->selectedFeatureCount() > 0 && selectedFeaturesOnly;
         if ( !packageVectorLayer( vectorLayer, packagePath, context, &multiStepFeedback, saveStyles, saveMetadata, onlySaveSelected ) )
           errored = true;
         else
@@ -202,6 +202,12 @@ QVariantMap QgsPackageAlgorithm::processAlgorithm( const QVariantMap &parameters
         feedback->pushDebugInfo( QObject::tr( "Packaging annotation layers is not supported." ) );
         errored = true;
         break;
+
+      case QgsMapLayerType::GroupLayer:
+        //not supported
+        feedback->pushDebugInfo( QObject::tr( "Packaging group layers is not supported." ) );
+        errored = true;
+        break;
     }
   }
 
@@ -232,7 +238,7 @@ bool QgsPackageAlgorithm::packageVectorLayer( QgsVectorLayer *layer, const QStri
 
   // remove any existing FID field, let this be completely recreated
   // since many layer sources have fid fields which are not compatible with gpkg requirements
-  QgsFields fields = layer->fields();
+  const QgsFields fields = layer->fields();
   const int fidIndex = fields.lookupField( QStringLiteral( "fid" ) );
 
   options.attributes = fields.allAttributesList();
@@ -261,7 +267,7 @@ bool QgsPackageAlgorithm::packageVectorLayer( QgsVectorLayer *layer, const QStri
       {
         QString errorMsg;
         QDomDocument doc( QStringLiteral( "qgis" ) );
-        QgsReadWriteContext context;
+        const QgsReadWriteContext context;
         layer->exportNamedStyle( doc, errorMsg, context );
         if ( !errorMsg.isEmpty() )
         {
@@ -277,7 +283,7 @@ bool QgsPackageAlgorithm::packageVectorLayer( QgsVectorLayer *layer, const QStri
           {
             QgsSettings settings;
             // this is not nice -- but needed to avoid an "overwrite" prompt messagebox from the provider! This api needs a rework to avoid this.
-            QVariant prevOverwriteStyle = settings.value( QStringLiteral( "qgis/overwriteStyle" ) );
+            const QVariant prevOverwriteStyle = settings.value( QStringLiteral( "qgis/overwriteStyle" ) );
             settings.setValue( QStringLiteral( "qgis/overwriteStyle" ), true );
             res->saveStyleToDatabase( newLayer, QString(), true, QString(), errorMsg );
             settings.setValue( QStringLiteral( "qgis/overwriteStyle" ), prevOverwriteStyle );

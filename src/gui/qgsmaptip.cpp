@@ -27,6 +27,8 @@
 #include "qgsexpressioncontextutils.h"
 #include "qgsmaplayertemporalproperties.h"
 #include "qgsvectorlayertemporalproperties.h"
+#include "qgsrendercontext.h"
+#include "qgsmapcanvasutils.h"
 
 // Qt includes
 #include <QPoint>
@@ -63,7 +65,7 @@ void QgsMapTip::showMapTip( QgsMapLayer *pLayer,
   // field defined as the label field in the layer configuration file/database
 
   // Do not render map tips if the layer is not visible
-  if ( !pMapCanvas->layers().contains( pLayer ) )
+  if ( !pMapCanvas->layers( true ).contains( pLayer ) )
   {
     return;
   }
@@ -164,10 +166,10 @@ void QgsMapTip::resizeContent()
 {
 #if WITH_QTWEBKIT
   // Get the content size
-  QWebElement container = mWebView->page()->mainFrame()->findFirstElement(
-                            QStringLiteral( "#QgsWebViewContainer" ) );
-  int width = container.geometry().width() + MARGIN_VALUE * 2;
-  int height = container.geometry().height() + MARGIN_VALUE * 2;
+  const QWebElement container = mWebView->page()->mainFrame()->findFirstElement(
+                                  QStringLiteral( "#QgsWebViewContainer" ) );
+  const int width = container.geometry().width() + MARGIN_VALUE * 2;
+  const int height = container.geometry().height() + MARGIN_VALUE * 2;
   mWidget->resize( width, height );
 #else
   mWebView->adjustSize();
@@ -197,7 +199,7 @@ QString QgsMapTip::fetchFeature( QgsMapLayer *layer, QgsPointXY &mapPosition, Qg
     return QString();
   }
 
-  double searchRadius = QgsMapTool::searchRadiusMU( mapCanvas );
+  const double searchRadius = QgsMapTool::searchRadiusMU( mapCanvas );
 
   QgsRectangle r;
   r.setXMinimum( mapPosition.x() - searchRadius );
@@ -210,18 +212,11 @@ QString QgsMapTip::fetchFeature( QgsMapLayer *layer, QgsPointXY &mapPosition, Qg
   QgsExpressionContext context( QgsExpressionContextUtils::globalProjectLayerScopes( vlayer ) );
   context.appendScope( QgsExpressionContextUtils::mapSettingsScope( mapCanvas->mapSettings() ) );
 
-  QString temporalFilter;
-  if ( mapCanvas->mapSettings().isTemporal() )
-  {
-    if ( !layer->temporalProperties()->isVisibleInTemporalRange( mapCanvas->temporalRange() ) )
-      return QString();
+  const QString canvasFilter = QgsMapCanvasUtils::filterForLayer( mapCanvas, vlayer );
+  if ( canvasFilter ==  QLatin1String( "FALSE" ) )
+    return QString();
 
-    QgsVectorLayerTemporalContext temporalContext;
-    temporalContext.setLayer( vlayer );
-    temporalFilter = qobject_cast< const QgsVectorLayerTemporalProperties * >( layer->temporalProperties() )->createFilterString( temporalContext, mapCanvas->temporalRange() );
-  }
-
-  QString mapTip = vlayer->mapTipTemplate();
+  const QString mapTip = vlayer->mapTipTemplate();
   QString tipString;
   QgsExpression exp( vlayer->displayExpression() );
   QgsFeature feature;
@@ -229,8 +224,8 @@ QString QgsMapTip::fetchFeature( QgsMapLayer *layer, QgsPointXY &mapPosition, Qg
   QgsFeatureRequest request;
   request.setFilterRect( r );
   request.setFlags( QgsFeatureRequest::ExactIntersect );
-  if ( !temporalFilter.isEmpty() )
-    request.setFilterExpression( temporalFilter );
+  if ( !canvasFilter.isEmpty() )
+    request.setFilterExpression( canvasFilter );
 
   if ( mapTip.isEmpty() )
   {
@@ -294,8 +289,8 @@ QString QgsMapTip::fetchFeature( QgsMapLayer *layer, QgsPointXY &mapPosition, Qg
 
 void QgsMapTip::applyFontSettings()
 {
-  QgsSettings settings;
-  QFont defaultFont = qApp->font();
+  const QgsSettings settings;
+  const QFont defaultFont = qApp->font();
   mFontSize = settings.value( QStringLiteral( "/qgis/stylesheet/fontPointSize" ), defaultFont.pointSize() ).toInt();
   mFontFamily = settings.value( QStringLiteral( "/qgis/stylesheet/fontFamily" ), defaultFont.family() ).toString();
 }

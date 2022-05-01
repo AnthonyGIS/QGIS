@@ -139,13 +139,13 @@ QVariantMap QgsFilterByGeometryAlgorithm::processAlgorithm( const QVariantMap &p
   if ( parameters.value( QStringLiteral( "NO_GEOMETRY" ), QVariant() ).isValid() && !noGeomSink )
     throw QgsProcessingException( invalidSinkError( parameters, QStringLiteral( "NO_GEOMETRY" ) ) );
 
-  long count = source->featureCount();
+  const long count = source->featureCount();
   long long pointCount = 0;
   long long lineCount = 0;
   long long polygonCount = 0;
   long long nullCount = 0;
 
-  double step = count > 0 ? 100.0 / count : 1;
+  const double step = count > 0 ? 100.0 / count : 1;
   int current = 0;
 
   QgsFeatureIterator it = source->getFeatures();
@@ -310,6 +310,7 @@ QVariantMap QgsFilterByLayerTypeAlgorithm::processAlgorithm( const QVariantMap &
     case QgsMapLayerType::VectorTileLayer:
     case QgsMapLayerType::AnnotationLayer:
     case QgsMapLayerType::PointCloudLayer:
+    case QgsMapLayerType::GroupLayer:
       break;
   }
 

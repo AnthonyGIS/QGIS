@@ -49,13 +49,8 @@ void QgsMapToolReshape::cadCanvasReleaseEvent( QgsMapMouseEvent *e )
   //add point to list and to rubber band
   if ( e->button() == Qt::LeftButton )
   {
-    int error = addVertex( e->mapPoint(), e->mapPointMatch() );
-    if ( error == 1 )
-    {
-      //current layer is not a vector layer
-      return;
-    }
-    else if ( error == 2 )
+    const int error = addVertex( e->mapPoint(), e->mapPointMatch() );
+    if ( error == 2 )
     {
       //problem with coordinate transformation
       emit messageEmitted( tr( "Cannot transform the point to the layers coordinate system" ), Qgis::MessageLevel::Warning );
@@ -81,14 +76,17 @@ void QgsMapToolReshape::cadCanvasReleaseEvent( QgsMapMouseEvent *e )
   }
 }
 
-bool QgsMapToolReshape::supportsTechnique( QgsMapToolCapture::CaptureTechnique technique ) const
+bool QgsMapToolReshape::supportsTechnique( Qgis::CaptureTechnique technique ) const
 {
   switch ( technique )
   {
-    case QgsMapToolCapture::StraightSegments:
-    case QgsMapToolCapture::CircularString:
-    case QgsMapToolCapture::Streaming:
+    case Qgis::CaptureTechnique::StraightSegments:
+    case Qgis::CaptureTechnique::CircularString:
+    case Qgis::CaptureTechnique::Streaming:
       return true;
+
+    case Qgis::CaptureTechnique::Shape:
+      return false;
   }
   return false;
 }
@@ -126,7 +124,7 @@ bool QgsMapToolReshape::isBindingLine( QgsVectorLayer *vlayer, const QgsRectangl
 
 void QgsMapToolReshape::reshape( QgsVectorLayer *vlayer )
 {
-  QgsPointXY firstPoint = pointsZM().at( 0 );
+  const QgsPointXY firstPoint = pointsZM().at( 0 );
   QgsRectangle bbox( firstPoint.x(), firstPoint.y(), firstPoint.x(), firstPoint.y() );
   for ( int i = 1; i < size(); ++i )
   {
@@ -145,7 +143,7 @@ void QgsMapToolReshape::reshape( QgsVectorLayer *vlayer )
     segmented->points( pts );
   }
 
-  QgsLineString reshapeLineString( pts );
+  const QgsLineString reshapeLineString( pts );
 
   //query all the features that intersect bounding box of capture line
   QgsFeatureRequest req = QgsFeatureRequest().setFilterRect( bbox ).setNoAttributes();
@@ -156,9 +154,9 @@ void QgsMapToolReshape::reshape( QgsVectorLayer *vlayer )
   QgsFeatureIterator fit = vlayer->getFeatures( req );
 
   QgsFeature f;
-  int reshapeReturn;
+  Qgis::GeometryOperationResult reshapeReturn = Qgis::GeometryOperationResult::Success;
   bool reshapeDone = false;
-  bool isBinding = isBindingLine( vlayer, bbox );
+  const bool isBinding = isBindingLine( vlayer, bbox );
 
   vlayer->beginEditCommand( tr( "Reshape" ) );
   while ( fit.nextFeature( f ) )
@@ -175,7 +173,7 @@ void QgsMapToolReshape::reshape( QgsVectorLayer *vlayer )
         continue;
 
       reshapeReturn = geom.reshapeGeometry( reshapeLineString );
-      if ( reshapeReturn == 0 )
+      if ( reshapeReturn == Qgis::GeometryOperationResult::Success )
       {
         //avoid intersections on polygon layers
         if ( vlayer->geometryType() == QgsWkbTypes::PolygonGeometry )
@@ -232,7 +230,7 @@ void QgsMapToolReshape::reshape( QgsVectorLayer *vlayer )
     // Add topological points
     if ( QgsProject::instance()->topologicalEditing() )
     {
-      QList<QgsPointLocator::Match> sm = snappingMatches();
+      const QList<QgsPointLocator::Match> sm = snappingMatches();
       Q_ASSERT( pts.size() == sm.size() );
       for ( int i = 0; i < sm.size() ; ++i )
       {

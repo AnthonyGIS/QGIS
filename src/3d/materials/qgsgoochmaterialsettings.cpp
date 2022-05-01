@@ -135,10 +135,10 @@ void QgsGoochMaterialSettings::addParametersToEffect( Qt3DRender::QEffect * ) co
 QByteArray QgsGoochMaterialSettings::dataDefinedVertexColorsAsByte( const QgsExpressionContext &expressionContext ) const
 {
 
-  QColor diffuse = dataDefinedProperties().valueAsColor( Diffuse, expressionContext, mDiffuse );
-  QColor warm = dataDefinedProperties().valueAsColor( Warm, expressionContext, mWarm );
-  QColor cool = dataDefinedProperties().valueAsColor( Cool, expressionContext, mCool );
-  QColor specular = dataDefinedProperties().valueAsColor( Specular, expressionContext, mSpecular );
+  const QColor diffuse = dataDefinedProperties().valueAsColor( Diffuse, expressionContext, mDiffuse );
+  const QColor warm = dataDefinedProperties().valueAsColor( Warm, expressionContext, mWarm );
+  const QColor cool = dataDefinedProperties().valueAsColor( Cool, expressionContext, mCool );
+  const QColor specular = dataDefinedProperties().valueAsColor( Specular, expressionContext, mSpecular );
 
 
   QByteArray array;
@@ -242,10 +242,10 @@ Qt3DRender::QMaterial *QgsGoochMaterialSettings::dataDefinedMaterial() const
   Qt3DRender::QShaderProgram *shaderProgram = new Qt3DRender::QShaderProgram();
 
   //Load shader programs
-  QUrl urlVert( QStringLiteral( "qrc:/shaders/goochDataDefined.vert" ) );
-  shaderProgram->setShaderCode( Qt3DRender::QShaderProgram::Vertex, shaderProgram->loadSource( urlVert ) );
-  QUrl urlFrag( QStringLiteral( "qrc:/shaders/goochDataDefined.frag" ) );
-  shaderProgram->setShaderCode( Qt3DRender::QShaderProgram::Fragment, shaderProgram->loadSource( urlFrag ) );
+  const QUrl urlVert( QStringLiteral( "qrc:/shaders/goochDataDefined.vert" ) );
+  shaderProgram->setShaderCode( Qt3DRender::QShaderProgram::Vertex, Qt3DRender::QShaderProgram::loadSource( urlVert ) );
+  const QUrl urlFrag( QStringLiteral( "qrc:/shaders/goochDataDefined.frag" ) );
+  shaderProgram->setShaderCode( Qt3DRender::QShaderProgram::Fragment, Qt3DRender::QShaderProgram::loadSource( urlFrag ) );
 
   renderPass->setShaderProgram( shaderProgram );
   technique->addRenderPass( renderPass );

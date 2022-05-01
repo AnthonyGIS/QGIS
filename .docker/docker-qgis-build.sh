@@ -80,6 +80,7 @@ cmake \
  -DWITH_ASTYLE=OFF \
  -DWITH_BINDINGS=${WITH_QT5} \
  -DWITH_SERVER=${WITH_QT5} \
+ -DWITH_SERVER_LANDINGPAGE_WEBAPP=${WITH_QT5} \
  -DWITH_ORACLE=${WITH_QT5} \
  -DWITH_PDAL=${WITH_QT5} \
  -DWITH_QT5SERIALPORT=${WITH_QT5} \
@@ -94,6 +95,9 @@ cmake \
  -DADD_CLAZY_CHECKS=ON \
  ${CMAKE_EXTRA_ARGS[*]} ..
 echo "::endgroup::"
+
+# Workaround https://github.com/actions/checkout/issues/760
+git config --global --add safe.directory /root/QGIS
 
 #######
 # Build

@@ -16,6 +16,7 @@
 #include "qgstextfragment.h"
 #include <QFontMetricsF>
 #include <QTextFragment>
+#include "qgsstringutils.h"
 
 QgsTextFragment::QgsTextFragment( const QString &text, const QgsTextCharacterFormat &format )
   : mText( text )
@@ -48,19 +49,19 @@ double QgsTextFragment::horizontalAdvance( const QFont &font, bool fontHasBeenUp
 {
   if ( fontHasBeenUpdatedForFragment )
   {
-    QFontMetricsF fm( font );
+    const QFontMetricsF fm( font );
     return fm.horizontalAdvance( mText );
   }
   else
   {
     QFont updatedFont = font;
     mCharFormat.updateFontForFormat( updatedFont, scaleFactor );
-    QFontMetricsF fm( updatedFont );
+    const QFontMetricsF fm( updatedFont );
     return fm.horizontalAdvance( mText );
   }
 }
 
-void QgsTextFragment::applyCapitalization( QgsStringUtils::Capitalization capitalization )
+void QgsTextFragment::applyCapitalization( Qgis::Capitalization capitalization )
 {
   mText = QgsStringUtils::capitalize( mText, capitalization );
 }

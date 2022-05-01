@@ -18,6 +18,7 @@
 #include "qgsspatialiteconnpool.h"
 #include "qgsspatialiteprovider.h"
 #include "qgssqliteexpressioncompiler.h"
+#include "qgsspatialiteexpressioncompiler.h"
 
 #include "qgsgeometry.h"
 #include "qgslogger.h"
@@ -25,6 +26,7 @@
 #include "qgsjsonutils.h"
 #include "qgssettings.h"
 #include "qgsexception.h"
+#include "qgsgeometryengine.h"
 
 QgsSpatiaLiteFeatureIterator::QgsSpatiaLiteFeatureIterator( QgsSpatiaLiteFeatureSource *source, bool ownSource, const QgsFeatureRequest &request )
   : QgsAbstractFeatureIteratorFromSource<QgsSpatiaLiteFeatureSource>( source, ownSource, request )
@@ -64,9 +66,27 @@ QgsSpatiaLiteFeatureIterator::QgsSpatiaLiteFeatureIterator( QgsSpatiaLiteFeature
     return;
   }
 
+  // prepare spatial filter geometries for optimal speed
+  switch ( mRequest.spatialFilterType() )
+  {
+    case Qgis::SpatialFilterType::NoFilter:
+    case Qgis::SpatialFilterType::BoundingBox:
+      break;
+
+    case Qgis::SpatialFilterType::DistanceWithin:
+      if ( !mRequest.referenceGeometry().isEmpty() )
+      {
+        mDistanceWithinGeom = mRequest.referenceGeometry();
+        mDistanceWithinEngine.reset( QgsGeometry::createGeometryEngine( mDistanceWithinGeom.constGet() ) );
+        mDistanceWithinEngine->prepareGeometry();
+        mFetchGeometry = true;
+      }
+      break;
+  }
+
   //beware - limitAtProvider needs to be set to false if the request cannot be completely handled
   //by the provider (e.g., utilising QGIS expression filters)
-  bool limitAtProvider = ( mRequest.limit() >= 0 );
+  bool limitAtProvider = ( mRequest.limit() >= 0 ) && mRequest.spatialFilterType() != Qgis::SpatialFilterType::DistanceWithin;
 
   if ( !mFilterRect.isNull() && !mSource->mGeometryColumn.isNull() )
   {
@@ -123,7 +143,7 @@ QgsSpatiaLiteFeatureIterator::QgsSpatiaLiteFeatureIterator( QgsSpatiaLiteFeature
       mFetchGeometry = true;
     }
 
-    QgsSQLiteExpressionCompiler compiler = QgsSQLiteExpressionCompiler( source->mFields, request.flags() & QgsFeatureRequest::IgnoreStaticNodesDuringExpressionCompilation );
+    QgsSpatialiteExpressionCompiler compiler = QgsSpatialiteExpressionCompiler( source->mFields, request.flags() & QgsFeatureRequest::IgnoreStaticNodesDuringExpressionCompilation );
     QgsSqlExpressionCompiler::Result result = compiler.compile( request.filterExpression() );
     if ( result == QgsSqlExpressionCompiler::Complete || result == QgsSqlExpressionCompiler::Partial )
     {
@@ -215,6 +235,10 @@ QgsSpatiaLiteFeatureIterator::QgsSpatiaLiteFeatureIterator( QgsSpatiaLiteFeature
       sqliteStatement = nullptr;
       close();
     }
+    else
+    {
+      mQueryLogWrapper = std::make_unique<QgsDatabaseQueryLogWrapper>( mLastSql, mSource->mSqlitePath, QStringLiteral( "spatialite" ), QStringLiteral( "QgsSpatiaLiteFeatureIterator" ), QGS_QUERY_LOG_ORIGIN );
+    }
   }
 }
 
@@ -238,16 +262,27 @@ bool QgsSpatiaLiteFeatureIterator::fetchFeature( QgsFeature &feature )
     return false;
   }
 
-  if ( !getFeature( sqliteStatement, feature ) )
+  bool foundMatchingFeature = false;
+  while ( !foundMatchingFeature )
   {
-    sqlite3_finalize( sqliteStatement );
-    sqliteStatement = nullptr;
-    close();
-    return false;
-  }
+    if ( !getFeature( sqliteStatement, feature ) )
+    {
+      sqlite3_finalize( sqliteStatement );
+      sqliteStatement = nullptr;
+      close();
+      return false;
+    }
 
-  feature.setValid( true );
-  geometryToDestinationCrs( feature, mTransform );
+    foundMatchingFeature = true;
+    feature.setValid( true );
+    geometryToDestinationCrs( feature, mTransform );
+
+    if ( mDistanceWithinEngine && mDistanceWithinEngine->distance( feature.geometry().constGet() ) > mRequest.distanceWithin() )
+    {
+      foundMatchingFeature = false;
+      feature.setValid( false );
+    }
+  }
   return true;
 }
 
@@ -364,6 +399,7 @@ bool QgsSpatiaLiteFeatureIterator::prepareStatement( const QString &whereClause,
       QgsMessageLog::logMessage( QObject::tr( "SQLite error: %2\nSQL: %1" ).arg( sql, sqlite3_errmsg( mSqliteHandle ) ), QObject::tr( "SpatiaLite" ) );
       return false;
     }
+    mLastSql = sql;
   }
   catch ( QgsSpatiaLiteProvider::SLFieldNotFound )
   {
@@ -425,7 +461,7 @@ QString QgsSpatiaLiteFeatureIterator::whereClauseRect()
       mbrFilter += QStringLiteral( "ymax >= %1" ).arg( qgsDoubleToString( mFilterRect.yMinimum() ) );
       QString idxName = QStringLiteral( "idx_%1_%2" ).arg( mSource->mIndexTable, mSource->mIndexGeometry );
       whereClause += QStringLiteral( "%1 IN (SELECT pkid FROM %2 WHERE %3)" )
-                     .arg( QStringLiteral( "ROWID" ),
+                     .arg( mSource->mViewBased ? quotedPrimaryKey() : QStringLiteral( "ROWID" ),
                            QgsSqliteUtils::quotedIdentifier( idxName ),
                            mbrFilter );
     }
@@ -434,7 +470,7 @@ QString QgsSpatiaLiteFeatureIterator::whereClauseRect()
       // using the MbrCache spatial index
       QString idxName = QStringLiteral( "cache_%1_%2" ).arg( mSource->mIndexTable, mSource->mIndexGeometry );
       whereClause += QStringLiteral( "%1 IN (SELECT rowid FROM %2 WHERE mbr = FilterMbrIntersects(%3))" )
-                     .arg( QStringLiteral( "ROWID" ),
+                     .arg( mSource->mViewBased ? quotedPrimaryKey() : QStringLiteral( "ROWID" ),
                            QgsSqliteUtils::quotedIdentifier( idxName ),
                            mbr( mFilterRect ) );
     }

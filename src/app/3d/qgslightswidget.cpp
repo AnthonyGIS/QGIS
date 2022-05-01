@@ -80,22 +80,53 @@ QgsLightsWidget::QgsLightsWidget( QWidget *parent )
   selectedLightChanged( mLightsListView->selectionModel()->selection(), QItemSelection() );
 }
 
-void QgsLightsWidget::setLights( const QList<QgsPointLightSettings> &pointLights, const QList<QgsDirectionalLightSettings> &directionalLights )
+void QgsLightsWidget::setLights( const QList<QgsLightSource *> sources )
 {
+  QList< QgsPointLightSettings > pointLights;
+  QList< QgsDirectionalLightSettings > directionalLights;
+  for ( const QgsLightSource *source : sources )
+  {
+    switch ( source->type() )
+    {
+      case Qgis::LightSourceType::Point:
+        pointLights.append( *qgis::down_cast< const QgsPointLightSettings *>( source ) );
+        break;
+      case Qgis::LightSourceType::Directional:
+        directionalLights.append( *qgis::down_cast< const QgsDirectionalLightSettings *>( source ) );
+        break;
+    }
+  }
+
   mLightsModel->setPointLights( pointLights );
   mLightsModel->setDirectionalLights( directionalLights );
   mLightsListView->selectionModel()->select( mLightsModel->index( 0, 0 ), QItemSelectionModel::ClearAndSelect );
   selectedLightChanged( mLightsListView->selectionModel()->selection(), QItemSelection() );
 }
 
-QList<QgsPointLightSettings> QgsLightsWidget::pointLights()
+QList<QgsLightSource *> QgsLightsWidget::lightSources()
 {
-  return mLightsModel->pointLights();
+  QList<QgsLightSource *> res;
+  const QList<QgsPointLightSettings> pointLights = mLightsModel->pointLights();
+  const QList<QgsDirectionalLightSettings> directionalLights = mLightsModel->directionalLights();
+  for ( const QgsPointLightSettings &light : pointLights )
+  {
+    res.append( light.clone() );
+  }
+  for ( const QgsDirectionalLightSettings &light : directionalLights )
+  {
+    res.append( light.clone() );
+  }
+  return res;
 }
 
-QList<QgsDirectionalLightSettings> QgsLightsWidget::directionalLights()
+int QgsLightsWidget::directionalLightCount() const
 {
-  return mLightsModel->directionalLights();
+  return mLightsModel->directionalLights().count();
+}
+
+int QgsLightsWidget::lightSourceCount() const
+{
+  return mLightsModel->rowCount( QModelIndex() );
 }
 
 void QgsLightsWidget::selectedLightChanged( const QItemSelection &selected, const QItemSelection & )
@@ -229,7 +260,7 @@ void QgsLightsWidget::setAzimuthAltitude()
   double azimuthAngle;
   double altitudeAngle;
 
-  double horizontalVectorMagnitude = sqrt( mDirectionX * mDirectionX + mDirectionZ * mDirectionZ );
+  const double horizontalVectorMagnitude = sqrt( mDirectionX * mDirectionX + mDirectionZ * mDirectionZ );
 
   if ( horizontalVectorMagnitude == 0 )
     azimuthAngle = 0;
@@ -257,10 +288,10 @@ void QgsLightsWidget::setAzimuthAltitude()
 
 void QgsLightsWidget::onDirectionChange()
 {
-  double altitudeValue = spinBoxAltitude->value();
-  double azimuthValue = spinBoxAzimuth->value();
+  const double altitudeValue = spinBoxAltitude->value();
+  const double azimuthValue = spinBoxAzimuth->value();
 
-  double horizontalVectorMagnitude = cos( altitudeValue / 180 * M_PI );
+  const double horizontalVectorMagnitude = cos( altitudeValue / 180 * M_PI );
   mDirectionX = -horizontalVectorMagnitude * sin( azimuthValue / 180 * M_PI );
   mDirectionZ = horizontalVectorMagnitude * cos( azimuthValue / 180 * M_PI );
   mDirectionY = -sin( altitudeValue / 180 * M_PI );

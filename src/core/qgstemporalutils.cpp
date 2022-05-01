@@ -32,7 +32,7 @@
 
 QgsDateTimeRange QgsTemporalUtils::calculateTemporalRangeForProject( QgsProject *project )
 {
-  QMap<QString, QgsMapLayer *> mapLayers = project->mapLayers();
+  const QMap<QString, QgsMapLayer *> mapLayers = project->mapLayers();
   QDateTime minDate;
   QDateTime maxDate;
 
@@ -42,7 +42,7 @@ QgsDateTimeRange QgsTemporalUtils::calculateTemporalRangeForProject( QgsProject 
 
     if ( !currentLayer->temporalProperties() || !currentLayer->temporalProperties()->isActive() )
       continue;
-    QgsDateTimeRange layerRange = currentLayer->temporalProperties()->calculateTemporalExtent( currentLayer );
+    const QgsDateTimeRange layerRange = currentLayer->temporalProperties()->calculateTemporalExtent( currentLayer );
 
     if ( layerRange.begin().isValid() && ( !minDate.isValid() ||  layerRange.begin() < minDate ) )
       minDate = layerRange.begin();
@@ -55,7 +55,7 @@ QgsDateTimeRange QgsTemporalUtils::calculateTemporalRangeForProject( QgsProject 
 
 QList< QgsDateTimeRange > QgsTemporalUtils::usedTemporalRangesForProject( QgsProject *project )
 {
-  QMap<QString, QgsMapLayer *> mapLayers = project->mapLayers();
+  const QMap<QString, QgsMapLayer *> mapLayers = project->mapLayers();
 
   QList< QgsDateTimeRange > ranges;
   for ( auto it = mapLayers.constBegin(); it != mapLayers.constEnd(); ++it )
@@ -78,7 +78,7 @@ bool QgsTemporalUtils::exportAnimation( const QgsMapSettings &mapSettings, const
     error = QObject::tr( "Filename template is empty" );
     return false;
   }
-  int numberOfDigits = settings.fileNameTemplate.count( QLatin1Char( '#' ) );
+  const int numberOfDigits = settings.fileNameTemplate.count( QLatin1Char( '#' ) );
   if ( numberOfDigits < 0 )
   {
     error = QObject::tr( "Wrong filename template format (must contain #)" );
@@ -101,6 +101,7 @@ bool QgsTemporalUtils::exportAnimation( const QgsMapSettings &mapSettings, const
   navigator.setFrameDuration( settings.frameDuration );
   QgsMapSettings ms = mapSettings;
   const QgsExpressionContext context = ms.expressionContext();
+  ms.setFrameRate( settings.frameRate );
 
   const long long totalFrames = navigator.totalFrameCount();
   long long currentFrame = 0;
@@ -121,6 +122,7 @@ bool QgsTemporalUtils::exportAnimation( const QgsMapSettings &mapSettings, const
 
     ms.setIsTemporal( true );
     ms.setTemporalRange( navigator.dateTimeRangeForFrameNumber( currentFrame ) );
+    ms.setCurrentFrame( currentFrame );
 
     QgsExpressionContext frameContext = context;
     frameContext.appendScope( navigator.createExpressionContextScope() );
@@ -363,7 +365,7 @@ QDateTime QgsTimeDuration::addToDateTime( const QDateTime &dateTime )
 QgsTimeDuration QgsTimeDuration::fromString( const QString &string, bool &ok )
 {
   ok = false;
-  thread_local QRegularExpression sRx( QStringLiteral( R"(P(?:([\d]+)Y)?(?:([\d]+)M)?(?:([\d]+)W)?(?:([\d]+)D)?(?:T(?:([\d]+)H)?(?:([\d]+)M)?(?:([\d\.]+)S)?)?$)" ) );
+  thread_local const QRegularExpression sRx( QStringLiteral( R"(P(?:([\d]+)Y)?(?:([\d]+)M)?(?:([\d]+)W)?(?:([\d]+)D)?(?:T(?:([\d]+)H)?(?:([\d]+)M)?(?:([\d\.]+)S)?)?$)" ) );
 
   const QRegularExpressionMatch match = sRx.match( string );
   QgsTimeDuration duration;

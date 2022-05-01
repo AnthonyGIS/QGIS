@@ -18,6 +18,7 @@
 #include "qgsprojectutils.h"
 #include "qgsmaplayerutils.h"
 #include "qgsproject.h"
+#include "qgsgrouplayer.h"
 
 QList<QgsMapLayer *> QgsProjectUtils::layersMatchingPath( const QgsProject *project, const QString &path )
 {
@@ -34,4 +35,32 @@ QList<QgsMapLayer *> QgsProjectUtils::layersMatchingPath( const QgsProject *proj
     }
   }
   return layersList;
+}
+
+bool QgsProjectUtils::updateLayerPath( QgsProject *project, const QString &oldPath, const QString &newPath )
+{
+  if ( !project )
+    return false;
+
+  bool res = false;
+  const QMap<QString, QgsMapLayer *> mapLayers( project->mapLayers() );
+  for ( QgsMapLayer *layer : mapLayers )
+  {
+    if ( QgsMapLayerUtils::layerSourceMatchesPath( layer, oldPath ) )
+    {
+      res = QgsMapLayerUtils::updateLayerSourcePath( layer, newPath ) || res;
+    }
+  }
+  return res;
+}
+
+bool QgsProjectUtils::layerIsContainedInGroupLayer( QgsProject *project, QgsMapLayer *layer )
+{
+  const QVector< QgsGroupLayer * > groupLayers = project->layers< QgsGroupLayer * >();
+  for ( QgsGroupLayer *groupLayer : groupLayers )
+  {
+    if ( groupLayer->childLayers().contains( layer ) )
+      return true;
+  }
+  return false;
 }

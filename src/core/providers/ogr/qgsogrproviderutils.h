@@ -48,7 +48,7 @@ struct QgsOgrLayerReleaser
   /**
    * Releases a QgsOgrLayer \a layer.
    */
-  void operator()( QgsOgrLayer *layer );
+  void operator()( QgsOgrLayer *layer ) const;
 };
 
 /**
@@ -134,6 +134,9 @@ class CORE_EXPORT QgsOgrProviderUtils
     static QStringList directoryExtensions();
     static QStringList wildcards();
 
+    //! Whether the file is a local file.
+    static bool IsLocalFile( const QString &path );
+
     /**
      * Creates an empty data source
      * \param uri location to store the file(s)
@@ -216,7 +219,7 @@ class CORE_EXPORT QgsOgrProviderUtils
     static void release( QgsOgrLayer *&layer );
 
     //! Release a QgsOgrDataset*
-    static void releaseDataset( QgsOgrDataset *&ds );
+    static void releaseDataset( QgsOgrDataset *ds );
 
     //! Make sure that the existing pool of opened datasets on dsName is not accessible for new getLayer() attempts
     static void invalidateCachedDatasets( const QString &dsName );
@@ -260,7 +263,7 @@ class CORE_EXPORT QgsOgrProviderUtils
         bool updateMode,
         const QString &dsName );
 
-    static QList<QgsProviderSublayerDetails> querySubLayerList( int i, QgsOgrLayer *layer, const QString &driverName, Qgis::SublayerQueryFlags flags, bool isSubLayer,
+    static QList<QgsProviderSublayerDetails> querySubLayerList( int i, QgsOgrLayer *layer, GDALDatasetH hDS, const QString &driverName, Qgis::SublayerQueryFlags flags,
         const QString &baseUri, bool hasSingleLayerOnly, QgsFeedback *feedback = nullptr );
 
     /**
@@ -487,16 +490,16 @@ class QgsOgrLayer
 
 #if QT_VERSION < QT_VERSION_CHECK(5, 14, 0)
     //! Returns native GDALDatasetH object with the mutex to lock when using it
-    GDALDatasetH getDatasetHandleAndMutex( QMutex *&mutex );
+    GDALDatasetH getDatasetHandleAndMutex( QMutex *&mutex ) const;
 
     //! Returns native OGRLayerH object with the mutex to lock when using it
-    OGRLayerH getHandleAndMutex( QMutex *&mutex );
+    OGRLayerH getHandleAndMutex( QMutex *&mutex ) const;
 #else
     //! Returns native GDALDatasetH object with the mutex to lock when using it
-    GDALDatasetH getDatasetHandleAndMutex( QRecursiveMutex *&mutex );
+    GDALDatasetH getDatasetHandleAndMutex( QRecursiveMutex *&mutex ) const;
 
     //! Returns native OGRLayerH object with the mutex to lock when using it
-    OGRLayerH getHandleAndMutex( QRecursiveMutex *&mutex );
+    OGRLayerH getHandleAndMutex( QRecursiveMutex *&mutex ) const;
 #endif
 
 

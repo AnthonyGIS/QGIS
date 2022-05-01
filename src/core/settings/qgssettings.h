@@ -75,7 +75,36 @@ class CORE_EXPORT QgsSettings : public QObject
       App,
       Providers,
       Expressions,
-      Misc
+      Misc,
+      Gps, //!< GPS section, since QGIS 3.22
+    };
+
+    /**
+     * \ingroup core
+     * \brief Prefixes for the settings keys
+     * \since QGIS 3.26
+     */
+    class Prefix SIP_SKIP
+    {
+      public:
+        static const inline char *APP_GEOREFERENCER = "app/georeferencer";
+        static const inline char *CORE = "core";
+        static const inline char *CORE_LAYOUT = "core/Layout";
+        static const inline char *GEOMETRYVALIDATION = "geometry_validation";
+        static const inline char *GPS = "gps";
+        static const inline char *GUI_LOCATORFILTERS = "gui/locator_filters";
+        static const inline char *GUI_QGIS = "gui/qgis";
+        static const inline char *LOCALE = "locale";
+        static const inline char *MAP = "Map";
+        static const inline char *PLUGINS = "plugins";
+        static const inline char *PROCESSING_CONFIGURATION = "Processing/Configuration";
+        static const inline char *QGIS = "qgis";
+        static const inline char *QGIS_DIGITIZING = "qgis/digitizing";
+        static const inline char *QGIS_DIGITIZING_SHAPEMAPTOOLS = "qgis/digitizing/shape-map-tools";
+        static const inline char *QGIS_NETWORKANDPROXY = "qgis/networkAndProxy";
+        static const inline char *SVG = "svg";
+        static const inline char *ELEVATION_PROFILE = "elevation-profile";
+        static const inline char *CORE_LAYERTREE = "core/layer-tree";
     };
 
     /**
@@ -252,7 +281,7 @@ class CORE_EXPORT QgsSettings : public QObject
     T enumValue( const QString &key, const T &defaultValue,
                  const Section section = NoSection )
     {
-      QMetaEnum metaEnum = QMetaEnum::fromType<T>();
+      const QMetaEnum metaEnum = QMetaEnum::fromType<T>();
       Q_ASSERT( metaEnum.isValid() );
       if ( !metaEnum.isValid() )
       {
@@ -265,7 +294,7 @@ class CORE_EXPORT QgsSettings : public QObject
       if ( metaEnum.isValid() )
       {
         // read as string
-        QByteArray ba = value( key, metaEnum.valueToKey( static_cast<int>( defaultValue ) ), section ).toString().toUtf8();
+        QByteArray ba = value( key, metaEnum.valueToKey( static_cast<const int>( defaultValue ) ), section ).toString().toUtf8();
         const char *vs = ba.data();
         v = static_cast<T>( metaEnum.keyToValue( vs, &ok ) );
         if ( ok )
@@ -275,7 +304,7 @@ class CORE_EXPORT QgsSettings : public QObject
       // if failed, try to read as int (old behavior)
       // this code shall be removed later (probably after QGIS 3.4 LTR for 3.6)
       // then the method could be marked as const
-      v = static_cast<T>( value( key, static_cast<int>( defaultValue ), section ).toInt( &ok ) );
+      v = static_cast<T>( value( key, static_cast<const int>( defaultValue ), section ).toInt( &ok ) );
       if ( metaEnum.isValid() )
       {
         if ( !ok || !metaEnum.valueToKey( static_cast<int>( v ) ) )
@@ -304,11 +333,11 @@ class CORE_EXPORT QgsSettings : public QObject
     void setEnumValue( const QString &key, const T &value,
                        const Section section = NoSection )
     {
-      QMetaEnum metaEnum = QMetaEnum::fromType<T>();
+      const QMetaEnum metaEnum = QMetaEnum::fromType<T>();
       Q_ASSERT( metaEnum.isValid() );
       if ( metaEnum.isValid() )
       {
-        setValue( key, metaEnum.valueToKey( static_cast<int>( value ) ), section );
+        setValue( key, metaEnum.valueToKey( static_cast<const int>( value ) ), section );
       }
       else
       {
@@ -330,7 +359,7 @@ class CORE_EXPORT QgsSettings : public QObject
     T flagValue( const QString &key, const T &defaultValue,
                  const Section section = NoSection )
     {
-      QMetaEnum metaEnum = QMetaEnum::fromType<T>();
+      const QMetaEnum metaEnum = QMetaEnum::fromType<T>();
       Q_ASSERT( metaEnum.isValid() );
       if ( !metaEnum.isValid() )
       {
@@ -343,22 +372,22 @@ class CORE_EXPORT QgsSettings : public QObject
       if ( metaEnum.isValid() )
       {
         // read as string
-        QByteArray ba = value( key, metaEnum.valueToKeys( defaultValue ) ).toString().toUtf8();
+        QByteArray ba = value( key, metaEnum.valueToKeys( static_cast< const int >( defaultValue ) ) ).toString().toUtf8();
         const char *vs = ba.data();
         v = static_cast<T>( metaEnum.keysToValue( vs, &ok ) );
       }
       if ( !ok )
       {
         // if failed, try to read as int
-        int intValue = value( key, static_cast<int>( defaultValue ), section ).toInt( &ok );
+        const int intValue = value( key, static_cast<const int>( defaultValue ), section ).toInt( &ok );
         if ( metaEnum.isValid() )
         {
           if ( ok )
           {
             // check that the int value does correspond to a flag
             // see https://stackoverflow.com/a/68495949/1548052
-            QByteArray keys = metaEnum.valueToKeys( intValue );
-            int intValueCheck = metaEnum.keysToValue( keys );
+            const QByteArray keys = metaEnum.valueToKeys( intValue );
+            const int intValueCheck = metaEnum.keysToValue( keys );
             if ( intValue != intValueCheck )
             {
               v = defaultValue;
@@ -394,11 +423,11 @@ class CORE_EXPORT QgsSettings : public QObject
     void setFlagValue( const QString &key, const T &value,
                        const Section section = NoSection )
     {
-      QMetaEnum metaEnum = QMetaEnum::fromType<T>();
+      const QMetaEnum metaEnum = QMetaEnum::fromType<T>();
       Q_ASSERT( metaEnum.isValid() );
       if ( metaEnum.isValid() )
       {
-        setValue( key, metaEnum.valueToKeys( value ), section );
+        setValue( key, metaEnum.valueToKeys( static_cast< const int >( value ) ), section );
       }
       else
       {

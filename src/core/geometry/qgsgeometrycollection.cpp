@@ -323,7 +323,7 @@ QString QgsGeometryCollection::geometryType() const
   return QStringLiteral( "GeometryCollection" );
 }
 
-void QgsGeometryCollection::transform( const QgsCoordinateTransform &ct, QgsCoordinateTransform::TransformDirection d, bool transformZ )
+void QgsGeometryCollection::transform( const QgsCoordinateTransform &ct, Qgis::TransformDirection d, bool transformZ )
 {
   for ( QgsAbstractGeometry *g : std::as_const( mGeometries ) )
   {
@@ -901,7 +901,7 @@ QgsPoint QgsGeometryCollection::vertexAt( QgsVertexId id ) const
   return mGeometries[id.part]->vertexAt( id );
 }
 
-bool QgsGeometryCollection::isValid( QString &error, int flags ) const
+bool QgsGeometryCollection::isValid( QString &error, Qgis::GeometryValidityFlags flags ) const
 {
   if ( flags == 0 && mHasCachedValidity )
   {
@@ -911,7 +911,7 @@ bool QgsGeometryCollection::isValid( QString &error, int flags ) const
   }
 
   QgsGeos geos( this );
-  bool res = geos.isValid( &error, flags & QgsGeometry::FlagAllowSelfTouchingHoles, nullptr );
+  bool res = geos.isValid( &error, flags & Qgis::GeometryValidityFlag::AllowSelfTouchingHoles, nullptr );
   if ( flags == 0 )
   {
     mValidityFailureReason = !res ? error : QString();

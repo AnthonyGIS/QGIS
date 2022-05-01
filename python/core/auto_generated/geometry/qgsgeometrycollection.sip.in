@@ -153,7 +153,7 @@ Removes a geometry from the collection by index.
 %End
 
     void normalize() final /HoldGIL/;
-    virtual void transform( const QgsCoordinateTransform &ct, QgsCoordinateTransform::TransformDirection d = QgsCoordinateTransform::ForwardTransform, bool transformZ = false ) throw( QgsCsException );
+    virtual void transform( const QgsCoordinateTransform &ct, Qgis::TransformDirection d = Qgis::TransformDirection::Forward, bool transformZ = false ) throw( QgsCsException );
 
     virtual void transform( const QTransform &t, double zTranslate = 0.0, double zScale = 1.0, double mTranslate = 0.0, double mScale = 1.0 );
 
@@ -232,7 +232,7 @@ Returns a geometry without curves. Caller takes ownership
 
     virtual QgsPoint vertexAt( QgsVertexId id ) const;
 
-    virtual bool isValid( QString &error /Out/, int flags = 0 ) const;
+    virtual bool isValid( QString &error /Out/, Qgis::GeometryValidityFlags flags = Qgis::GeometryValidityFlags() ) const;
 
 
     virtual bool addZValue( double zValue = 0 );

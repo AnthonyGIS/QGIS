@@ -61,8 +61,10 @@ static bool setGlobalSettingsPath( QString path );
       App,
       Providers,
       Expressions,
-      Misc
+      Misc,
+      Gps,
     };
+
 
     explicit QgsSettings( const QString &organization,
                           const QString &application = QString(), QObject *parent = 0 );

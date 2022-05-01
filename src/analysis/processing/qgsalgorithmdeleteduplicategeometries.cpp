@@ -94,7 +94,7 @@ QVariantMap QgsDeleteDuplicateGeometriesAlgorithm::processAlgorithm( const QVari
   QHash< QgsFeatureId, QgsGeometry > geometries;
   QSet< QgsFeatureId > nullGeometryFeatures;
   long current = 0;
-  QgsSpatialIndex index( it, [&]( const QgsFeature & f ) ->bool
+  const QgsSpatialIndex index( it, [&]( const QgsFeature & f ) ->bool
   {
     if ( feedback->isCanceled() )
       return false;
@@ -168,7 +168,7 @@ QVariantMap QgsDeleteDuplicateGeometriesAlgorithm::processAlgorithm( const QVari
   outputFeatureIds.unite( nullGeometryFeatures );
   step = outputFeatureIds.empty() ? 1 : 100.0 / outputFeatureIds.size();
 
-  QgsFeatureRequest request = QgsFeatureRequest().setFilterFids( outputFeatureIds ).setFlags( QgsFeatureRequest::NoGeometry );
+  const QgsFeatureRequest request = QgsFeatureRequest().setFilterFids( outputFeatureIds ).setFlags( QgsFeatureRequest::NoGeometry );
   it = mSource->getFeatures( request );
   current = 0;
   while ( it.nextFeature( f ) )
@@ -188,7 +188,7 @@ QVariantMap QgsDeleteDuplicateGeometriesAlgorithm::processAlgorithm( const QVari
     feedback->setProgress( 0.10 * current * step + 90 ); // takes about 10% of time
   }
 
-  feedback->pushInfo( QObject::tr( "%1 duplicate features removed" ).arg( removed ) );
+  feedback->pushInfo( QObject::tr( "%n duplicate feature(s) removed", nullptr, removed ) );
 
   QVariantMap outputs;
   outputs.insert( QStringLiteral( "OUTPUT" ), destId );

@@ -292,6 +292,9 @@ class AlgorithmsTest(object):
         else:
             path = param['name']
 
+        if not path:
+            return None
+
         return self.uri_path_join(prefix, path)
 
     def uri_path_join(self, prefix, filepath):
@@ -402,14 +405,10 @@ class GenericAlgorithmsTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         start_app()
-        from processing.core.Processing import Processing
-        Processing.initialize()
         cls.cleanup_paths = []
 
     @classmethod
     def tearDownClass(cls):
-        from processing.core.Processing import Processing
-        Processing.deinitialize()
         for path in cls.cleanup_paths:
             shutil.rmtree(path)
 

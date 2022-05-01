@@ -38,7 +38,8 @@ QgsFillSymbol::QgsFillSymbol( const QgsSymbolLayerList &layers )
 
 void QgsFillSymbol::renderPolygon( const QPolygonF &points, const QVector<QPolygonF> *rings, const QgsFeature *f, QgsRenderContext &context, int layerIdx, bool selected )
 {
-  const double opacity = dataDefinedProperties().valueAsDouble( QgsSymbol::PropertyOpacity, context.expressionContext(), mOpacity * 100 ) * 0.01;
+  const double opacity = dataDefinedProperties().hasActiveProperties() ? dataDefinedProperties().valueAsDouble( QgsSymbol::PropertyOpacity, context.expressionContext(), mOpacity * 100 ) * 0.01
+                         : mOpacity;
 
   QgsSymbolRenderContext symbolContext( context, QgsUnitTypes::RenderUnknownUnit, opacity, selected, mRenderHints, f );
   symbolContext.setOriginalGeometryType( QgsWkbTypes::PolygonGeometry );
@@ -53,7 +54,7 @@ void QgsFillSymbol::renderPolygon( const QPolygonF &points, const QVector<QPolyg
       if ( symbolLayer->type() == Qgis::SymbolType::Fill || symbolLayer->type() == Qgis::SymbolType::Line )
         renderPolygonUsingLayer( symbolLayer, points, rings, symbolContext );
       else
-        renderUsingLayer( symbolLayer, symbolContext );
+        renderUsingLayer( symbolLayer, symbolContext, QgsWkbTypes::PolygonGeometry, &points, rings );
     }
     return;
   }
@@ -70,21 +71,21 @@ void QgsFillSymbol::renderPolygon( const QPolygonF &points, const QVector<QPolyg
     if ( symbolLayer->type() == Qgis::SymbolType::Fill || symbolLayer->type() == Qgis::SymbolType::Line )
       renderPolygonUsingLayer( symbolLayer, points, rings, symbolContext );
     else
-      renderUsingLayer( symbolLayer, symbolContext );
+      renderUsingLayer( symbolLayer, symbolContext, QgsWkbTypes::PolygonGeometry, &points, rings );
   }
 }
 
-void QgsFillSymbol::renderPolygonUsingLayer( QgsSymbolLayer *layer, const QPolygonF &points, const QVector<QPolygonF> *rings, QgsSymbolRenderContext &context )
+void QgsFillSymbol::renderPolygonUsingLayer( QgsSymbolLayer *layer, const QPolygonF &points, const QVector<QPolygonF> *rings, QgsSymbolRenderContext &context ) const
 {
   if ( layer->dataDefinedProperties().hasActiveProperties() && !layer->dataDefinedProperties().valueAsBool( QgsSymbolLayer::PropertyLayerEnabled, context.renderContext().expressionContext(), true ) )
     return;
 
-  Qgis::SymbolType layertype = layer->type();
+  const Qgis::SymbolType layertype = layer->type();
 
   QgsPaintEffect *effect = layer->paintEffect();
   if ( effect && effect->enabled() )
   {
-    QRectF bounds = polygonBounds( points, rings );
+    const QRectF bounds = polygonBounds( points, rings );
     QVector<QPolygonF> *translatedRings = translateRings( rings, -bounds.left(), -bounds.top() );
 
     QgsEffectPainter p( context.renderContext() );
@@ -151,10 +152,11 @@ QgsFillSymbol *QgsFillSymbol::clone() const
   cloneSymbol->setForceRHR( mForceRHR );
   cloneSymbol->setDataDefinedProperties( dataDefinedProperties() );
   cloneSymbol->setFlags( mSymbolFlags );
+  cloneSymbol->setAnimationSettings( mAnimationSettings );
   return cloneSymbol;
 }
 
-void QgsFillSymbol::setAngle( double angle )
+void QgsFillSymbol::setAngle( double angle ) const
 {
   const auto constMLayers = mLayers;
   for ( QgsSymbolLayer *layer : constMLayers )

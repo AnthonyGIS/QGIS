@@ -39,6 +39,7 @@
 #include "qgsrelationmanager.h"
 #include "qgsannotationmanager.h"
 #include "qgsvectorlayerjoininfo.h"
+#include "qgsvectorlayerjoinbuffer.h"
 #include "qgsmapthemecollection.h"
 #include "qgslayerdefinition.h"
 #include "qgsunittypes.h"
@@ -46,7 +47,7 @@
 #include "qgstransactiongroup.h"
 #include "qgsvectordataprovider.h"
 #include "qgsprojectbadlayerhandler.h"
-#include "qgsmaplayerlistutils.h"
+#include "qgsmaplayerlistutils_p.h"
 #include "qgsmeshlayer.h"
 #include "qgslayoutmanager.h"
 #include "qgsbookmarkmanager.h"
@@ -65,7 +66,9 @@
 #include "qgsannotationlayer.h"
 #include "qgspointcloudlayer.h"
 #include "qgsattributeeditorcontainer.h"
-
+#include "qgsgrouplayer.h"
+#include "qgsmapviewsmanager.h"
+#include "qgsprojectelevationproperties.h"
 
 #include <algorithm>
 #include <QApplication>
@@ -112,14 +115,14 @@ QStringList makeKeyTokens_( const QString &scope, const QString &key )
   //check validy of keys since an invalid xml name will will be dropped upon saving the xml file. If not valid, we print a message to the console.
   for ( int i = 0; i < keyTokens.size(); ++i )
   {
-    QString keyToken = keyTokens.at( i );
+    const QString keyToken = keyTokens.at( i );
 
     //invalid chars in XML are found at http://www.w3.org/TR/REC-xml/#NT-NameChar
     //note : it seems \x10000-\xEFFFF is valid, but it when added to the regexp, a lot of unwanted characters remain
-    const thread_local QRegularExpression sInvalidRegexp = QRegularExpression( "([^:A-Z_a-z\\x{C0}-\\x{D6}\\x{D8}-\\x{F6}\\x{F8}-\\x{2FF}\\x{370}-\\x{37D}\\x{37F}-\\x{1FFF}\\x{200C}-\\x{200D}\\x{2070}-\\x{218F}\\x{2C00}-\\x{2FEF}\\x{3001}-\\x{D7FF}\\x{F900}-\\x{FDCF}\\x{FDF0}-\\x{FFFD}\\-\\.0-9\\x{B7}\\x{0300}-\\x{036F}\\x{203F}-\\x{2040}]|^[^:A-Z_a-z\\x{C0}-\\x{D6}\\x{D8}-\\x{F6}\\x{F8}-\\x{2FF}\\x{370}-\\x{37D}\\x{37F}-\\x{1FFF}\\x{200C}-\\x{200D}\\x{2070}-\\x{218F}\\x{2C00}-\\x{2FEF}\\x{3001}-\\x{D7FF}\\x{F900}-\\x{FDCF}\\x{FDF0}-\\x{FFFD}])" );
+    const thread_local QRegularExpression sInvalidRegexp = QRegularExpression( QStringLiteral( "([^:A-Z_a-z\\x{C0}-\\x{D6}\\x{D8}-\\x{F6}\\x{F8}-\\x{2FF}\\x{370}-\\x{37D}\\x{37F}-\\x{1FFF}\\x{200C}-\\x{200D}\\x{2070}-\\x{218F}\\x{2C00}-\\x{2FEF}\\x{3001}-\\x{D7FF}\\x{F900}-\\x{FDCF}\\x{FDF0}-\\x{FFFD}\\-\\.0-9\\x{B7}\\x{0300}-\\x{036F}\\x{203F}-\\x{2040}]|^[^:A-Z_a-z\\x{C0}-\\x{D6}\\x{D8}-\\x{F6}\\x{F8}-\\x{2FF}\\x{370}-\\x{37D}\\x{37F}-\\x{1FFF}\\x{200C}-\\x{200D}\\x{2070}-\\x{218F}\\x{2C00}-\\x{2FEF}\\x{3001}-\\x{D7FF}\\x{F900}-\\x{FDCF}\\x{FDF0}-\\x{FFFD}])" ) );
     if ( keyToken.contains( sInvalidRegexp ) )
     {
-      QString errorString = QObject::tr( "Entry token invalid : '%1'. The token will not be saved to file." ).arg( keyToken );
+      const QString errorString = QObject::tr( "Entry token invalid : '%1'. The token will not be saved to file." ).arg( keyToken );
       QgsMessageLog::logMessage( errorString, QString(), Qgis::MessageLevel::Critical );
     }
   }
@@ -369,9 +372,11 @@ QgsProject::QgsProject( QObject *parent )
   , mRelationManager( new QgsRelationManager( this ) )
   , mAnnotationManager( new QgsAnnotationManager( this ) )
   , mLayoutManager( new QgsLayoutManager( this ) )
+  , m3DViewsManager( new QgsMapViewsManager( this ) )
   , mBookmarkManager( QgsBookmarkManager::createProjectBasedManager( this ) )
   , mViewSettings( new QgsProjectViewSettings( this ) )
   , mTimeSettings( new QgsProjectTimeSettings( this ) )
+  , mElevationProperties( new QgsProjectElevationProperties( this ) )
   , mDisplaySettings( new QgsProjectDisplaySettings( this ) )
   , mRootGroup( new QgsLayerTree )
   , mLabelingEngineSettings( new QgsLabelingEngineSettings )
@@ -488,6 +493,49 @@ void QgsProject::setTitle( const QString &title )
 QString QgsProject::title() const
 {
   return mMetadata.title();
+}
+
+void QgsProject::setFlags( Qgis::ProjectFlags flags )
+{
+  const bool oldEvaluateDefaultValues = mFlags & Qgis::ProjectFlag::EvaluateDefaultValuesOnProviderSide;
+  const bool newEvaluateDefaultValues = flags & Qgis::ProjectFlag::EvaluateDefaultValuesOnProviderSide;
+  if ( oldEvaluateDefaultValues != newEvaluateDefaultValues )
+  {
+    const QMap<QString, QgsMapLayer *> layers = mapLayers();
+    for ( auto layerIt = layers.constBegin(); layerIt != layers.constEnd(); ++layerIt )
+    {
+      if ( QgsVectorLayer *vl = qobject_cast<QgsVectorLayer *>( layerIt.value() ) )
+      {
+        vl->dataProvider()->setProviderProperty( QgsVectorDataProvider::EvaluateDefaultValues, newEvaluateDefaultValues );
+      }
+    }
+  }
+
+  const bool oldTrustLayerMetadata = mFlags & Qgis::ProjectFlag::TrustStoredLayerStatistics;
+  const bool newTrustLayerMetadata = flags & Qgis::ProjectFlag::TrustStoredLayerStatistics;
+  if ( oldTrustLayerMetadata != newTrustLayerMetadata )
+  {
+    const QMap<QString, QgsMapLayer *> layers = mapLayers();
+    for ( auto layerIt = layers.constBegin(); layerIt != layers.constEnd(); ++layerIt )
+    {
+      if ( QgsVectorLayer *vl = qobject_cast<QgsVectorLayer *>( layerIt.value() ) )
+      {
+        vl->setReadExtentFromXml( newTrustLayerMetadata );
+      }
+    }
+  }
+
+  mFlags = flags;
+}
+
+void QgsProject::setFlag( Qgis::ProjectFlag flag, bool enabled )
+{
+  Qgis::ProjectFlags newFlags = mFlags;
+  if ( enabled )
+    newFlags |= flag;
+  else
+    newFlags &= ~( static_cast< int >( flag ) );
+  setFlags( newFlags );
 }
 
 QString QgsProject::saveUser() const
@@ -625,12 +673,79 @@ QgsPropertyCollection QgsProject::dataDefinedServerProperties() const
   return mDataDefinedServerProperties;
 }
 
+bool QgsProject::startEditing( QgsVectorLayer *vectorLayer )
+{
+  switch ( mTransactionMode )
+  {
+    case Qgis::TransactionMode::Disabled:
+    case Qgis::TransactionMode::AutomaticGroups:
+    {
+      if ( ! vectorLayer )
+        return false;
+      return vectorLayer->startEditing();
+    }
+
+    case Qgis::TransactionMode::BufferedGroups:
+      return mEditBufferGroup.startEditing();
+  }
+
+  return false;
+}
+
+bool QgsProject::commitChanges( QStringList &commitErrors, bool stopEditing, QgsVectorLayer *vectorLayer )
+{
+  switch ( mTransactionMode )
+  {
+    case Qgis::TransactionMode::Disabled:
+    case Qgis::TransactionMode::AutomaticGroups:
+    {
+      if ( ! vectorLayer )
+      {
+        commitErrors.append( tr( "Trying to commit changes without a layer specified. This only works if the transaction mode is buffered" ) );
+        return false;
+      }
+      bool success = vectorLayer->commitChanges( stopEditing );
+      commitErrors = vectorLayer->commitErrors();
+      return success;
+    }
+
+    case Qgis::TransactionMode::BufferedGroups:
+      return mEditBufferGroup.commitChanges( commitErrors, stopEditing );
+  }
+
+  return false;
+}
+
+bool QgsProject::rollBack( QStringList &rollbackErrors, bool stopEditing, QgsVectorLayer *vectorLayer )
+{
+  switch ( mTransactionMode )
+  {
+    case Qgis::TransactionMode::Disabled:
+    case Qgis::TransactionMode::AutomaticGroups:
+    {
+      if ( ! vectorLayer )
+      {
+        rollbackErrors.append( tr( "Trying to roll back changes without a layer specified. This only works if the transaction mode is buffered" ) );
+        return false;
+      }
+      bool success = vectorLayer->rollBack( stopEditing );
+      rollbackErrors = vectorLayer->commitErrors();
+      return success;
+    }
+
+    case Qgis::TransactionMode::BufferedGroups:
+      return mEditBufferGroup.rollBack( rollbackErrors, stopEditing );
+  }
+
+  return false;
+}
+
 void QgsProject::setFileName( const QString &name )
 {
   if ( name == mFile.fileName() )
     return;
 
-  QString oldHomePath = homePath();
+  const QString oldHomePath = homePath();
 
   mFile.setFileName( name );
   mCachedHomePath.clear();
@@ -638,7 +753,7 @@ void QgsProject::setFileName( const QString &name )
 
   emit fileNameChanged();
 
-  QString newHomePath = homePath();
+  const QString newHomePath = homePath();
   if ( newHomePath != oldHomePath )
     emit homePathChanged();
 
@@ -751,6 +866,12 @@ void QgsProject::setCrs( const QgsCoordinateReferenceSystem &crs, bool adjustEll
     mCrs = crs;
     writeEntry( QStringLiteral( "SpatialRefSys" ), QStringLiteral( "/ProjectionsEnabled" ), crs.isValid() ? 1 : 0 );
     mProjectScope.reset();
+
+    // if annotation layer doesn't have a crs (i.e. in a newly created project), it should
+    // initially inherit the project CRS
+    if ( !mMainAnnotationLayer->crs().isValid() )
+      mMainAnnotationLayer->setCrs( crs );
+
     setDirty( true );
     emit crsChanged();
   }
@@ -811,10 +932,9 @@ void QgsProject::clear()
   mSaveVersion = QgsProjectVersion();
   mHomePath.clear();
   mCachedHomePath.clear();
-  mAutoTransaction = false;
-  mEvaluateDefaultValues = false;
+  mTransactionMode = Qgis::TransactionMode::Disabled;
+  mFlags = Qgis::ProjectFlags();
   mDirty = false;
-  mTrustLayerMetadata = false;
   mCustomVariables.clear();
   mCrs = QgsCoordinateReferenceSystem();
   mMetadata = QgsProjectMetadata();
@@ -833,9 +953,11 @@ void QgsProject::clear()
   mRelationManager->clear();
   mAnnotationManager->clear();
   mLayoutManager->clear();
+  m3DViewsManager->clear();
   mBookmarkManager->clear();
   mViewSettings->reset();
   mTimeSettings->reset();
+  mElevationProperties->reset();
   mDisplaySettings->reset();
   mSnappingConfig.reset();
   mAvoidIntersectionsMode = AvoidIntersectionsMode::AllowIntersections;
@@ -863,7 +985,7 @@ void QgsProject::clear()
   writeEntry( QStringLiteral( "PositionPrecision" ), QStringLiteral( "/Automatic" ), true );
   writeEntry( QStringLiteral( "PositionPrecision" ), QStringLiteral( "/DecimalPlaces" ), 2 );
 
-  bool defaultRelativePaths = mSettings.value( QStringLiteral( "/qgis/defaultProjectPathsRelative" ), true ).toBool();
+  const bool defaultRelativePaths = mSettings.value( QStringLiteral( "/qgis/defaultProjectPathsRelative" ), true ).toBool();
   setFilePathStorage( defaultRelativePaths ? Qgis::FilePathType::Relative : Qgis::FilePathType::Absolute );
 
   //copy default units to project
@@ -878,7 +1000,7 @@ void QgsProject::clear()
   red = mSettings.value( QStringLiteral( "qgis/default_selection_color_red" ), 255 ).toInt();
   green = mSettings.value( QStringLiteral( "qgis/default_selection_color_green" ), 255 ).toInt();
   blue = mSettings.value( QStringLiteral( "qgis/default_selection_color_blue" ), 0 ).toInt();
-  int alpha = mSettings.value( QStringLiteral( "qgis/default_selection_color_alpha" ), 255 ).toInt();
+  const int alpha = mSettings.value( QStringLiteral( "qgis/default_selection_color_alpha" ), 255 ).toInt();
   setSelectionColor( QColor( red, green, blue, alpha ) );
 
   mSnappingConfig.clearIndividualLayerSettings();
@@ -935,14 +1057,14 @@ void dump_( const QgsProjectPropertyKey &topQgsPropertyKey )
 */
 void _getProperties( const QDomDocument &doc, QgsProjectPropertyKey &project_properties )
 {
-  QDomElement propertiesElem = doc.documentElement().firstChildElement( QStringLiteral( "properties" ) );
+  const QDomElement propertiesElem = doc.documentElement().firstChildElement( QStringLiteral( "properties" ) );
 
   if ( propertiesElem.isNull() )  // no properties found, so we're done
   {
     return;
   }
 
-  QDomNodeList scopes = propertiesElem.childNodes();
+  const QDomNodeList scopes = propertiesElem.childNodes();
 
   if ( propertiesElem.firstChild().isNull() )
   {
@@ -966,7 +1088,7 @@ QgsPropertyCollection getDataDefinedServerProperties( const QDomDocument &doc, c
 {
   QgsPropertyCollection ddServerProperties;
   // Read data defined server properties
-  QDomElement ddElem = doc.documentElement().firstChildElement( QStringLiteral( "dataDefinedServerProperties" ) );
+  const QDomElement ddElem = doc.documentElement().firstChildElement( QStringLiteral( "dataDefinedServerProperties" ) );
   if ( !ddElem.isNull() )
   {
     if ( !ddServerProperties.readXml( ddElem, dataDefinedServerPropertyDefinitions ) )
@@ -983,7 +1105,7 @@ QgsPropertyCollection getDataDefinedServerProperties( const QDomDocument &doc, c
 */
 static void _getTitle( const QDomDocument &doc, QString &title )
 {
-  QDomElement titleNode = doc.documentElement().firstChildElement( QStringLiteral( "title" ) );
+  const QDomElement titleNode = doc.documentElement().firstChildElement( QStringLiteral( "title" ) );
 
   title.clear();               // by default the title will be empty
 
@@ -999,7 +1121,7 @@ static void _getTitle( const QDomDocument &doc, QString &title )
     return;
   }
 
-  QDomNode titleTextNode = titleNode.firstChild();  // should only have one child
+  const QDomNode titleTextNode = titleNode.firstChild();  // should only have one child
 
   if ( !titleTextNode.isText() )
   {
@@ -1007,7 +1129,7 @@ static void _getTitle( const QDomDocument &doc, QString &title )
     return;
   }
 
-  QDomText titleText = titleTextNode.toText();
+  const QDomText titleText = titleTextNode.toText();
 
   title = titleText.data();
 
@@ -1015,17 +1137,17 @@ static void _getTitle( const QDomDocument &doc, QString &title )
 
 static void readProjectFileMetadata( const QDomDocument &doc, QString &lastUser, QString &lastUserFull, QDateTime &lastSaveDateTime )
 {
-  QDomNodeList nl = doc.elementsByTagName( QStringLiteral( "qgis" ) );
+  const QDomNodeList nl = doc.elementsByTagName( QStringLiteral( "qgis" ) );
 
   if ( !nl.count() )
   {
-    QgsDebugMsg( "unable to find qgis element" );
+    QgsDebugMsg( QStringLiteral( "unable to find qgis element" ) );
     return;
   }
 
-  QDomNode qgisNode = nl.item( 0 ); // there should only be one, so zeroth element OK
+  const QDomNode qgisNode = nl.item( 0 ); // there should only be one, so zeroth element OK
 
-  QDomElement qgisElement = qgisNode.toElement(); // qgis node should be element
+  const QDomElement qgisElement = qgisNode.toElement(); // qgis node should be element
   lastUser = qgisElement.attribute( QStringLiteral( "saveUser" ), QString() );
   lastUserFull = qgisElement.attribute( QStringLiteral( "saveUserFull" ), QString() );
   lastSaveDateTime = QDateTime::fromString( qgisElement.attribute( QStringLiteral( "saveDateTime" ), QString() ), Qt::ISODate );
@@ -1034,7 +1156,7 @@ static void readProjectFileMetadata( const QDomDocument &doc, QString &lastUser,
 
 QgsProjectVersion getVersion( const QDomDocument &doc )
 {
-  QDomNodeList nl = doc.elementsByTagName( QStringLiteral( "qgis" ) );
+  const QDomNodeList nl = doc.elementsByTagName( QStringLiteral( "qgis" ) );
 
   if ( !nl.count() )
   {
@@ -1042,9 +1164,9 @@ QgsProjectVersion getVersion( const QDomDocument &doc )
     return QgsProjectVersion( 0, 0, 0, QString() );
   }
 
-  QDomNode qgisNode = nl.item( 0 );  // there should only be one, so zeroth element OK
+  const QDomNode qgisNode = nl.item( 0 );  // there should only be one, so zeroth element OK
 
-  QDomElement qgisElement = qgisNode.toElement(); // qgis node should be element
+  const QDomElement qgisElement = qgisNode.toElement(); // qgis node should be element
   QgsProjectVersion projectVersion( qgisElement.attribute( QStringLiteral( "version" ) ) );
   return projectVersion;
 }
@@ -1104,7 +1226,7 @@ bool QgsProject::_getMapLayers( const QDomDocument &doc, QList<QDomNode> &broken
 
   // order layers based on their dependencies
   QgsScopedRuntimeProfile profile( tr( "Sorting layers" ), QStringLiteral( "projectload" ) );
-  QgsLayerDefinition::DependencySorter depSorter( doc );
+  const QgsLayerDefinition::DependencySorter depSorter( doc );
   if ( depSorter.hasCycle() )
     return false;
 
@@ -1158,7 +1280,7 @@ bool QgsProject::_getMapLayers( const QDomDocument &doc, QList<QDomNode> &broken
 
 bool QgsProject::addLayer( const QDomElement &layerElem, QList<QDomNode> &brokenNodes, QgsReadWriteContext &context, QgsProject::ReadFlags flags )
 {
-  QString type = layerElem.attribute( QStringLiteral( "type" ) );
+  const QString type = layerElem.attribute( QStringLiteral( "type" ) );
   QgsDebugMsgLevel( "Layer type is " + type, 4 );
   std::unique_ptr<QgsMapLayer> mapLayer;
 
@@ -1180,7 +1302,7 @@ bool QgsProject::addLayer( const QDomElement &layerElem, QList<QDomNode> &broken
       // apply specific settings to vector layer
       if ( QgsVectorLayer *vl = qobject_cast<QgsVectorLayer *>( mapLayer.get() ) )
       {
-        vl->setReadExtentFromXml( mTrustLayerMetadata || ( flags & QgsProject::ReadFlag::FlagTrustLayerMetadata ) );
+        vl->setReadExtentFromXml( ( mFlags & Qgis::ProjectFlag::TrustStoredLayerStatistics ) || ( flags & QgsProject::ReadFlag::FlagTrustLayerMetadata ) );
       }
       break;
     }
@@ -1203,15 +1325,22 @@ bool QgsProject::addLayer( const QDomElement &layerElem, QList<QDomNode> &broken
 
     case QgsMapLayerType::PluginLayer:
     {
-      QString typeName = layerElem.attribute( QStringLiteral( "name" ) );
+      const QString typeName = layerElem.attribute( QStringLiteral( "name" ) );
       mapLayer.reset( QgsApplication::pluginLayerRegistry()->createLayer( typeName ) );
       break;
     }
 
     case QgsMapLayerType::AnnotationLayer:
     {
-      QgsAnnotationLayer::LayerOptions options( mTransformContext );
+      const QgsAnnotationLayer::LayerOptions options( mTransformContext );
       mapLayer = std::make_unique<QgsAnnotationLayer>( QString(), options );
+      break;
+    }
+
+    case QgsMapLayerType::GroupLayer:
+    {
+      const QgsGroupLayer::LayerOptions options( mTransformContext );
+      mapLayer = std::make_unique<QgsGroupLayer>( QString(), options );
       break;
     }
   }
@@ -1235,11 +1364,11 @@ bool QgsProject::addLayer( const QDomElement &layerElem, QList<QDomNode> &broken
   if ( flags & QgsProject::ReadFlag::FlagDontResolveLayers )
     layerFlags |= QgsMapLayer::FlagDontResolveLayers;
   // Propagate trust layer metadata flag
-  if ( mTrustLayerMetadata || ( flags & QgsProject::ReadFlag::FlagTrustLayerMetadata ) )
+  if ( ( mFlags & Qgis::ProjectFlag::TrustStoredLayerStatistics ) || ( flags & QgsProject::ReadFlag::FlagTrustLayerMetadata ) )
     layerFlags |= QgsMapLayer::FlagTrustLayerMetadata;
 
   profile.switchTask( tr( "Load layer source" ) );
-  bool layerIsValid = mapLayer->readLayerXml( layerElem, context, layerFlags ) && mapLayer->isValid();
+  const bool layerIsValid = mapLayer->readLayerXml( layerElem, context, layerFlags ) && mapLayer->isValid();
 
   profile.switchTask( tr( "Add layer to project" ) );
   QList<QgsMapLayer *> newLayers;
@@ -1248,6 +1377,14 @@ bool QgsProject::addLayer( const QDomElement &layerElem, QList<QDomNode> &broken
   {
     emit readMapLayer( mapLayer.get(), layerElem );
     addMapLayers( newLayers );
+    // Try to resolve references here (this is necessary to set up joined fields that will be possibly used by
+    // virtual layers that point to this layer's joined field in their query otherwise they won't be valid ),
+    // a second attempt to resolve references will be done after all layers are loaded
+    // see https://github.com/qgis/QGIS/issues/46834
+    if ( QgsVectorLayer *vLayer = qobject_cast<QgsVectorLayer *>( mapLayer.get() ) )
+    {
+      vLayer->joinBuffer()->resolveReferences( this );
+    }
   }
   else
   {
@@ -1256,6 +1393,16 @@ bool QgsProject::addLayer( const QDomElement &layerElem, QList<QDomNode> &broken
     newLayers.first();
     QgsDebugMsg( "Unable to load " + type + " layer" );
     brokenNodes.push_back( layerElem );
+  }
+
+  const bool wasEditable = layerElem.attribute( QStringLiteral( "editable" ), QStringLiteral( "0" ) ).toInt();
+  if ( wasEditable )
+  {
+    mapLayer->setCustomProperty( QStringLiteral( "_layer_was_editable" ), true );
+  }
+  else
+  {
+    mapLayer->removeCustomProperty( QStringLiteral( "_layer_was_editable" ) );
   }
 
   // It should be safe to delete the layer now if layer was stored, because all the store
@@ -1279,7 +1426,7 @@ bool QgsProject::read( const QString &filename, QgsProject::ReadFlags flags )
 
 bool QgsProject::read( QgsProject::ReadFlags flags )
 {
-  QString filename = mFile.fileName();
+  const QString filename = mFile.fileName();
   bool returnValue;
 
   if ( QgsProjectStorage *storage = projectStorage() )
@@ -1313,8 +1460,8 @@ bool QgsProject::read( QgsProject::ReadFlags flags )
     else
     {
       mAuxiliaryStorage.reset( new QgsAuxiliaryStorage( *this ) );
-      QFileInfo finfo( mFile.fileName() );
-      QString attachmentsZip = finfo.absoluteDir().absoluteFilePath( QStringLiteral( "%1_attachments.zip" ).arg( finfo.completeBaseName() ) );
+      const QFileInfo finfo( mFile.fileName() );
+      const QString attachmentsZip = finfo.absoluteDir().absoluteFilePath( QStringLiteral( "%1_attachments.zip" ).arg( finfo.completeBaseName() ) );
       if ( QFile( attachmentsZip ).exists() )
       {
         std::unique_ptr<QgsArchive> archive( new QgsArchive() );
@@ -1354,7 +1501,7 @@ bool QgsProject::readProjectFile( const QString &filename, QgsProject::ReadFlags
   QgsApplication::profiler()->clear( QStringLiteral( "projectload" ) );
   QgsScopedRuntimeProfile profile( tr( "Setting up translations" ), QStringLiteral( "projectload" ) );
 
-  QString localeFileName = QStringLiteral( "%1_%2" ).arg( QFileInfo( projectFile.fileName() ).baseName(), QgsApplication::settingsLocaleUserLocale.value() );
+  const QString localeFileName = QStringLiteral( "%1_%2" ).arg( QFileInfo( projectFile.fileName() ).baseName(), QgsApplication::settingsLocaleUserLocale.value() );
 
   if ( QFile( QStringLiteral( "%1/%2.qm" ).arg( QFileInfo( projectFile.fileName() ).absolutePath(), localeFileName ) ).exists() )
   {
@@ -1380,8 +1527,8 @@ bool QgsProject::readProjectFile( const QString &filename, QgsProject::ReadFlags
 
   if ( !doc->setContent( &projectFile, &errorMsg, &line, &column ) )
   {
-    QString errorString = tr( "Project file read error in file %1: %2 at line %3 column %4" )
-                          .arg( projectFile.fileName(), errorMsg ).arg( line ).arg( column );
+    const QString errorString = tr( "Project file read error in file %1: %2 at line %3 column %4" )
+                                .arg( projectFile.fileName(), errorMsg ).arg( line ).arg( column );
 
     QgsDebugMsg( errorString );
 
@@ -1397,28 +1544,45 @@ bool QgsProject::readProjectFile( const QString &filename, QgsProject::ReadFlags
   QgsDebugMsgLevel( "Opened document " + projectFile.fileName(), 2 );
 
   // get project version string, if any
-  QgsProjectVersion fileVersion = getVersion( *doc );
+  const QgsProjectVersion fileVersion = getVersion( *doc );
   const QgsProjectVersion thisVersion( Qgis::version() );
 
   profile.switchTask( tr( "Updating project file" ) );
   if ( thisVersion > fileVersion )
   {
-    QgsLogger::warning( "Loading a file that was saved with an older "
-                        "version of qgis (saved in " + fileVersion.text() +
-                        ", loaded in " + Qgis::version() +
-                        "). Problems may occur." );
+    const bool isOlderMajorVersion = fileVersion.majorVersion() < thisVersion.majorVersion();
+
+    if ( isOlderMajorVersion )
+    {
+      QgsLogger::warning( "Loading a file that was saved with an older "
+                          "version of qgis (saved in " + fileVersion.text() +
+                          ", loaded in " + Qgis::version() +
+                          "). Problems may occur." );
+    }
 
     QgsProjectFileTransform projectFile( *doc, fileVersion );
 
     // Shows a warning when an old project file is read.
+    Q_NOWARN_DEPRECATED_PUSH
     emit oldProjectVersionWarning( fileVersion.text() );
+    Q_NOWARN_DEPRECATED_POP
+    emit readVersionMismatchOccurred( fileVersion.text() );
 
     projectFile.updateRevision( thisVersion );
+  }
+  else if ( fileVersion > thisVersion )
+  {
+    QgsLogger::warning( "Loading a file that was saved with a newer "
+                        "version of qgis (saved in " + fileVersion.text() +
+                        ", loaded in " + Qgis::version() +
+                        "). Problems may occur." );
+
+    emit readVersionMismatchOccurred( fileVersion.text() );
   }
 
   // start new project, just keep the file name and auxiliary storage
   profile.switchTask( tr( "Creating auxiliary storage" ) );
-  QString fileName = mFile.fileName();
+  const QString fileName = mFile.fileName();
   std::unique_ptr<QgsAuxiliaryStorage> aStorage = std::move( mAuxiliaryStorage );
   std::unique_ptr<QgsArchive> archive = std::move( mArchive );
   clear();
@@ -1448,11 +1612,11 @@ bool QgsProject::readProjectFile( const QString &filename, QgsProject::ReadFlags
 
   readProjectFileMetadata( *doc, mSaveUser, mSaveUserFull, mSaveDateTime );
 
-  QDomNodeList homePathNl = doc->elementsByTagName( QStringLiteral( "homePath" ) );
+  const QDomNodeList homePathNl = doc->elementsByTagName( QStringLiteral( "homePath" ) );
   if ( homePathNl.count() > 0 )
   {
-    QDomElement homePathElement = homePathNl.at( 0 ).toElement();
-    QString homePath = homePathElement.attribute( QStringLiteral( "path" ) );
+    const QDomElement homePathElement = homePathNl.at( 0 ).toElement();
+    const QString homePath = homePathElement.attribute( QStringLiteral( "path" ) );
     if ( !homePath.isEmpty() )
       setPresetHomePath( homePath );
   }
@@ -1480,7 +1644,7 @@ bool QgsProject::readProjectFile( const QString &filename, QgsProject::ReadFlags
   if ( readNumEntry( QStringLiteral( "SpatialRefSys" ), QStringLiteral( "/ProjectionsEnabled" ), 0 ) )
   {
     // first preference - dedicated projectCrs node
-    QDomNode srsNode = doc->documentElement().namedItem( QStringLiteral( "projectCrs" ) );
+    const QDomNode srsNode = doc->documentElement().namedItem( QStringLiteral( "projectCrs" ) );
     if ( !srsNode.isNull() )
     {
       projectCrs.readXml( srsNode );
@@ -1488,12 +1652,12 @@ bool QgsProject::readProjectFile( const QString &filename, QgsProject::ReadFlags
 
     if ( !projectCrs.isValid() )
     {
-      QString projCrsString = readEntry( QStringLiteral( "SpatialRefSys" ), QStringLiteral( "/ProjectCRSProj4String" ) );
-      long currentCRS = readNumEntry( QStringLiteral( "SpatialRefSys" ), QStringLiteral( "/ProjectCRSID" ), -1 );
+      const QString projCrsString = readEntry( QStringLiteral( "SpatialRefSys" ), QStringLiteral( "/ProjectCRSProj4String" ) );
+      const long currentCRS = readNumEntry( QStringLiteral( "SpatialRefSys" ), QStringLiteral( "/ProjectCRSID" ), -1 );
       const QString authid = readEntry( QStringLiteral( "SpatialRefSys" ), QStringLiteral( "/ProjectCrs" ) );
 
       // authid should be prioritized over all
-      bool isUserAuthId = authid.startsWith( QLatin1String( "USER:" ), Qt::CaseInsensitive );
+      const bool isUserAuthId = authid.startsWith( QLatin1String( "USER:" ), Qt::CaseInsensitive );
       if ( !authid.isEmpty() && !isUserAuthId )
         projectCrs = QgsCoordinateReferenceSystem( authid );
 
@@ -1527,8 +1691,8 @@ bool QgsProject::readProjectFile( const QString &filename, QgsProject::ReadFlags
 
   //add variables defined in project file - do this early in the reading cycle, as other components
   //(e.g. layouts) may depend on these variables
-  QStringList variableNames = readListEntry( QStringLiteral( "Variables" ), QStringLiteral( "/variableNames" ) );
-  QStringList variableValues = readListEntry( QStringLiteral( "Variables" ), QStringLiteral( "/variableValues" ) );
+  const QStringList variableNames = readListEntry( QStringLiteral( "Variables" ), QStringLiteral( "/variableNames" ) );
+  const QStringList variableValues = readListEntry( QStringLiteral( "Variables" ), QStringLiteral( "/variableValues" ) );
 
   mCustomVariables.clear();
   if ( variableNames.length() == variableValues.length() )
@@ -1561,26 +1725,44 @@ bool QgsProject::readProjectFile( const QString &filename, QgsProject::ReadFlags
   }
   emit metadataChanged();
 
-  element = doc->documentElement().firstChildElement( QStringLiteral( "autotransaction" ) );
-  if ( ! element.isNull() )
-  {
-    if ( element.attribute( QStringLiteral( "active" ), QStringLiteral( "0" ) ).toInt() == 1 )
-      mAutoTransaction = true;
-  }
-
-  element = doc->documentElement().firstChildElement( QStringLiteral( "evaluateDefaultValues" ) );
+  // Transaction mode
+  element = doc->documentElement().firstChildElement( QStringLiteral( "transaction" ) );
   if ( !element.isNull() )
   {
-    if ( element.attribute( QStringLiteral( "active" ), QStringLiteral( "0" ) ).toInt() == 1 )
-      mEvaluateDefaultValues = true;
+    mTransactionMode = qgsEnumKeyToValue( element.attribute( QStringLiteral( "mode" ) ), Qgis::TransactionMode::Disabled );
+  }
+  else
+  {
+    // maybe older project => try read autotransaction
+    element = doc->documentElement().firstChildElement( QStringLiteral( "autotransaction" ) );
+    if ( ! element.isNull() )
+    {
+      mTransactionMode = static_cast<Qgis::TransactionMode>( element.attribute( QStringLiteral( "active" ), QStringLiteral( "0" ) ).toInt() );
+    }
   }
 
-  // Read trust layer metadata config in the project
-  element = doc->documentElement().firstChildElement( QStringLiteral( "trust" ) );
+  element = doc->documentElement().firstChildElement( QStringLiteral( "projectFlags" ) );
   if ( !element.isNull() )
   {
-    if ( element.attribute( QStringLiteral( "active" ), QStringLiteral( "0" ) ).toInt() == 1 )
-      mTrustLayerMetadata = true;
+    mFlags = qgsFlagKeysToValue( element.attribute( QStringLiteral( "set" ) ), Qgis::ProjectFlags() );
+  }
+  else
+  {
+    // older project compatibility
+    element = doc->documentElement().firstChildElement( QStringLiteral( "evaluateDefaultValues" ) );
+    if ( !element.isNull() )
+    {
+      if ( element.attribute( QStringLiteral( "active" ), QStringLiteral( "0" ) ).toInt() == 1 )
+        mFlags |= Qgis::ProjectFlag::EvaluateDefaultValuesOnProviderSide;
+    }
+
+    // Read trust layer metadata config in the project
+    element = doc->documentElement().firstChildElement( QStringLiteral( "trust" ) );
+    if ( !element.isNull() )
+    {
+      if ( element.attribute( QStringLiteral( "active" ), QStringLiteral( "0" ) ).toInt() == 1 )
+        mFlags |= Qgis::ProjectFlag::TrustStoredLayerStatistics;
+    }
   }
 
   // read the layer tree from project file
@@ -1606,7 +1788,7 @@ bool QgsProject::readProjectFile( const QString &filename, QgsProject::ReadFlags
   profile.switchTask( tr( "Reading map layers" ) );
 
   QList<QDomNode> brokenNodes;
-  bool clean = _getMapLayers( *doc, brokenNodes, flags );
+  const bool clean = _getMapLayers( *doc, brokenNodes, flags );
 
   // review the integrity of the retrieved map layers
   if ( !clean )
@@ -1626,6 +1808,10 @@ bool QgsProject::readProjectFile( const QString &filename, QgsProject::ReadFlags
   mMainAnnotationLayer->readLayerXml( doc->documentElement().firstChildElement( QStringLiteral( "main-annotation-layer" ) ), context );
   mMainAnnotationLayer->setTransformContext( mTransformContext );
 
+  // load embedded groups and layers
+  profile.switchTask( tr( "Loading embedded layers" ) );
+  loadEmbeddedNodes( mRootGroup, flags );
+
   // Resolve references to other layers
   // Needs to be done here once all dependent layers are loaded
   profile.switchTask( tr( "Resolving layer references" ) );
@@ -1637,10 +1823,6 @@ bool QgsProject::readProjectFile( const QString &filename, QgsProject::ReadFlags
 
   mLayerTreeRegistryBridge->setEnabled( true );
 
-  // load embedded groups and layers
-  profile.switchTask( tr( "Loading embedded layers" ) );
-  loadEmbeddedNodes( mRootGroup, flags );
-
   // now that layers are loaded, we can resolve layer tree's references to the layers
   profile.switchTask( tr( "Resolving references" ) );
   mRootGroup->resolveReferences( this );
@@ -1651,7 +1833,7 @@ bool QgsProject::readProjectFile( const QString &filename, QgsProject::ReadFlags
   }
 
   // Load pre 3.0 configuration
-  QDomElement layerTreeCanvasElem = doc->documentElement().firstChildElement( QStringLiteral( "layer-tree-canvas" ) );
+  const QDomElement layerTreeCanvasElem = doc->documentElement().firstChildElement( QStringLiteral( "layer-tree-canvas" ) );
   if ( !layerTreeCanvasElem.isNull( ) )
   {
     mRootGroup->readLayerOrderFromXml( layerTreeCanvasElem );
@@ -1705,6 +1887,13 @@ bool QgsProject::readProjectFile( const QString &filename, QgsProject::ReadFlags
     profile.switchTask( tr( "Loading layouts" ) );
     mLayoutManager->readXml( doc->documentElement(), *doc );
   }
+
+  if ( !( flags & QgsProject::ReadFlag::FlagDontLoad3DViews ) )
+  {
+    profile.switchTask( tr( "Loading 3D Views" ) );
+    m3DViewsManager->readXml( doc->documentElement(), *doc );
+  }
+
   profile.switchTask( tr( "Loading bookmarks" ) );
   mBookmarkManager->readXml( doc->documentElement(), *doc );
 
@@ -1738,18 +1927,24 @@ bool QgsProject::readProjectFile( const QString &filename, QgsProject::ReadFlags
     }
   }
   mViewSettings->setMapScales( res );
-  QDomElement viewSettingsElement = doc->documentElement().firstChildElement( QStringLiteral( "ProjectViewSettings" ) );
+  const QDomElement viewSettingsElement = doc->documentElement().firstChildElement( QStringLiteral( "ProjectViewSettings" ) );
   if ( !viewSettingsElement.isNull() )
     mViewSettings->readXml( viewSettingsElement, context );
 
   // restore time settings
   profile.switchTask( tr( "Loading temporal settings" ) );
-  QDomElement timeSettingsElement = doc->documentElement().firstChildElement( QStringLiteral( "ProjectTimeSettings" ) );
+  const QDomElement timeSettingsElement = doc->documentElement().firstChildElement( QStringLiteral( "ProjectTimeSettings" ) );
   if ( !timeSettingsElement.isNull() )
     mTimeSettings->readXml( timeSettingsElement, context );
 
+  profile.switchTask( tr( "Loading elevation properties" ) );
+  const QDomElement elevationPropertiesElement = doc->documentElement().firstChildElement( QStringLiteral( "ElevationProperties" ) );
+  if ( !elevationPropertiesElement.isNull() )
+    mElevationProperties->readXml( elevationPropertiesElement, context );
+  mElevationProperties->resolveReferences( this );
+
   profile.switchTask( tr( "Loading display settings" ) );
-  QDomElement displaySettingsElement = doc->documentElement().firstChildElement( QStringLiteral( "ProjectDisplaySettings" ) );
+  const QDomElement displaySettingsElement = doc->documentElement().firstChildElement( QStringLiteral( "ProjectDisplaySettings" ) );
   if ( !displaySettingsElement.isNull() )
     mDisplaySettings->readXml( displaySettingsElement, context );
 
@@ -1778,8 +1973,8 @@ bool QgsProject::readProjectFile( const QString &filename, QgsProject::ReadFlags
   if ( clean )
     setDirty( false );
 
-  QgsDebugMsgLevel( QString( "Project save user: %1" ).arg( mSaveUser ), 2 );
-  QgsDebugMsgLevel( QString( "Project save user: %1" ).arg( mSaveUserFull ), 2 );
+  QgsDebugMsgLevel( QStringLiteral( "Project save user: %1" ).arg( mSaveUser ), 2 );
+  QgsDebugMsgLevel( QStringLiteral( "Project save user: %1" ).arg( mSaveUserFull ), 2 );
 
   Q_NOWARN_DEPRECATED_PUSH
   emit nonIdentifiableLayersChanged( nonIdentifiableLayers() );
@@ -1788,7 +1983,7 @@ bool QgsProject::readProjectFile( const QString &filename, QgsProject::ReadFlags
   if ( mTranslator )
   {
     //project possibly translated -> rename it with locale postfix
-    QString newFileName( QStringLiteral( "%1/%2.qgs" ).arg( QFileInfo( projectFile.fileName() ).absolutePath(), localeFileName ) );
+    const QString newFileName( QStringLiteral( "%1/%2.qgs" ).arg( QFileInfo( projectFile.fileName() ).absolutePath(), localeFileName ) );
     setFileName( newFileName );
 
     if ( write() )
@@ -1801,6 +1996,19 @@ bool QgsProject::readProjectFile( const QString &filename, QgsProject::ReadFlags
       QgsMessageLog::logMessage( tr( "Error saving translated project with locale prefix %1" ).arg( newFileName ), QObject::tr( "Project translation" ), Qgis::MessageLevel::Critical );
     }
   }
+
+  // lastly, make any previously editable layers editable
+  const QMap<QString, QgsMapLayer *> loadedLayers = mapLayers();
+  for ( auto it = loadedLayers.constBegin(); it != loadedLayers.constEnd(); ++it )
+  {
+    if ( it.value()->isValid() && it.value()->customProperty( QStringLiteral( "_layer_was_editable" ) ).toBool() )
+    {
+      if ( QgsVectorLayer *vl = qobject_cast< QgsVectorLayer * >( it.value() ) )
+        vl->startEditing();
+      it.value()->removeCustomProperty( QStringLiteral( "_layer_was_editable" ) );
+    }
+  }
+
   return true;
 }
 
@@ -1817,13 +2025,14 @@ bool QgsProject::loadEmbeddedNodes( QgsLayerTreeGroup *group, QgsProject::ReadFl
       if ( childGroup->customProperty( QStringLiteral( "embedded" ) ).toInt() )
       {
         // make sure to convert the path from relative to absolute
-        QString projectPath = readPath( childGroup->customProperty( QStringLiteral( "embedded_project" ) ).toString() );
+        const QString projectPath = readPath( childGroup->customProperty( QStringLiteral( "embedded_project" ) ).toString() );
         childGroup->setCustomProperty( QStringLiteral( "embedded_project" ), projectPath );
         QgsLayerTreeGroup *newGroup = createEmbeddedGroup( childGroup->name(), projectPath, childGroup->customProperty( QStringLiteral( "embedded-invisible-layers" ) ).toStringList(), flags );
         if ( newGroup )
         {
           QList<QgsLayerTreeNode *> clonedChildren;
-          const auto constChildren = newGroup->children();
+          const QList<QgsLayerTreeNode *> constChildren = newGroup->children();
+          clonedChildren.reserve( constChildren.size() );
           for ( QgsLayerTreeNode *newGroupChild : constChildren )
             clonedChildren << newGroupChild->clone();
           delete newGroup;
@@ -1908,7 +2117,7 @@ const QgsMapLayerStore *QgsProject::layerStore() const
 QList<QgsVectorLayer *> QgsProject::avoidIntersectionsLayers() const
 {
   QList<QgsVectorLayer *> layers;
-  QStringList layerIds = readListEntry( QStringLiteral( "Digitizing" ), QStringLiteral( "/AvoidIntersectionsList" ), QStringList() );
+  const QStringList layerIds = readListEntry( QStringLiteral( "Digitizing" ), QStringLiteral( "/AvoidIntersectionsList" ), QStringList() );
   const auto constLayerIds = layerIds;
   for ( const QString &layerId : constLayerIds )
   {
@@ -1921,8 +2130,8 @@ QList<QgsVectorLayer *> QgsProject::avoidIntersectionsLayers() const
 void QgsProject::setAvoidIntersectionsLayers( const QList<QgsVectorLayer *> &layers )
 {
   QStringList list;
-  const auto constLayers = layers;
-  for ( QgsVectorLayer *layer : constLayers )
+  list.reserve( layers.size() );
+  for ( QgsVectorLayer *layer : layers )
     list << layer->id();
   writeEntry( QStringLiteral( "Digitizing" ), QStringLiteral( "/AvoidIntersectionsList" ), list );
   emit avoidIntersectionsLayersChanged();
@@ -1964,9 +2173,9 @@ QgsExpressionContextScope *QgsProject::createExpressionContextScope() const
   QString projectPath = projectStorage() ? fileName() : absoluteFilePath();
   if ( projectPath.isEmpty() )
     projectPath = mOriginalPath;
-  QString projectFolder = QFileInfo( projectPath ).path();
-  QString projectFilename = QFileInfo( projectPath ).fileName();
-  QString projectBasename = baseName();
+  const QString projectFolder = QFileInfo( projectPath ).path();
+  const QString projectFilename = QFileInfo( projectPath ).fileName();
+  const QString projectBasename = baseName();
 
   //add other known project variables
   mProjectScope->addVariable( QgsExpressionContextScope::StaticVariable( QStringLiteral( "project_title" ), title(), true, true ) );
@@ -1976,7 +2185,7 @@ QgsExpressionContextScope *QgsProject::createExpressionContextScope() const
   mProjectScope->addVariable( QgsExpressionContextScope::StaticVariable( QStringLiteral( "project_basename" ), projectBasename, true, true ) );
   mProjectScope->addVariable( QgsExpressionContextScope::StaticVariable( QStringLiteral( "project_home" ), QDir::toNativeSeparators( homePath() ), true, true ) );
   mProjectScope->addVariable( QgsExpressionContextScope::StaticVariable( QStringLiteral( "project_last_saved" ), mSaveDateTime.isNull() ? QVariant() : QVariant( mSaveDateTime ), true, true ) );
-  QgsCoordinateReferenceSystem projectCrs = crs();
+  const QgsCoordinateReferenceSystem projectCrs = crs();
   mProjectScope->addVariable( QgsExpressionContextScope::StaticVariable( QStringLiteral( "project_crs" ), projectCrs.authid(), true, true ) );
   mProjectScope->addVariable( QgsExpressionContextScope::StaticVariable( QStringLiteral( "project_crs_definition" ), projectCrs.toProj(), true, true ) );
   mProjectScope->addVariable( QgsExpressionContextScope::StaticVariable( QStringLiteral( "project_crs_description" ), projectCrs.description(), true, true ) );
@@ -1996,7 +2205,7 @@ QgsExpressionContextScope *QgsProject::createExpressionContextScope() const
 
   // keywords
   QVariantMap keywords;
-  QgsAbstractMetadataBase::KeywordMap metadataKeywords = metadata().keywords();
+  const QgsAbstractMetadataBase::KeywordMap metadataKeywords = metadata().keywords();
   for ( auto it = metadataKeywords.constBegin(); it != metadataKeywords.constEnd(); ++it )
   {
     keywords.insert( it.key(), it.value() );
@@ -2024,56 +2233,29 @@ QgsExpressionContextScope *QgsProject::createExpressionContextScope() const
 
 void QgsProject::onMapLayersAdded( const QList<QgsMapLayer *> &layers )
 {
-  QMap<QString, QgsMapLayer *> existingMaps = mapLayers();
-
-  bool tgChanged = false;
+  const QMap<QString, QgsMapLayer *> existingMaps = mapLayers();
 
   const auto constLayers = layers;
   for ( QgsMapLayer *layer : constLayers )
   {
-    if ( layer->isValid() )
+    if ( ! layer->isValid() )
+      return;
+
+    connect( layer, &QgsMapLayer::configChanged, this, [ = ] { setDirty(); } );
+
+    // check if we have to update connections for layers with dependencies
+    for ( QMap<QString, QgsMapLayer *>::const_iterator it = existingMaps.cbegin(); it != existingMaps.cend(); ++it )
     {
-      QgsVectorLayer *vlayer = qobject_cast<QgsVectorLayer *>( layer );
-      if ( vlayer )
+      const QSet<QgsMapLayerDependency> deps = it.value()->dependencies();
+      if ( deps.contains( layer->id() ) )
       {
-        if ( autoTransaction() )
-        {
-          if ( QgsTransaction::supportsTransaction( vlayer ) )
-          {
-            const QString connString = QgsTransaction::connectionString( vlayer->source() );
-            const QString key = vlayer->providerType();
-
-            QgsTransactionGroup *tg = mTransactionGroups.value( qMakePair( key, connString ) );
-
-            if ( !tg )
-            {
-              tg = new QgsTransactionGroup();
-              mTransactionGroups.insert( qMakePair( key, connString ), tg );
-              tgChanged = true;
-            }
-            tg->addLayer( vlayer );
-          }
-        }
-        vlayer->dataProvider()->setProviderProperty( QgsVectorDataProvider::EvaluateDefaultValues, evaluateDefaultValues() );
-      }
-
-      if ( tgChanged )
-        emit transactionGroupsChanged();
-
-      connect( layer, &QgsMapLayer::configChanged, this, [ = ] { setDirty(); } );
-
-      // check if we have to update connections for layers with dependencies
-      for ( QMap<QString, QgsMapLayer *>::const_iterator it = existingMaps.cbegin(); it != existingMaps.cend(); ++it )
-      {
-        QSet<QgsMapLayerDependency> deps = it.value()->dependencies();
-        if ( deps.contains( layer->id() ) )
-        {
-          // reconnect to change signals
-          it.value()->setDependencies( deps );
-        }
+        // reconnect to change signals
+        it.value()->setDependencies( deps );
       }
     }
   }
+
+  updateTransactionGroups();
 
   if ( !mBlockSnappingUpdates && mSnappingConfig.addLayers( layers ) )
     emit snappingConfigChanged( mSnappingConfig );
@@ -2105,6 +2287,72 @@ void QgsProject::cleanTransactionGroups( bool force )
     emit transactionGroupsChanged();
 }
 
+void QgsProject::updateTransactionGroups()
+{
+  switch ( mTransactionMode )
+  {
+    case Qgis::TransactionMode::Disabled:
+    {
+      cleanTransactionGroups( true );
+      return;
+    }
+
+    case Qgis::TransactionMode::AutomaticGroups:
+    case Qgis::TransactionMode::BufferedGroups:
+      cleanTransactionGroups( false );
+      break;
+  }
+
+  mEditBufferGroup.clear();
+
+  bool tgChanged = false;
+  const auto constLayers = mapLayers().values();
+  for ( QgsMapLayer *layer : constLayers )
+  {
+    if ( ! layer->isValid() )
+      continue;
+
+    QgsVectorLayer *vlayer = qobject_cast<QgsVectorLayer *>( layer );
+    if ( ! vlayer )
+      continue;
+
+    switch ( mTransactionMode )
+    {
+      case Qgis::TransactionMode::Disabled:
+        Q_ASSERT( false );
+        break;
+      case Qgis::TransactionMode::AutomaticGroups:
+      {
+        if ( QgsTransaction::supportsTransaction( vlayer ) )
+        {
+          const QString connString = QgsTransaction::connectionString( vlayer->source() );
+          const QString key = vlayer->providerType();
+
+          QgsTransactionGroup *tg = mTransactionGroups.value( qMakePair( key, connString ) );
+
+          if ( !tg )
+          {
+            tg = new QgsTransactionGroup();
+            mTransactionGroups.insert( qMakePair( key, connString ), tg );
+            tgChanged = true;
+          }
+          tg->addLayer( vlayer );
+        }
+      }
+      break;
+      case Qgis::TransactionMode::BufferedGroups:
+      {
+        if ( vlayer->supportsEditing() )
+          mEditBufferGroup.addLayer( vlayer );
+      }
+      break;
+    }
+  }
+
+  if ( tgChanged )
+    emit transactionGroupsChanged();
+}
+
 bool QgsProject::readLayer( const QDomNode &layerNode )
 {
   QgsReadWriteContext context;
@@ -2116,14 +2364,18 @@ bool QgsProject::readLayer( const QDomNode &layerNode )
   {
     // have to try to update joins for all layers now - a previously added layer may be dependent on this newly
     // added layer for joins
-    QVector<QgsVectorLayer *> vectorLayers = layers<QgsVectorLayer *>();
-    const auto constVectorLayers = vectorLayers;
-    for ( QgsVectorLayer *layer : constVectorLayers )
+    const QVector<QgsVectorLayer *> vectorLayers = layers<QgsVectorLayer *>();
+    for ( QgsVectorLayer *layer : vectorLayers )
     {
       // TODO: should be only done later - and with all layers (other layers may have referenced this layer)
       layer->resolveReferences( this );
-    }
 
+      if ( layer->isValid() && layer->customProperty( QStringLiteral( "_layer_was_editable" ) ).toBool() )
+      {
+        layer->startEditing();
+        layer->removeCustomProperty( QStringLiteral( "_layer_was_editable" ) );
+      }
+    }
     return true;
   }
   return false;
@@ -2144,15 +2396,15 @@ bool QgsProject::write()
     QgsReadWriteContext context;
     // for projects stored in a custom storage, we have to check for the support
     // of relative paths since the storage most likely will not be in a file system
-    QString storageFilePath { storage->filePath( mFile.fileName() ) };
+    const QString storageFilePath { storage->filePath( mFile.fileName() ) };
     if ( storageFilePath.isEmpty() )
     {
       setFilePathStorage( Qgis::FilePathType::Absolute );
     }
     context.setPathResolver( pathResolver() );
 
-    QString tempPath = QStandardPaths::standardLocations( QStandardPaths::TempLocation ).at( 0 );
-    QString tmpZipFilename( tempPath + QDir::separator() + QUuid::createUuid().toString() );
+    const QString tempPath = QStandardPaths::standardLocations( QStandardPaths::TempLocation ).at( 0 );
+    const QString tmpZipFilename( tempPath + QDir::separator() + QUuid::createUuid().toString() );
 
     if ( !zip( tmpZipFilename ) )
       return false;  // zip() already calls setError() when returning false
@@ -2194,8 +2446,8 @@ bool QgsProject::write()
     bool attachmentsOk = true;
     if ( !mArchive->files().isEmpty() )
     {
-      QFileInfo finfo( mFile.fileName() );
-      QString attachmentsZip = finfo.absoluteDir().absoluteFilePath( QStringLiteral( "%1_attachments.zip" ).arg( finfo.completeBaseName() ) );
+      const QFileInfo finfo( mFile.fileName() );
+      const QString attachmentsZip = finfo.absoluteDir().absoluteFilePath( QStringLiteral( "%1_attachments.zip" ).arg( finfo.completeBaseName() ) );
       attachmentsOk = mArchive->zip( attachmentsZip );
     }
 
@@ -2212,7 +2464,7 @@ bool QgsProject::write()
       {
         errorMessage.append( tr( "Unable to save attachments archive" ) );
       }
-      setError( errorMessage.join( "\n" ) );
+      setError( errorMessage.join( '\n' ) );
     }
 
     return asOk && writeOk && attachmentsOk;
@@ -2227,7 +2479,7 @@ bool QgsProject::writeProjectFile( const QString &filename )
   // if we have problems creating or otherwise writing to the project file,
   // let's find out up front before we go through all the hand-waving
   // necessary to create all the Dom objects
-  QFileInfo myFileInfo( projectFile );
+  const QFileInfo myFileInfo( projectFile );
   if ( myFileInfo.exists() && !myFileInfo.isWritable() )
   {
     setError( tr( "%1 is not writable. Please adjust permissions (if possible) and try again." )
@@ -2239,12 +2491,11 @@ bool QgsProject::writeProjectFile( const QString &filename )
   context.setPathResolver( pathResolver() );
   context.setTransformContext( transformContext() );
 
-  QDomImplementation DomImplementation;
-  DomImplementation.setInvalidDataPolicy( QDomImplementation::DropInvalidChars );
+  QDomImplementation::setInvalidDataPolicy( QDomImplementation::DropInvalidChars );
 
-  QDomDocumentType documentType =
-    DomImplementation.createDocumentType( QStringLiteral( "qgis" ), QStringLiteral( "http://mrcc.com/qgis.dtd" ),
-                                          QStringLiteral( "SYSTEM" ) );
+  const QDomDocumentType documentType =
+    QDomImplementation().createDocumentType( QStringLiteral( "qgis" ), QStringLiteral( "http://mrcc.com/qgis.dtd" ),
+        QStringLiteral( "SYSTEM" ) );
   std::unique_ptr<QDomDocument> doc( new QDomDocument( documentType ) );
 
   QDomElement qgisNode = doc->createElement( QStringLiteral( "qgis" ) );
@@ -2253,8 +2504,8 @@ bool QgsProject::writeProjectFile( const QString &filename )
 
   if ( !mSettings.value( QStringLiteral( "projects/anonymize_saved_projects" ), false, QgsSettings::Core ).toBool() )
   {
-    QString newSaveUser = QgsApplication::userLoginName();
-    QString newSaveUserFull = QgsApplication::userFullName();
+    const QString newSaveUser = QgsApplication::userLoginName();
+    const QString newSaveUserFull = QgsApplication::userFullName();
     qgisNode.setAttribute( QStringLiteral( "saveUser" ), newSaveUser );
     qgisNode.setAttribute( QStringLiteral( "saveUserFull" ), newSaveUserFull );
     mSaveUser = newSaveUser;
@@ -2279,19 +2530,15 @@ bool QgsProject::writeProjectFile( const QString &filename )
   QDomElement titleNode = doc->createElement( QStringLiteral( "title" ) );
   qgisNode.appendChild( titleNode );
 
-  QDomElement transactionNode = doc->createElement( QStringLiteral( "autotransaction" ) );
-  transactionNode.setAttribute( QStringLiteral( "active" ), mAutoTransaction ? 1 : 0 );
+  QDomElement transactionNode = doc->createElement( QStringLiteral( "transaction" ) );
+  transactionNode.setAttribute( QStringLiteral( "mode" ), qgsEnumValueToKey( mTransactionMode ) );
   qgisNode.appendChild( transactionNode );
 
-  QDomElement evaluateDefaultValuesNode = doc->createElement( QStringLiteral( "evaluateDefaultValues" ) );
-  evaluateDefaultValuesNode.setAttribute( QStringLiteral( "active" ), mEvaluateDefaultValues ? 1 : 0 );
-  qgisNode.appendChild( evaluateDefaultValuesNode );
+  QDomElement flagsNode = doc->createElement( QStringLiteral( "projectFlags" ) );
+  flagsNode.setAttribute( QStringLiteral( "set" ), qgsFlagValueToKeys( mFlags ) );
+  qgisNode.appendChild( flagsNode );
 
-  QDomElement trustNode = doc->createElement( QStringLiteral( "trust" ) );
-  trustNode.setAttribute( QStringLiteral( "active" ), mTrustLayerMetadata ? 1 : 0 );
-  qgisNode.appendChild( trustNode );
-
-  QDomText titleText = doc->createTextNode( title() );  // XXX why have title TWICE?
+  const QDomText titleText = doc->createTextNode( title() );  // XXX why have title TWICE?
   titleNode.appendChild( titleText );
 
   // write project CRS
@@ -2314,7 +2561,7 @@ bool QgsProject::writeProjectFile( const QString &filename )
   emit writeProject( *doc );
 
   // within top level node save list of layers
-  const QMap<QString, QgsMapLayer *> &layers = mapLayers();
+  const QMap<QString, QgsMapLayer *> layers = mapLayers();
 
   QDomElement annotationLayerNode = doc->createElement( QStringLiteral( "main-annotation-layer" ) );
   mMainAnnotationLayer->writeLayerXml( annotationLayerNode, *doc, context );
@@ -2331,7 +2578,7 @@ bool QgsProject::writeProjectFile( const QString &filename )
 
     if ( ml )
     {
-      QHash< QString, QPair< QString, bool> >::const_iterator emIt = mEmbeddedLayers.constFind( ml->id() );
+      const QHash< QString, QPair< QString, bool> >::const_iterator emIt = mEmbeddedLayers.constFind( ml->id() );
       if ( emIt == mEmbeddedLayers.constEnd() )
       {
         QDomElement maplayerElem;
@@ -2342,6 +2589,9 @@ bool QgsProject::writeProjectFile( const QString &filename )
           // general layer metadata
           maplayerElem = doc->createElement( QStringLiteral( "maplayer" ) );
           ml->writeLayerXml( maplayerElem, *doc, context );
+
+          if ( ml->isEditable() && ( mFlags & Qgis::ProjectFlag::RememberLayerEditStatusBetweenSessions ) )
+            maplayerElem.setAttribute( QStringLiteral( "editable" ), QStringLiteral( "1" ) );
         }
         else if ( ! ml->originalXmlProperties().isEmpty() )
         {
@@ -2425,22 +2675,28 @@ bool QgsProject::writeProjectFile( const QString &filename )
   mMetadata.writeMetadataXml( metadataElem, *doc );
   qgisNode.appendChild( metadataElem );
 
-  QDomElement annotationsElem = mAnnotationManager->writeXml( *doc, context );
+  const QDomElement annotationsElem = mAnnotationManager->writeXml( *doc, context );
   qgisNode.appendChild( annotationsElem );
 
-  QDomElement layoutElem = mLayoutManager->writeXml( *doc );
+  const QDomElement layoutElem = mLayoutManager->writeXml( *doc );
   qgisNode.appendChild( layoutElem );
 
-  QDomElement bookmarkElem = mBookmarkManager->writeXml( *doc );
+  const QDomElement views3DElem = m3DViewsManager->writeXml( *doc );
+  qgisNode.appendChild( views3DElem );
+
+  const QDomElement bookmarkElem = mBookmarkManager->writeXml( *doc );
   qgisNode.appendChild( bookmarkElem );
 
-  QDomElement viewSettingsElem = mViewSettings->writeXml( *doc, context );
+  const QDomElement viewSettingsElem = mViewSettings->writeXml( *doc, context );
   qgisNode.appendChild( viewSettingsElem );
 
-  QDomElement timeSettingsElement = mTimeSettings->writeXml( *doc, context );
+  const QDomElement timeSettingsElement = mTimeSettings->writeXml( *doc, context );
   qgisNode.appendChild( timeSettingsElement );
 
-  QDomElement displaySettingsElem = mDisplaySettings->writeXml( *doc, context );
+  const QDomElement elevationPropertiesElement = mElevationProperties->writeXml( *doc, context );
+  qgisNode.appendChild( elevationPropertiesElement );
+
+  const QDomElement displaySettingsElem = mDisplaySettings->writeXml( *doc, context );
   qgisNode.appendChild( displaySettingsElem );
 
   // now wrap it up and ship it to the project file
@@ -2470,7 +2726,7 @@ bool QgsProject::writeProjectFile( const QString &filename )
       return false;
     }
 
-    QFileInfo fi( fileName() );
+    const QFileInfo fi( fileName() );
     struct utimbuf tb = { static_cast<time_t>( fi.lastRead().toSecsSinceEpoch() ), static_cast<time_t>( fi.lastModified().toSecsSinceEpoch() ) };
     utime( backupFile.fileName().toUtf8().constData(), &tb );
   }
@@ -2526,7 +2782,7 @@ bool QgsProject::writeProjectFile( const QString &filename )
 bool QgsProject::writeEntry( const QString &scope, QString const &key, bool value )
 {
   bool propertiesModified;
-  bool success = addKey_( scope, key, &mProperties, value, propertiesModified );
+  const bool success = addKey_( scope, key, &mProperties, value, propertiesModified );
 
   if ( propertiesModified )
     setDirty( true );
@@ -2537,7 +2793,7 @@ bool QgsProject::writeEntry( const QString &scope, QString const &key, bool valu
 bool QgsProject::writeEntry( const QString &scope, const QString &key, double value )
 {
   bool propertiesModified;
-  bool success = addKey_( scope, key, &mProperties, value, propertiesModified );
+  const bool success = addKey_( scope, key, &mProperties, value, propertiesModified );
 
   if ( propertiesModified )
     setDirty( true );
@@ -2548,7 +2804,7 @@ bool QgsProject::writeEntry( const QString &scope, const QString &key, double va
 bool QgsProject::writeEntry( const QString &scope, QString const &key, int value )
 {
   bool propertiesModified;
-  bool success = addKey_( scope, key, &mProperties, value, propertiesModified );
+  const bool success = addKey_( scope, key, &mProperties, value, propertiesModified );
 
   if ( propertiesModified )
     setDirty( true );
@@ -2559,7 +2815,7 @@ bool QgsProject::writeEntry( const QString &scope, QString const &key, int value
 bool QgsProject::writeEntry( const QString &scope, const QString &key, const QString &value )
 {
   bool propertiesModified;
-  bool success = addKey_( scope, key, &mProperties, value, propertiesModified );
+  const bool success = addKey_( scope, key, &mProperties, value, propertiesModified );
 
   if ( propertiesModified )
     setDirty( true );
@@ -2570,7 +2826,7 @@ bool QgsProject::writeEntry( const QString &scope, const QString &key, const QSt
 bool QgsProject::writeEntry( const QString &scope, const QString &key, const QStringList &value )
 {
   bool propertiesModified;
-  bool success = addKey_( scope, key, &mProperties, value, propertiesModified );
+  const bool success = addKey_( scope, key, &mProperties, value, propertiesModified );
 
   if ( propertiesModified )
     setDirty( true );
@@ -2591,7 +2847,7 @@ QStringList QgsProject::readListEntry( const QString &scope,
   {
     value = property->value();
 
-    bool valid = QVariant::StringList == value.type();
+    const bool valid = QVariant::StringList == value.type();
     if ( ok )
       *ok = valid;
 
@@ -2621,7 +2877,7 @@ QString QgsProject::readEntry( const QString &scope,
   {
     value = property->value();
 
-    bool valid = value.canConvert( QVariant::String );
+    const bool valid = value.canConvert( QVariant::String );
     if ( ok )
       *ok = valid;
 
@@ -2646,7 +2902,7 @@ int QgsProject::readNumEntry( const QString &scope, const QString &key, int def,
     value = property->value();
   }
 
-  bool valid = value.canConvert( QVariant::Int );
+  const bool valid = value.canConvert( QVariant::Int );
 
   if ( ok )
   {
@@ -2668,9 +2924,9 @@ double QgsProject::readDoubleEntry( const QString &scope, const QString &key,
   QgsProjectProperty *property = findKey_( scope, key, mProperties );
   if ( property )
   {
-    QVariant value = property->value();
+    const QVariant value = property->value();
 
-    bool valid = value.canConvert( QVariant::Double );
+    const bool valid = value.canConvert( QVariant::Double );
     if ( ok )
       *ok = valid;
 
@@ -2690,9 +2946,9 @@ bool QgsProject::readBoolEntry( const QString &scope, const QString &key, bool d
 
   if ( property )
   {
-    QVariant value = property->value();
+    const QVariant value = property->value();
 
-    bool valid = value.canConvert( QVariant::Bool );
+    const bool valid = value.canConvert( QVariant::Bool );
     if ( ok )
       *ok = valid;
 
@@ -2817,7 +3073,7 @@ void QgsProject::setBadLayerHandler( QgsProjectBadLayerHandler *handler )
 
 QString QgsProject::layerIsEmbedded( const QString &id ) const
 {
-  QHash< QString, QPair< QString, bool > >::const_iterator it = mEmbeddedLayers.find( id );
+  const QHash< QString, QPair< QString, bool > >::const_iterator it = mEmbeddedLayers.find( id );
   if ( it == mEmbeddedLayers.constEnd() )
   {
     return QString();
@@ -2842,7 +3098,7 @@ bool QgsProject::createEmbeddedLayer( const QString &layerId, const QString &pro
     qgsProjectFile = archive.projectFile();
   }
 
-  QDateTime projectFileTimestamp = QFileInfo( projectFilePath ).lastModified();
+  const QDateTime projectFileTimestamp = QFileInfo( projectFilePath ).lastModified();
 
   if ( projectFilePath != sPrevProjectFilePath || projectFileTimestamp != sPrevProjectFileTimestamp )
   {
@@ -2866,10 +3122,10 @@ bool QgsProject::createEmbeddedLayer( const QString &layerId, const QString &pro
   // does project store paths absolute or relative?
   bool useAbsolutePaths = true;
 
-  QDomElement propertiesElem = sProjectDocument.documentElement().firstChildElement( QStringLiteral( "properties" ) );
+  const QDomElement propertiesElem = sProjectDocument.documentElement().firstChildElement( QStringLiteral( "properties" ) );
   if ( !propertiesElem.isNull() )
   {
-    QDomElement absElem = propertiesElem.firstChildElement( QStringLiteral( "Paths" ) ).firstChildElement( QStringLiteral( "Absolute" ) );
+    const QDomElement absElem = propertiesElem.firstChildElement( QStringLiteral( "Paths" ) ).firstChildElement( QStringLiteral( "Absolute" ) );
     if ( !absElem.isNull() )
     {
       useAbsolutePaths = absElem.text().compare( QLatin1String( "true" ), Qt::CaseInsensitive ) == 0;
@@ -2882,7 +3138,7 @@ bool QgsProject::createEmbeddedLayer( const QString &layerId, const QString &pro
   embeddedContext.setProjectTranslator( this );
   embeddedContext.setTransformContext( transformContext() );
 
-  QDomElement projectLayersElem = sProjectDocument.documentElement().firstChildElement( QStringLiteral( "projectlayers" ) );
+  const QDomElement projectLayersElem = sProjectDocument.documentElement().firstChildElement( QStringLiteral( "projectlayers" ) );
   if ( projectLayersElem.isNull() )
   {
     return false;
@@ -2892,7 +3148,7 @@ bool QgsProject::createEmbeddedLayer( const QString &layerId, const QString &pro
   while ( ! mapLayerElem.isNull() )
   {
     // get layer id
-    QString id = mapLayerElem.firstChildElement( QStringLiteral( "id" ) ).text();
+    const QString id = mapLayerElem.firstChildElement( QStringLiteral( "id" ) ).text();
     if ( id == layerId )
     {
       // layer can be embedded only once
@@ -3019,26 +3275,12 @@ void QgsProject::initializeEmbeddedSubtree( const QString &projectFilePath, QgsL
 
 bool QgsProject::evaluateDefaultValues() const
 {
-  return mEvaluateDefaultValues;
+  return mFlags & Qgis::ProjectFlag::EvaluateDefaultValuesOnProviderSide;
 }
 
 void QgsProject::setEvaluateDefaultValues( bool evaluateDefaultValues )
 {
-  if ( evaluateDefaultValues == mEvaluateDefaultValues )
-    return;
-
-  const QMap<QString, QgsMapLayer *> layers = mapLayers();
-  QMap<QString, QgsMapLayer *>::const_iterator layerIt = layers.constBegin();
-  for ( ; layerIt != layers.constEnd(); ++layerIt )
-  {
-    QgsVectorLayer *vl = qobject_cast<QgsVectorLayer *>( layerIt.value() );
-    if ( vl )
-    {
-      vl->dataProvider()->setProviderProperty( QgsVectorDataProvider::EvaluateDefaultValues, evaluateDefaultValues );
-    }
-  }
-
-  mEvaluateDefaultValues = evaluateDefaultValues;
+  setFlag( Qgis::ProjectFlag::EvaluateDefaultValuesOnProviderSide, evaluateDefaultValues );
 }
 
 void QgsProject::setTopologicalEditing( bool enabled )
@@ -3054,13 +3296,13 @@ bool QgsProject::topologicalEditing() const
 
 QgsUnitTypes::DistanceUnit QgsProject::distanceUnits() const
 {
-  QString distanceUnitString = readEntry( QStringLiteral( "Measurement" ), QStringLiteral( "/DistanceUnits" ), QString() );
+  const QString distanceUnitString = readEntry( QStringLiteral( "Measurement" ), QStringLiteral( "/DistanceUnits" ), QString() );
   if ( !distanceUnitString.isEmpty() )
     return QgsUnitTypes::decodeDistanceUnit( distanceUnitString );
 
   //fallback to QGIS default measurement unit
   bool ok = false;
-  QgsUnitTypes::DistanceUnit type = QgsUnitTypes::decodeDistanceUnit( mSettings.value( QStringLiteral( "/qgis/measure/displayunits" ) ).toString(), &ok );
+  const QgsUnitTypes::DistanceUnit type = QgsUnitTypes::decodeDistanceUnit( mSettings.value( QStringLiteral( "/qgis/measure/displayunits" ) ).toString(), &ok );
   return ok ? type : QgsUnitTypes::DistanceMeters;
 }
 
@@ -3071,13 +3313,13 @@ void QgsProject::setDistanceUnits( QgsUnitTypes::DistanceUnit unit )
 
 QgsUnitTypes::AreaUnit QgsProject::areaUnits() const
 {
-  QString areaUnitString = readEntry( QStringLiteral( "Measurement" ), QStringLiteral( "/AreaUnits" ), QString() );
+  const QString areaUnitString = readEntry( QStringLiteral( "Measurement" ), QStringLiteral( "/AreaUnits" ), QString() );
   if ( !areaUnitString.isEmpty() )
     return QgsUnitTypes::decodeAreaUnit( areaUnitString );
 
   //fallback to QGIS default area unit
   bool ok = false;
-  QgsUnitTypes::AreaUnit type = QgsUnitTypes::decodeAreaUnit( mSettings.value( QStringLiteral( "/qgis/measure/areaunits" ) ).toString(), &ok );
+  const QgsUnitTypes::AreaUnit type = QgsUnitTypes::decodeAreaUnit( mSettings.value( QStringLiteral( "/qgis/measure/areaunits" ) ).toString(), &ok );
   return ok ? type : QgsUnitTypes::AreaSquareMeters;
 }
 
@@ -3091,11 +3333,11 @@ QString QgsProject::homePath() const
   if ( !mCachedHomePath.isEmpty() )
     return mCachedHomePath;
 
-  QFileInfo pfi( fileName() );
+  const QFileInfo pfi( fileName() );
 
   if ( !mHomePath.isEmpty() )
   {
-    QFileInfo homeInfo( mHomePath );
+    const QFileInfo homeInfo( mHomePath );
     if ( !homeInfo.isRelative() )
     {
       mCachedHomePath = mHomePath;
@@ -3147,6 +3389,16 @@ QgsLayoutManager *QgsProject::layoutManager()
   return mLayoutManager.get();
 }
 
+const QgsMapViewsManager *QgsProject::viewsManager() const
+{
+  return m3DViewsManager.get();
+}
+
+QgsMapViewsManager *QgsProject::viewsManager()
+{
+  return m3DViewsManager.get();
+}
+
 const QgsBookmarkManager *QgsProject::bookmarkManager() const
 {
   return mBookmarkManager;
@@ -3175,6 +3427,16 @@ const QgsProjectTimeSettings *QgsProject::timeSettings() const
 QgsProjectTimeSettings *QgsProject::timeSettings()
 {
   return mTimeSettings;
+}
+
+const QgsProjectElevationProperties *QgsProject::elevationProperties() const
+{
+  return mElevationProperties;
+}
+
+QgsProjectElevationProperties *QgsProject::elevationProperties()
+{
+  return mElevationProperties;
 }
 
 const QgsProjectDisplaySettings *QgsProject::displaySettings() const
@@ -3258,20 +3520,51 @@ QStringList QgsProject::nonIdentifiableLayers() const
 
 bool QgsProject::autoTransaction() const
 {
-  return mAutoTransaction;
+  return mTransactionMode == Qgis::TransactionMode::AutomaticGroups;
 }
 
 void QgsProject::setAutoTransaction( bool autoTransaction )
 {
-  if ( autoTransaction != mAutoTransaction )
-  {
-    mAutoTransaction = autoTransaction;
+  if ( autoTransaction
+       && mTransactionMode == Qgis::TransactionMode::AutomaticGroups )
+    return;
 
-    if ( autoTransaction )
-      onMapLayersAdded( mapLayers().values() );
-    else
-      cleanTransactionGroups( true );
+  if ( ! autoTransaction
+       && mTransactionMode == Qgis::TransactionMode::Disabled )
+    return;
+
+  if ( autoTransaction )
+    mTransactionMode = Qgis::TransactionMode::AutomaticGroups;
+  else
+    mTransactionMode = Qgis::TransactionMode::Disabled;
+
+  updateTransactionGroups();
+}
+
+Qgis::TransactionMode QgsProject::transactionMode() const
+{
+  return mTransactionMode;
+}
+
+bool QgsProject::setTransactionMode( Qgis::TransactionMode transactionMode )
+{
+  if ( transactionMode == mTransactionMode )
+    return true;
+
+  // Check that all layer are not in edit mode
+  const auto constLayers = mapLayers().values();
+  for ( QgsMapLayer *layer : constLayers )
+  {
+    if ( layer->isEditable() )
+    {
+      QgsLogger::warning( tr( "Transaction mode can be changed only if all layers are not editable." ) );
+      return false;
+    }
   }
+
+  mTransactionMode = transactionMode;
+  updateTransactionGroups();
+  return true;
 }
 
 QMap<QPair<QString, QString>, QgsTransactionGroup *> QgsProject::transactionGroups()
@@ -3397,7 +3690,7 @@ bool QgsProject::zip( const QString &filename )
 
   // save auxiliary storage
   const QFileInfo info( qgsFile );
-  QString asExt = QStringLiteral( ".%1" ).arg( QgsAuxiliaryStorage::extension() );
+  const QString asExt = QStringLiteral( ".%1" ).arg( QgsAuxiliaryStorage::extension() );
   const QString asFileName = info.path() + QDir::separator() + info.completeBaseName() + asExt;
 
   bool auxiliaryStorageSavedOk = true;
@@ -3439,7 +3732,7 @@ bool QgsProject::zip( const QString &filename )
   const QStringList &files = mArchive->files();
   for ( const QString &file : files )
   {
-    if ( !file.endsWith( ".qgs", Qt::CaseInsensitive ) && !file.endsWith( asExt, Qt::CaseInsensitive ) )
+    if ( !file.endsWith( QLatin1String( ".qgs" ), Qt::CaseInsensitive ) && !file.endsWith( asExt, Qt::CaseInsensitive ) )
     {
       archive->addFile( file );
     }
@@ -3562,7 +3855,7 @@ void QgsProject::removeAllMapLayers()
 
 void QgsProject::reloadAllLayers()
 {
-  QMap<QString, QgsMapLayer *> layers = mLayerStore->mapLayers();
+  const QMap<QString, QgsMapLayer *> layers = mLayerStore->mapLayers();
   QMap<QString, QgsMapLayer *>::const_iterator it = layers.constBegin();
   for ( ; it != layers.constEnd(); ++it )
   {
@@ -3580,6 +3873,11 @@ QgsTransactionGroup *QgsProject::transactionGroup( const QString &providerKey, c
   return mTransactionGroups.value( qMakePair( providerKey, connString ) );
 }
 
+QgsVectorLayerEditBufferGroup *QgsProject::editBufferGroup()
+{
+  return &mEditBufferGroup;
+}
+
 QgsCoordinateReferenceSystem QgsProject::defaultCrsForNewLayers() const
 {
   QgsCoordinateReferenceSystem defaultCrs;
@@ -3595,7 +3893,7 @@ QgsCoordinateReferenceSystem QgsProject::defaultCrsForNewLayers() const
   else
   {
     // global crs
-    QString layerDefaultCrs = mSettings.value( QStringLiteral( "/Projections/layerDefaultCrs" ), geoEpsgCrsAuthId() ).toString();
+    const QString layerDefaultCrs = mSettings.value( QStringLiteral( "/Projections/layerDefaultCrs" ), geoEpsgCrsAuthId() ).toString();
     defaultCrs = QgsCoordinateReferenceSystem::fromOgcWmsCrs( layerDefaultCrs );
   }
 
@@ -3604,17 +3902,12 @@ QgsCoordinateReferenceSystem QgsProject::defaultCrsForNewLayers() const
 
 void QgsProject::setTrustLayerMetadata( bool trust )
 {
-  mTrustLayerMetadata = trust;
+  setFlag( Qgis::ProjectFlag::TrustStoredLayerStatistics, trust );
+}
 
-  auto layers = mapLayers();
-  for ( auto it = layers.constBegin(); it != layers.constEnd(); ++it )
-  {
-    QgsVectorLayer *vl = qobject_cast<QgsVectorLayer *>( it.value() );
-    if ( vl )
-    {
-      vl->setReadExtentFromXml( trust );
-    }
-  }
+bool QgsProject::trustLayerMetadata() const
+{
+  return mFlags & Qgis::ProjectFlag::TrustStoredLayerStatistics;
 }
 
 bool QgsProject::saveAuxiliaryStorage( const QString &filename )
@@ -3672,8 +3965,7 @@ QgsAuxiliaryStorage *QgsProject::auxiliaryStorage()
 
 QString QgsProject::createAttachedFile( const QString &nameTemplate )
 {
-  QString fileName = nameTemplate;
-  QDir archiveDir( mArchive->dir() );
+  const QDir archiveDir( mArchive->dir() );
   QTemporaryFile tmpFile( archiveDir.filePath( "XXXXXX_" + nameTemplate ), this );
   tmpFile.setAutoRemove( false );
   tmpFile.open();
@@ -3684,8 +3976,10 @@ QString QgsProject::createAttachedFile( const QString &nameTemplate )
 QStringList QgsProject::attachedFiles() const
 {
   QStringList attachments;
-  QString baseName = QFileInfo( fileName() ).baseName();
-  for ( const QString &file : mArchive->files() )
+  const QString baseName = QFileInfo( fileName() ).baseName();
+  const QStringList files = mArchive->files();
+  attachments.reserve( files.size() );
+  for ( const QString &file : files )
   {
     if ( QFileInfo( file ).baseName() != baseName )
     {
@@ -3707,7 +4001,7 @@ QString QgsProject::attachmentIdentifier( const QString &attachedFile ) const
 
 QString QgsProject::resolveAttachmentIdentifier( const QString &identifier ) const
 {
-  if ( identifier.startsWith( "attachment:///" ) )
+  if ( identifier.startsWith( QLatin1String( "attachment:///" ) ) )
   {
     return QDir( mArchive->dir() ).absoluteFilePath( identifier.mid( 14 ) );
   }
@@ -3771,8 +4065,8 @@ void QgsProject::setProjectColors( const QgsNamedColorList &colors )
   QgsNamedColorList::const_iterator colorIt = colors.constBegin();
   for ( ; colorIt != colors.constEnd(); ++colorIt )
   {
-    QString color = QgsSymbolLayerUtils::encodeColor( ( *colorIt ).first );
-    QString label = ( *colorIt ).second;
+    const QString color = QgsSymbolLayerUtils::encodeColor( ( *colorIt ).first );
+    const QString label = ( *colorIt ).second;
     customColors.append( color );
     customColorLabels.append( label );
   }
@@ -3894,14 +4188,14 @@ GetNamedProjectColor::GetNamedProjectColor( const QgsProject *project )
 
   //build up color list from project. Do this in advance for speed
   QStringList colorStrings = project->readListEntry( QStringLiteral( "Palette" ), QStringLiteral( "/Colors" ) );
-  QStringList colorLabels = project->readListEntry( QStringLiteral( "Palette" ), QStringLiteral( "/Labels" ) );
+  const QStringList colorLabels = project->readListEntry( QStringLiteral( "Palette" ), QStringLiteral( "/Labels" ) );
 
   //generate list from custom colors
   int colorIndex = 0;
   for ( QStringList::iterator it = colorStrings.begin();
         it != colorStrings.end(); ++it )
   {
-    QColor color = QgsSymbolLayerUtils::decodeColor( *it );
+    const QColor color = QgsSymbolLayerUtils::decodeColor( *it );
     QString label;
     if ( colorLabels.length() > colorIndex )
     {
@@ -3921,7 +4215,7 @@ GetNamedProjectColor::GetNamedProjectColor( const QHash<QString, QColor> &colors
 
 QVariant GetNamedProjectColor::func( const QVariantList &values, const QgsExpressionContext *, QgsExpression *, const QgsExpressionNodeFunction * )
 {
-  QString colorName = values.at( 0 ).toString().toLower();
+  const QString colorName = values.at( 0 ).toString().toLower();
   if ( mColors.contains( colorName ) )
   {
     return QStringLiteral( "%1,%2,%3" ).arg( mColors.value( colorName ).red() ).arg( mColors.value( colorName ).green() ).arg( mColors.value( colorName ).blue() );

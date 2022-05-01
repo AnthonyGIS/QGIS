@@ -144,7 +144,7 @@ Sums up the area of the curve by iterating over the vertices (shoelace formula).
     virtual int vertexNumberFromVertexId( QgsVertexId id ) const;
 
 
-    virtual bool pointAt( int node, QgsPoint &point /Out/, QgsVertexId::VertexType &type /Out/ ) const = 0;
+    virtual bool pointAt( int node, QgsPoint &point /Out/, Qgis::VertexType &type /Out/ ) const = 0;
 %Docstring
 Returns the point and vertex id of a point within the curve.
 
@@ -208,7 +208,7 @@ Returns a geometry without curves. Caller takes ownership
 
     virtual QgsRectangle boundingBox() const;
 
-    virtual bool isValid( QString &error /Out/, int flags = 0 ) const;
+    virtual bool isValid( QString &error /Out/, Qgis::GeometryValidityFlags flags = Qgis::GeometryValidityFlags() ) const;
 
 
     virtual double xAt( int index ) const = 0;
@@ -281,13 +281,7 @@ If a curve :py:func:`~QgsCurve.isClosed`, it has infinite sinuosity and will ret
 .. versionadded:: 3.2
 %End
 
-    enum Orientation
-    {
-      Clockwise,
-      CounterClockwise,
-    };
-
-    Orientation orientation() const;
+    Qgis::AngularDirection orientation() const;
 %Docstring
 Returns the curve's orientation, e.g. clockwise or counter-clockwise.
 

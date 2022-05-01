@@ -34,14 +34,15 @@ QgsMapToolEdit::QgsMapToolEdit( QgsMapCanvas *canvas )
   }
 }
 
-double QgsMapToolEdit::defaultZValue() const
+double QgsMapToolEdit::defaultZValue()
 {
   return QgsSettingsRegistryCore::settingsDigitizingDefaultZValue.value();
 }
 
-double QgsMapToolEdit::defaultMValue() const
+double QgsMapToolEdit::defaultMValue()
 {
-  return QgsSettings().value( QStringLiteral( "/qgis/digitizing/default_m_value" ), Qgis::DEFAULT_M_COORDINATE ).toDouble();
+  return QgsSettingsRegistryCore::settingsDigitizingDefaultMValue.value();
+
 }
 
 QColor QgsMapToolEdit::digitizingStrokeColor()
@@ -68,19 +69,19 @@ QColor QgsMapToolEdit::digitizingFillColor()
 
 QgsRubberBand *QgsMapToolEdit::createRubberBand( QgsWkbTypes::GeometryType geometryType, bool alternativeBand )
 {
-  QgsSettings settings;
+  const QgsSettings settings;
   QgsRubberBand *rb = new QgsRubberBand( mCanvas, geometryType );
   rb->setWidth( digitizingStrokeWidth() );
   QColor color = digitizingStrokeColor();
   if ( alternativeBand )
   {
-    double alphaScale = QgsSettingsRegistryCore::settingsDigitizingLineColorAlphaScale.value();
+    const double alphaScale = QgsSettingsRegistryCore::settingsDigitizingLineColorAlphaScale.value();
     color.setAlphaF( color.alphaF() * alphaScale );
     rb->setLineStyle( Qt::DotLine );
   }
   rb->setStrokeColor( color );
 
-  QColor fillColor = digitizingFillColor();
+  const QColor fillColor = digitizingFillColor();
   rb->setFillColor( fillColor );
 
   rb->show();

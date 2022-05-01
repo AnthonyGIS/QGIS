@@ -29,6 +29,8 @@
 #include "qgsexpressioncontextutils.h"
 #include "qgsapplication.h"
 #include "qgsvectorlayercache.h"
+#include "qgsrendercontext.h"
+#include "qgsmapcanvasutils.h"
 
 //////////////////
 // Filter Model //
@@ -53,8 +55,8 @@ bool QgsAttributeTableFilterModel::lessThan( const QModelIndex &left, const QMod
 {
   if ( mSelectedOnTop )
   {
-    bool leftSelected = layer()->selectedFeatureIds().contains( masterModel()->rowToId( left.row() ) );
-    bool rightSelected = layer()->selectedFeatureIds().contains( masterModel()->rowToId( right.row() ) );
+    const bool leftSelected = layer()->selectedFeatureIds().contains( masterModel()->rowToId( left.row() ) );
+    const bool rightSelected = layer()->selectedFeatureIds().contains( masterModel()->rowToId( right.row() ) );
 
     if ( leftSelected && !rightSelected )
     {
@@ -86,7 +88,7 @@ void QgsAttributeTableFilterModel::sort( int column, Qt::SortOrder order )
   }
   else
   {
-    int myColumn = mColumnMapping.at( column );
+    const int myColumn = mColumnMapping.at( column );
     masterModel()->prefetchColumnData( myColumn );
     QSortFilterProxyModel::sort( myColumn, order );
   }
@@ -101,7 +103,7 @@ QVariant QgsAttributeTableFilterModel::data( const QModelIndex &index, int role 
       return ColumnTypeActionButton;
     else if ( role == QgsAttributeTableModel::FeatureIdRole )
     {
-      QModelIndex fieldIndex = QSortFilterProxyModel::mapToSource( QSortFilterProxyModel::index( index.row(), 0, index.parent() ) );
+      const QModelIndex fieldIndex = QSortFilterProxyModel::mapToSource( QSortFilterProxyModel::index( index.row(), 0, index.parent() ) );
       return sourceModel()->data( fieldIndex, QgsAttributeTableModel::FeatureIdRole );
     }
   }
@@ -126,7 +128,7 @@ QVariant QgsAttributeTableFilterModel::headerData( int section, Qt::Orientation 
       return section + 1;
     else
     {
-      int sourceSection = mapToSource( index( section, ( !mColumnMapping.isEmpty() && mColumnMapping.at( 0 ) == -1 ) ? 1 : 0 ) ).row();
+      const int sourceSection = mapToSource( index( section, ( !mColumnMapping.isEmpty() && mColumnMapping.at( 0 ) == -1 ) ? 1 : 0 ) ).row();
       return sourceModel()->headerData( sourceSection, orientation, role );
     }
   }
@@ -143,13 +145,13 @@ int QgsAttributeTableFilterModel::columnCount( const QModelIndex &parent ) const
   return mColumnMapping.count();
 }
 
-void QgsAttributeTableFilterModel::setAttributeTableConfig( const QgsAttributeTableConfig &config )
+void QgsAttributeTableFilterModel::setAttributeTableConfig( const QgsAttributeTableConfig &config, bool force )
 {
-  QgsAttributeTableConfig oldConfig = mConfig;
+  const QgsAttributeTableConfig oldConfig = mConfig;
   mConfig = config;
   mConfig.update( layer()->fields() );
 
-  if ( mConfig.hasSameColumns( oldConfig ) )
+  if ( !force && mConfig.hasSameColumns( oldConfig ) )
   {
     return;
   }
@@ -163,7 +165,7 @@ void QgsAttributeTableFilterModel::setAttributeTableConfig( const QgsAttributeTa
       continue;
 
     // The new value for the mapping (field index or -1 for action column)
-    int newValue = ( columnConfig.type == QgsAttributeTableConfig::Action ) ? -1 : layer()->fields().lookupField( columnConfig.name );
+    const int newValue = ( columnConfig.type == QgsAttributeTableConfig::Action ) ? -1 : layer()->fields().lookupField( columnConfig.name );
     newColumnMapping << newValue;
   }
 
@@ -321,7 +323,7 @@ QgsFeatureIds QgsAttributeTableFilterModel::filteredFeatures()
   ids.reserve( rowCount() );
   for ( int i = 0; i < rowCount(); ++i )
   {
-    QModelIndex row = index( i, 0 );
+    const QModelIndex row = index( i, 0 );
     ids << rowToId( row );
   }
   return ids;
@@ -334,7 +336,7 @@ void QgsAttributeTableFilterModel::setFilterMode( FilterMode filterMode )
     disconnectFilterModeConnections();
     connectFilterModeConnections( filterMode );
     mFilterMode = filterMode;
-    invalidateFilter();
+    invalidate();
   }
 }
 
@@ -407,7 +409,7 @@ bool QgsAttributeTableFilterModel::filterAcceptsRow( int sourceRow, const QModel
       QgsVectorLayerEditBuffer *editBuffer = layer()->editBuffer();
       if ( editBuffer )
       {
-        QgsFeatureId fid = masterModel()->rowToId( sourceRow );
+        const QgsFeatureId fid = masterModel()->rowToId( sourceRow );
 
         if ( editBuffer->isFeatureAdded( fid ) )
           return true;
@@ -577,7 +579,7 @@ void QgsAttributeTableFilterModel::generateListOfVisibleFeatures()
     return;
 
   bool filter = false;
-  QgsRectangle rect = mCanvas->mapSettings().mapToLayerCoordinates( layer(), mCanvas->extent() );
+  const QgsRectangle rect = mCanvas->mapSettings().mapToLayerCoordinates( layer(), mCanvas->extent() );
   QgsRenderContext renderContext;
   renderContext.expressionContext().appendScopes( QgsExpressionContextUtils::globalProjectLayerScopes( layer() ) );
 
@@ -614,7 +616,7 @@ void QgsAttributeTableFilterModel::generateListOfVisibleFeatures()
   renderer->startRender( renderContext, layer()->fields() );
 
   QgsFeatureRequest r( masterModel()->request() );
-  if ( !r.filterRect().isNull() )
+  if ( r.spatialFilterType() == Qgis::SpatialFilterType::BoundingBox )
   {
     r.setFilterRect( r.filterRect().intersect( rect ) );
   }
@@ -623,17 +625,11 @@ void QgsAttributeTableFilterModel::generateListOfVisibleFeatures()
     r.setFilterRect( rect );
   }
 
-  if ( mCanvas->mapSettings().isTemporal() )
-  {
-    if ( !layer()->temporalProperties()->isVisibleInTemporalRange( mCanvas->mapSettings().temporalRange() ) )
-      return;
-
-    QgsVectorLayerTemporalContext temporalContext;
-    temporalContext.setLayer( layer() );
-    const QString temporalFilter = qobject_cast< const QgsVectorLayerTemporalProperties * >( layer()->temporalProperties() )->createFilterString( temporalContext, mCanvas->mapSettings().temporalRange() );
-    if ( !temporalFilter.isEmpty() )
-      r.setFilterExpression( temporalFilter );
-  }
+  const QString canvasFilter = QgsMapCanvasUtils::filterForLayer( mCanvas, layer() );
+  if ( canvasFilter == QLatin1String( "FALSE" ) )
+    return;
+  if ( !canvasFilter.isEmpty() )
+    r.setFilterExpression( canvasFilter );
 
   QgsFeatureIterator features = masterModel()->layerCache()->getFeatures( r );
 
@@ -706,7 +702,7 @@ QModelIndex QgsAttributeTableFilterModel::mapToSource( const QModelIndex &proxyI
 
 QModelIndex QgsAttributeTableFilterModel::mapFromSource( const QModelIndex &sourceIndex ) const
 {
-  QModelIndex proxyIndex = QSortFilterProxyModel::mapFromSource( sourceIndex );
+  const QModelIndex proxyIndex = QSortFilterProxyModel::mapFromSource( sourceIndex );
 
   if ( proxyIndex.column() < 0 )
     return QModelIndex();
@@ -725,6 +721,6 @@ Qt::ItemFlags QgsAttributeTableFilterModel::flags( const QModelIndex &index ) co
   if ( mapColumnToSource( index.column() ) == -1 )
     return Qt::ItemIsEnabled | Qt::ItemIsSelectable;
 
-  QModelIndex source_index = mapToSource( index );
+  const QModelIndex source_index = mapToSource( index );
   return masterModel()->flags( source_index );
 }

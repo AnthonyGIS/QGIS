@@ -21,6 +21,7 @@
 #include "qgsfeature.h"
 #include "qgsfeatureiterator.h"
 #include "qgsgeometry.h"
+
 #include "qgslogger.h"
 #include "qgsmessagelog.h"
 #include "qgscoordinatereferencesystem.h"
@@ -33,6 +34,7 @@
 #include "qgsexception.h"
 #include "qgssettings.h"
 #include "qgsgeometryengine.h"
+#include "qgsogrproviderutils.h"
 #include "qgsproviderregistry.h"
 #include "qgsexpressioncontextutils.h"
 #include "qgsreadwritelocker.h"
@@ -47,6 +49,7 @@
 #include <QMetaType>
 #include <QMutex>
 #include <QRegularExpression>
+#include <QJsonDocument>
 
 #include <cassert>
 #include <cstdlib> // size_t
@@ -430,16 +433,7 @@ void QgsVectorFileWriter::init( QString vectorFileName,
     }
   }
 
-  if ( srs.isValid() )
-  {
-    QString srsWkt = srs.toWkt( QgsCoordinateReferenceSystem::WKT_PREFERRED_GDAL );
-    QgsDebugMsgLevel( "WKT to save as is " + srsWkt, 2 );
-    mOgrRef = OSRNewSpatialReference( srsWkt.toLocal8Bit().constData() );
-    if ( mOgrRef )
-    {
-      OSRSetAxisMappingStrategy( mOgrRef, OAMS_TRADITIONAL_GIS_ORDER );
-    }
-  }
+  mOgrRef = QgsOgrUtils::crsToOGRSpatialReference( srs );
 
   // datasource created, now create the output layer
   OGRwkbGeometryType wkbType = ogrTypeFromWkbType( geometryType );
@@ -606,6 +600,7 @@ void QgsVectorFileWriter::init( QString vectorFileName,
         }
 
         OGRFieldType ogrType = OFTString; //default to string
+        OGRFieldSubType ogrSubType = OFSTNone;
         int ogrWidth = attrField.length();
         int ogrPrecision = attrField.precision();
         if ( ogrPrecision > 0 )
@@ -638,6 +633,7 @@ void QgsVectorFileWriter::init( QString vectorFileName,
 
           case QVariant::Bool:
             ogrType = OFTInteger;
+            ogrSubType = OFSTBoolean;
             ogrWidth = 1;
             ogrPrecision = 0;
             break;
@@ -688,6 +684,14 @@ void QgsVectorFileWriter::init( QString vectorFileName,
 
           case QVariant::StringList:
           {
+            // handle GPKG conversion to JSON
+            if ( mOgrDriverName == QLatin1String( "GPKG" ) )
+            {
+              ogrType = OFTString;
+              ogrSubType = OFSTJSON;
+              break;
+            }
+
             const char *pszDataTypes = GDALGetMetadataItem( poDriver, GDAL_DMD_CREATIONFIELDDATATYPES, nullptr );
             if ( pszDataTypes && strstr( pszDataTypes, "StringList" ) )
             {
@@ -703,6 +707,14 @@ void QgsVectorFileWriter::init( QString vectorFileName,
           }
 
           case QVariant::List:
+            // handle GPKG conversion to JSON
+            if ( mOgrDriverName == QLatin1String( "GPKG" ) )
+            {
+              ogrType = OFTString;
+              ogrSubType = OFSTJSON;
+              break;
+            }
+
             // fall through to default for other unsupported types
             if ( attrField.subType() == QVariant::String )
             {
@@ -812,14 +824,8 @@ void QgsVectorFileWriter::init( QString vectorFileName,
           OGR_Fld_SetPrecision( fld.get(), ogrPrecision );
         }
 
-        switch ( attrField.type() )
-        {
-          case QVariant::Bool:
-            OGR_Fld_SetSubType( fld.get(), OFSTBoolean );
-            break;
-          default:
-            break;
-        }
+        if ( ogrSubType != OFSTNone )
+          OGR_Fld_SetSubType( fld.get(), ogrSubType );
 
         // create the field
         QgsDebugMsgLevel( "creating field " + attrField.name() +
@@ -2331,12 +2337,12 @@ OGRwkbGeometryType QgsVectorFileWriter::ogrTypeFromWkbType( QgsWkbTypes::Type ty
   return ogrType;
 }
 
-QgsVectorFileWriter::WriterError QgsVectorFileWriter::hasError()
+QgsVectorFileWriter::WriterError QgsVectorFileWriter::hasError() const
 {
   return mError;
 }
 
-QString QgsVectorFileWriter::errorMessage()
+QString QgsVectorFileWriter::errorMessage() const
 {
   return mErrorMessage;
 }
@@ -2434,20 +2440,6 @@ gdal::ogr_feature_unique_ptr QgsVectorFileWriter::createFeature( const QgsFeatur
   Q_UNUSED( l )
 
   gdal::ogr_feature_unique_ptr poFeature( OGR_F_Create( OGR_L_GetLayerDefn( mLayer ) ) );
-
-  qint64 fid = FID_TO_NUMBER( feature.id() );
-  if ( fid > std::numeric_limits<int>::max() )
-  {
-    QgsDebugMsg( QStringLiteral( "feature id %1 too large." ).arg( fid ) );
-    OGRErr err = OGR_F_SetFID( poFeature.get(), static_cast<long>( fid ) );
-    if ( err != OGRERR_NONE )
-    {
-      QgsDebugMsg( QStringLiteral( "Failed to set feature id to %1: %2 (OGR error: %3)" )
-                   .arg( feature.id() )
-                   .arg( err ).arg( CPLGetLastErrorMsg() )
-                 );
-    }
-  }
 
   // attribute handling
   for ( QMap<int, int>::const_iterator it = mAttrIdxToOgrIdx.constBegin(); it != mAttrIdxToOgrIdx.constEnd(); ++it )
@@ -2560,6 +2552,19 @@ gdal::ogr_feature_unique_ptr QgsVectorFileWriter::createFeature( const QgsFeatur
 
       case QVariant::StringList:
       {
+        // handle GPKG conversion to JSON
+        if ( mOgrDriverName == QLatin1String( "GPKG" ) )
+        {
+          const QJsonDocument doc = QJsonDocument::fromVariant( attrValue );
+          QString jsonString;
+          if ( !doc.isNull() )
+          {
+            jsonString = QString::fromUtf8( doc.toJson( QJsonDocument::Compact ).constData() );
+          }
+          OGR_F_SetFieldString( poFeature.get(), ogrField, mCodec->fromUnicode( jsonString.constData() ) );
+          break;
+        }
+
         QStringList list = attrValue.toStringList();
         if ( mSupportedListSubTypes.contains( QVariant::String ) )
         {
@@ -2586,6 +2591,19 @@ gdal::ogr_feature_unique_ptr QgsVectorFileWriter::createFeature( const QgsFeatur
       }
 
       case QVariant::List:
+        // handle GPKG conversion to JSON
+        if ( mOgrDriverName == QLatin1String( "GPKG" ) )
+        {
+          const QJsonDocument doc = QJsonDocument::fromVariant( attrValue );
+          QString jsonString;
+          if ( !doc.isNull() )
+          {
+            jsonString = QString::fromUtf8( doc.toJson( QJsonDocument::Compact ).data() );
+          }
+          OGR_F_SetFieldString( poFeature.get(), ogrField, mCodec->fromUnicode( jsonString.constData() ) );
+          break;
+        }
+
         // fall through to default for unsupported types
         if ( field.subType() == QVariant::String )
         {
@@ -2891,11 +2909,22 @@ QgsVectorFileWriter::~QgsVectorFileWriter()
   }
 #endif
 
+  QString mFilename;
+  if ( mDS )
+  {
+    mFilename = QString::fromUtf8( GDALGetDescription( mDS.get() ) );
+  }
+
   mDS.reset();
+
+  if ( !mFilename.isEmpty() )
+  {
+    QgsOgrProviderUtils::invalidateCachedDatasets( mFilename );
+  }
 
   if ( mOgrRef )
   {
-    OSRDestroySpatialReference( mOgrRef );
+    OSRRelease( mOgrRef );
   }
 }
 
@@ -3075,7 +3104,16 @@ QgsVectorFileWriter::WriterError QgsVectorFileWriter::prepareWriteAsVectorFormat
   {
     for ( int attrIdx : std::as_const( details.attributes ) )
     {
-      details.outputFields.append( details.sourceFields.at( attrIdx ) );
+      if ( details.sourceFields.exists( attrIdx ) )
+      {
+        QgsField field = details.sourceFields.at( attrIdx );
+        field.setName( options.attributesExportNames.value( attrIdx, field.name() ) );
+        details.outputFields.append( field );
+      }
+      else
+      {
+        QgsDebugMsg( QStringLiteral( "No such source field with index '%1' available." ).arg( attrIdx ) );
+      }
     }
   }
 
@@ -3116,7 +3154,9 @@ QgsVectorFileWriter::WriterError QgsVectorFileWriter::prepareWriteAsVectorFormat
       try
       {
         // map filter rect back from destination CRS to layer CRS
-        filterRect = options.ct.transformBoundingBox( filterRect, QgsCoordinateTransform::ReverseTransform );
+        QgsCoordinateTransform extentTransform = options.ct;
+        extentTransform.setBallparkTransformsAreAppropriate( true );
+        filterRect = extentTransform.transformBoundingBox( filterRect, Qgis::TransformDirection::Reverse );
       }
       catch ( QgsCsException & )
       {
@@ -3335,7 +3375,7 @@ QgsVectorFileWriter::WriterError QgsVectorFileWriter::writeAsVectorFormatV2( Pre
       {
         if ( errorMessage )
         {
-          *errorMessage += QObject::tr( "Stopping after %1 errors" ).arg( errors );
+          *errorMessage += QObject::tr( "Stopping after %n error(s)", nullptr, errors );
         }
 
         n = -1;

@@ -196,7 +196,7 @@ void QgsMssqlGeometryParser::DumpMemoryToLog( const char *pszMsg, unsigned char 
 #endif
 }
 
-QgsPoint QgsMssqlGeometryParser::readCoordinates( int iPoint )
+QgsPoint QgsMssqlGeometryParser::readCoordinates( int iPoint ) const
 {
   if ( mIsGeography )
   {
@@ -222,7 +222,7 @@ QgsPoint QgsMssqlGeometryParser::readCoordinates( int iPoint )
   }
 }
 
-void QgsMssqlGeometryParser::readCoordinates( int iPoint, int iNextPoint, double *x, double *y, double *z, double *m )
+void QgsMssqlGeometryParser::readCoordinates( int iPoint, int iNextPoint, double *x, double *y, double *z, double *m ) const
 {
   int i = 0;
   if ( mIsGeography )
@@ -321,7 +321,7 @@ void QgsMssqlGeometryParser::readCoordinates( int iPoint, int iNextPoint, double
   }
 }
 
-const QgsPointSequence QgsMssqlGeometryParser::readPointSequence( int iPoint, int iNextPoint )
+const QgsPointSequence QgsMssqlGeometryParser::readPointSequence( int iPoint, int iNextPoint ) const
 {
   if ( iPoint >= iNextPoint )
     return QgsPointSequence();
@@ -341,7 +341,7 @@ std::unique_ptr< QgsPoint > QgsMssqlGeometryParser::readPoint( int iFigure )
 {
   if ( iFigure < mNumFigures )
   {
-    int iPoint = PointOffset( iFigure );
+    const int iPoint = PointOffset( iFigure );
     if ( iPoint < mNumPoints )
     {
       return std::make_unique< QgsPoint >( readCoordinates( iPoint ) );
@@ -423,7 +423,7 @@ std::unique_ptr< QgsPolygon > QgsMssqlGeometryParser::readPolygon( int iShape )
 {
   int iFigure;
   int iRingCount = 0;
-  int iNextFigure = NextFigureOffset( iShape );
+  const int iNextFigure = NextFigureOffset( iShape );
 
   std::unique_ptr< QgsPolygon > poPoly = std::make_unique< QgsPolygon >();
   for ( iFigure = FigureOffset( iShape ); iFigure < iNextFigure; iFigure++ )
@@ -461,7 +461,7 @@ std::unique_ptr< QgsCompoundCurve > QgsMssqlGeometryParser::readCompoundCurve( i
   iPoint = PointOffset( iFigure );
   iNextPoint = NextPointOffset( iFigure ) - 1;
 
-  std::unique_ptr< QgsCurve > poGeom;
+  const std::unique_ptr< QgsCurve > poGeom;
 
   nPointsPrepared = 0;
   bool isCurve = false;
@@ -521,7 +521,7 @@ std::unique_ptr< QgsCurvePolygon > QgsMssqlGeometryParser::readCurvePolygon( int
 {
   int iFigure;
   int iRingCount = 0;
-  int iNextFigure = NextFigureOffset( iShape );
+  const int iNextFigure = NextFigureOffset( iShape );
 
   std::unique_ptr< QgsCurvePolygon > poPoly = std::make_unique< QgsCurvePolygon >();
   for ( iFigure = FigureOffset( iShape ); iFigure < iNextFigure; iFigure++ )
@@ -785,4 +785,3 @@ std::unique_ptr<QgsAbstractGeometry> QgsMssqlGeometryParser::parseSqlGeometry( u
 
   return poGeom;
 }
-

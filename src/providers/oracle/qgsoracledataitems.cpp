@@ -60,10 +60,10 @@ bool deleteLayer( const QString &uri, QString &errCause )
   QSqlQuery qry( *conn );
 
   // check the geometry column count
-  if ( !QgsOracleProvider::exec( qry, QString( "SELECT count(*)"
-                                 " FROM user_tab_columns"
-                                 " WHERE table_name=? AND data_type='SDO_GEOMETRY' AND data_type_owner='MDSYS'" ),
-                                 QVariantList() << tableName )
+  if ( !QgsOracleProvider::execLoggedStatic( qry, QString( "SELECT count(*)"
+       " FROM user_tab_columns"
+       " WHERE table_name=? AND data_type='SDO_GEOMETRY' AND data_type_owner='MDSYS'" ),
+       QVariantList() << tableName, dsUri.uri(), QStringLiteral( "QgsOracleLayerItem" ), QGS_QUERY_LOG_ORIGIN )
        || !qry.next() )
   {
     errCause = QObject::tr( "Unable to determine number of geometry columns of layer %1.%2: \n%3" )
@@ -97,7 +97,7 @@ bool deleteLayer( const QString &uri, QString &errCause )
     args << tableName;
   }
 
-  if ( !QgsOracleProvider::exec( qry, dropTable, QVariantList() ) )
+  if ( !QgsOracleProvider::execLoggedStatic( qry, dropTable, QVariantList(), dsUri.uri(), QStringLiteral( "QgsOracleLayerItem" ), QGS_QUERY_LOG_ORIGIN ) )
   {
     errCause = QObject::tr( "Unable to delete layer %1.%2: \n%3" )
                .arg( ownerName )
@@ -107,7 +107,7 @@ bool deleteLayer( const QString &uri, QString &errCause )
     return false;
   }
 
-  if ( !QgsOracleProvider::exec( qry, cleanView, args ) )
+  if ( !QgsOracleProvider::execLoggedStatic( qry, cleanView, args, dsUri.uri(), QStringLiteral( "QgsOracleLayerItem" ), QGS_QUERY_LOG_ORIGIN ) )
   {
     errCause = QObject::tr( "Unable to clean metadata %1.%2: \n%3" )
                .arg( ownerName )
@@ -285,7 +285,7 @@ QList<QAction *> QgsOracleConnectionItem::actions( QWidget *parent )
   connect( actionEdit, &QAction::triggered, this, &QgsOracleConnectionItem::editConnection );
   lst.append( actionEdit );
 
-  QAction *actionDelete = new QAction( tr( "Delete Connection" ), parent );
+  QAction *actionDelete = new QAction( tr( "Remove Connection" ), parent );
   connect( actionDelete, &QAction::triggered, this, &QgsOracleConnectionItem::deleteConnection );
   lst.append( actionDelete );
 
@@ -304,8 +304,8 @@ void QgsOracleConnectionItem::editConnection()
 
 void QgsOracleConnectionItem::deleteConnection()
 {
-  if ( QMessageBox::question( nullptr, QObject::tr( "Delete Connection" ),
-                              QObject::tr( "Are you sure you want to delete the connection to %1?" ).arg( mName ),
+  if ( QMessageBox::question( nullptr, QObject::tr( "Remove Connection" ),
+                              QObject::tr( "Are you sure you want to remove the connection to %1?" ).arg( mName ),
                               QMessageBox::Yes | QMessageBox::No, QMessageBox::No ) != QMessageBox::Yes )
     return;
 
@@ -544,7 +544,7 @@ QVector<QgsDataItem *> QgsOracleRootItem::createChildren()
 {
   QVector<QgsDataItem *> connections;
   const QStringList list = QgsOracleConn::connectionList();
-  for ( QString connName : list )
+  for ( const QString &connName : std::as_const( list ) )
   {
     connections << new QgsOracleConnectionItem( this, connName, mPath + '/' + connName );
   }

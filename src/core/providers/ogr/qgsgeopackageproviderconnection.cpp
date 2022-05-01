@@ -26,6 +26,9 @@
 #include "qgsapplication.h"
 #include "qgsvectorlayer.h"
 #include "qgsfeedback.h"
+#include "qgsogrutils.h"
+#include "qgsfielddomain.h"
+#include "qgsdbquerylog.h"
 
 #include <QTextCodec>
 #include <QRegularExpression>
@@ -35,27 +38,20 @@
 ///@cond PRIVATE
 
 QgsGeoPackageProviderConnection::QgsGeoPackageProviderConnection( const QString &name )
-  : QgsAbstractDatabaseProviderConnection( name )
+  : QgsOgrProviderConnection( name )
 {
-  mProviderKey = QStringLiteral( "ogr" );
-  setDefaultCapabilities();
   QgsSettings settings;
   settings.beginGroup( QStringLiteral( "ogr" ), QgsSettings::Section::Providers );
   settings.beginGroup( QStringLiteral( "GPKG" ) );
   settings.beginGroup( QStringLiteral( "connections" ) );
   settings.beginGroup( name );
   setUri( settings.value( QStringLiteral( "path" ) ).toString() );
+  setDefaultCapabilities();
 }
 
-QgsGeoPackageProviderConnection::QgsGeoPackageProviderConnection( const QString &uri, const QVariantMap &configuration ):
-  QgsAbstractDatabaseProviderConnection( uri, configuration )
+QgsGeoPackageProviderConnection::QgsGeoPackageProviderConnection( const QString &uri, const QVariantMap &configuration )
+  : QgsOgrProviderConnection( uri, configuration )
 {
-  mProviderKey = QStringLiteral( "ogr" );
-  // Cleanup the URI in case it contains other information other than the file path
-  if ( uri.contains( '|' ) )
-  {
-    setUri( uri.left( uri.indexOf( '|' ) ).trimmed() );
-  }
   setDefaultCapabilities();
 }
 
@@ -87,59 +83,9 @@ QString QgsGeoPackageProviderConnection::tableUri( const QString &schema, const 
   }
   else
   {
-    return uri() + QStringLiteral( "|layername=%1" ).arg( name );
+    return QgsOgrProviderConnection::tableUri( schema, name );
   }
 }
-
-void QgsGeoPackageProviderConnection::createVectorTable( const QString &schema,
-    const QString &name,
-    const QgsFields &fields,
-    QgsWkbTypes::Type wkbType,
-    const QgsCoordinateReferenceSystem &srs,
-    bool overwrite,
-    const QMap<QString, QVariant> *options ) const
-{
-  checkCapability( Capability::CreateVectorTable );
-  if ( ! schema.isEmpty() )
-  {
-    QgsMessageLog::logMessage( QStringLiteral( "Schema is not supported by GPKG, ignoring" ), QStringLiteral( "OGR" ), Qgis::MessageLevel::Info );
-  }
-  QMap<QString, QVariant> opts { *options };
-  opts[ QStringLiteral( "layerName" ) ] = QVariant( name );
-  opts[ QStringLiteral( "update" ) ] = true;
-  QMap<int, int> map;
-  QString errCause;
-  Qgis::VectorExportResult errCode = QgsOgrProvider::createEmptyLayer(
-                                       uri(),
-                                       fields,
-                                       wkbType,
-                                       srs,
-                                       overwrite,
-                                       &map,
-                                       &errCause,
-                                       &opts
-                                     );
-  if ( errCode != Qgis::VectorExportResult::Success )
-  {
-    throw QgsProviderConnectionException( QObject::tr( "An error occurred while creating the vector layer: %1" ).arg( errCause ) );
-  }
-}
-
-void QgsGeoPackageProviderConnection::dropVectorTable( const QString &schema, const QString &name ) const
-{
-  checkCapability( Capability::DropVectorTable );
-  if ( ! schema.isEmpty() )
-  {
-    QgsMessageLog::logMessage( QStringLiteral( "Schema is not supported by GPKG, ignoring" ), QStringLiteral( "OGR" ), Qgis::MessageLevel::Info );
-  }
-  QString errCause;
-  const QString layerUri { QStringLiteral( "%1|layername=%2" ).arg( uri(), name ) };
-  if ( ! QgsOgrProviderUtils::deleteLayer( layerUri, errCause ) )
-  {
-    throw QgsProviderConnectionException( QObject::tr( "Error deleting vector/aspatial table %1: %2" ).arg( name, errCause ) );
-  }
-}
-
 
 void QgsGeoPackageProviderConnection::dropRasterTable( const QString &schema, const QString &name ) const
 {
@@ -379,6 +325,17 @@ void QgsGeoPackageProviderConnection::setDefaultCapabilities()
     Capability::DropRasterTable,
     Capability::SqlLayers
   };
+
+
+#if GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(3,3,0)
+  mCapabilities |= Capability::RetrieveFieldDomain;
+  mCapabilities |= Capability::AddFieldDomain;
+  mCapabilities |= Capability::SetFieldDomain;
+#endif
+#if GDAL_VERSION_NUM >= GDAL_COMPUTE_VERSION(3,5,0)
+  mCapabilities |= Capability::ListFieldDomains;
+#endif
+
   mGeometryColumnCapabilities =
   {
     GeometryColumnCapability::Z,
@@ -395,8 +352,11 @@ void QgsGeoPackageProviderConnection::setDefaultCapabilities()
 QgsAbstractDatabaseProviderConnection::QueryResult QgsGeoPackageProviderConnection::executeGdalSqlPrivate( const QString &sql, QgsFeedback *feedback ) const
 {
 
+  QgsDatabaseQueryLogWrapper logWrapper( sql, uri(), providerKey(), QStringLiteral( "QgsGeoPackageProviderConnection" ), QGS_QUERY_LOG_ORIGIN );
+
   if ( feedback && feedback->isCanceled() )
   {
+    logWrapper.setCanceled();
     return QgsAbstractDatabaseProviderConnection::QueryResult();
   }
 
@@ -407,6 +367,7 @@ QgsAbstractDatabaseProviderConnection::QueryResult QgsGeoPackageProviderConnecti
 
     if ( feedback && feedback->isCanceled() )
     {
+      logWrapper.setCanceled();
       return QgsAbstractDatabaseProviderConnection::QueryResult();
     }
 
@@ -423,9 +384,9 @@ QgsAbstractDatabaseProviderConnection::QueryResult QgsGeoPackageProviderConnecti
       results.setQueryExecutionTime( std::chrono::duration_cast<std::chrono::milliseconds>( end - begin ).count() );
 
       gdal::ogr_feature_unique_ptr fet;
+
       if ( fet.reset( OGR_L_GetNextFeature( ogrLayer ) ), fet )
       {
-
         // pk column name
         QString pkColumnName;
 
@@ -497,11 +458,13 @@ QgsAbstractDatabaseProviderConnection::QueryResult QgsGeoPackageProviderConnecti
 
       if ( ! errCause.isEmpty() )
       {
+        logWrapper.setError( errCause );
         throw QgsProviderConnectionException( QObject::tr( "Error executing SQL statement %1: %2" ).arg( sql, errCause ) );
       }
 
       OGR_L_ResetReading( ogrLayer );
       iterator->nextRow();
+
       return results;
     }
 
@@ -519,6 +482,7 @@ QgsAbstractDatabaseProviderConnection::QueryResult QgsGeoPackageProviderConnecti
 
   if ( !errCause.isEmpty() )
   {
+    logWrapper.setError( errCause );
     throw QgsProviderConnectionException( QObject::tr( "Error executing SQL %1: %2" ).arg( sql, errCause ) );
   }
 
@@ -646,24 +610,8 @@ void QgsGeoPackageProviderResultIterator::setPrimaryKeyColumnName( const QString
   mPrimaryKeyColumnName = primaryKeyColumnName;
 }
 
-QList<QgsVectorDataProvider::NativeType> QgsGeoPackageProviderConnection::nativeTypes() const
-{
-  QgsVectorLayer::LayerOptions options { false, true };
-  options.skipCrsValidation = true;
-  const QgsVectorLayer vl { uri(), QStringLiteral( "temp_layer" ), QStringLiteral( "ogr" ), options };
-  if ( ! vl.isValid() || ! vl.dataProvider() )
-  {
-    const QString errorCause = vl.dataProvider() && vl.dataProvider()->hasErrors() ?
-                               vl.dataProvider()->errors().join( '\n' ) :
-                               QObject::tr( "unknown error" );
-    throw QgsProviderConnectionException( QObject::tr( "Error retrieving native types for %1: %2" ).arg( uri(), errorCause ) );
-  }
-  return vl.dataProvider()->nativeTypes();
-}
-
 QgsFields QgsGeoPackageProviderConnection::fields( const QString &schema, const QString &table ) const
 {
-
   Q_UNUSED( schema )
 
   // Get fields from layer

@@ -64,14 +64,14 @@ bool QgsAuthEsriTokenMethod::updateNetworkRequest( QNetworkRequest &request, con
     const QString &dataprovider )
 {
   Q_UNUSED( dataprovider )
-  QgsAuthMethodConfig mconfig = getMethodConfig( authcfg );
-  if ( !mconfig.isValid() )
+  const QgsAuthMethodConfig config = getMethodConfig( authcfg );
+  if ( !config.isValid() )
   {
     QgsDebugMsg( QStringLiteral( "Update request config FAILED for authcfg: %1: config invalid" ).arg( authcfg ) );
     return false;
   }
 
-  const QString token = mconfig.config( QStringLiteral( "token" ) );
+  const QString token = config.config( QStringLiteral( "token" ) );
 
   if ( !token.isEmpty() )
   {
@@ -89,7 +89,7 @@ void QgsAuthEsriTokenMethod::updateMethodConfig( QgsAuthMethodConfig &mconfig )
 {
   if ( mconfig.hasConfig( QStringLiteral( "oldconfigstyle" ) ) )
   {
-    QgsDebugMsg( QStringLiteral( "Updating old style auth method config" ) );
+    QgsDebugMsgLevel( QStringLiteral( "Updating old style auth method config" ), 2 );
   }
 
   // NOTE: add updates as method version() increases due to config storage changes
@@ -97,7 +97,7 @@ void QgsAuthEsriTokenMethod::updateMethodConfig( QgsAuthMethodConfig &mconfig )
 
 QgsAuthMethodConfig QgsAuthEsriTokenMethod::getMethodConfig( const QString &authcfg, bool fullconfig )
 {
-  QMutexLocker locker( &mMutex );
+  const QMutexLocker locker( &mMutex );
   QgsAuthMethodConfig mconfig;
 
   // check if it is cached
@@ -123,18 +123,18 @@ QgsAuthMethodConfig QgsAuthEsriTokenMethod::getMethodConfig( const QString &auth
 
 void QgsAuthEsriTokenMethod::putMethodConfig( const QString &authcfg, const QgsAuthMethodConfig &mconfig )
 {
-  QMutexLocker locker( &mMutex );
-  QgsDebugMsg( QStringLiteral( "Putting token config for authcfg: %1" ).arg( authcfg ) );
+  const QMutexLocker locker( &mMutex );
+  QgsDebugMsgLevel( QStringLiteral( "Putting token config for authcfg: %1" ).arg( authcfg ), 2 );
   sAuthConfigCache.insert( authcfg, mconfig );
 }
 
 void QgsAuthEsriTokenMethod::removeMethodConfig( const QString &authcfg )
 {
-  QMutexLocker locker( &mMutex );
+  const QMutexLocker locker( &mMutex );
   if ( sAuthConfigCache.contains( authcfg ) )
   {
     sAuthConfigCache.remove( authcfg );
-    QgsDebugMsg( QStringLiteral( "Removed token config for authcfg: %1" ).arg( authcfg ) );
+    QgsDebugMsgLevel( QStringLiteral( "Removed token config for authcfg: %1" ).arg( authcfg ), 2 );
   }
 }
 

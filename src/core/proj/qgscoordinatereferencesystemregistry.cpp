@@ -59,7 +59,7 @@ QList<QgsCoordinateReferenceSystemRegistry::UserCrsDetails> QgsCoordinateReferen
   sqlite3_statement_unique_ptr preparedStatement = database.prepare( sql, result );
   if ( result == SQLITE_OK )
   {
-    QgsCoordinateReferenceSystem crs;
+    const QgsCoordinateReferenceSystem crs;
     while ( preparedStatement.step() == SQLITE_ROW )
     {
       UserCrsDetails details;
@@ -79,7 +79,7 @@ QList<QgsCoordinateReferenceSystemRegistry::UserCrsDetails> QgsCoordinateReferen
   return res;
 }
 
-long QgsCoordinateReferenceSystemRegistry::addUserCrs( const QgsCoordinateReferenceSystem &crs, const QString &name, QgsCoordinateReferenceSystem::Format nativeFormat )
+long QgsCoordinateReferenceSystemRegistry::addUserCrs( const QgsCoordinateReferenceSystem &crs, const QString &name, Qgis::CrsDefinitionFormat nativeFormat )
 {
   if ( !crs.isValid() )
   {
@@ -94,7 +94,7 @@ long QgsCoordinateReferenceSystemRegistry::addUserCrs( const QgsCoordinateRefere
   {
     proj4String = crs.toProj();
   }
-  QString wktString = crs.toWkt( QgsCoordinateReferenceSystem::WKT_PREFERRED );
+  const QString wktString = crs.toWkt( QgsCoordinateReferenceSystem::WKT_PREFERRED );
 
   // ellipsoid acroynym column is incorrectly marked as not null in many crs database instances,
   // hack around this by using an empty string instead
@@ -113,7 +113,7 @@ long QgsCoordinateReferenceSystemRegistry::addUserCrs( const QgsCoordinateRefere
             + ',' + quotedEllipsoidString
             + ',' + ( !proj4String.isEmpty() ? QgsSqliteUtils::quotedString( proj4String ) : QStringLiteral( "''" ) )
             + ",0,"  // <-- is_geo shamelessly hard coded for now
-            + ( nativeFormat == QgsCoordinateReferenceSystem::FormatWkt ? QgsSqliteUtils::quotedString( wktString ) : QStringLiteral( "''" ) )
+            + ( nativeFormat == Qgis::CrsDefinitionFormat::Wkt ? QgsSqliteUtils::quotedString( wktString ) : QStringLiteral( "''" ) )
             + ')';
   }
   else
@@ -124,7 +124,7 @@ long QgsCoordinateReferenceSystemRegistry::addUserCrs( const QgsCoordinateRefere
             + ',' + quotedEllipsoidString
             + ',' + ( !proj4String.isEmpty() ? QgsSqliteUtils::quotedString( proj4String ) : QStringLiteral( "''" ) )
             + ",0,"  // <-- is_geo shamelessly hard coded for now
-            + ( nativeFormat == QgsCoordinateReferenceSystem::FormatWkt ? QgsSqliteUtils::quotedString( wktString ) : QStringLiteral( "''" ) )
+            + ( nativeFormat == Qgis::CrsDefinitionFormat::Wkt ? QgsSqliteUtils::quotedString( wktString ) : QStringLiteral( "''" ) )
             + ')';
   }
   sqlite3_database_unique_ptr database;
@@ -171,7 +171,7 @@ long QgsCoordinateReferenceSystemRegistry::addUserCrs( const QgsCoordinateRefere
   return returnId;
 }
 
-bool QgsCoordinateReferenceSystemRegistry::updateUserCrs( long id, const QgsCoordinateReferenceSystem &crs, const QString &name, QgsCoordinateReferenceSystem::Format nativeFormat )
+bool QgsCoordinateReferenceSystemRegistry::updateUserCrs( long id, const QgsCoordinateReferenceSystem &crs, const QString &name, Qgis::CrsDefinitionFormat nativeFormat )
 {
   if ( !crs.isValid() )
   {
@@ -185,13 +185,13 @@ bool QgsCoordinateReferenceSystemRegistry::updateUserCrs( long id, const QgsCoor
                       + ",ellipsoid_acronym=" + ( !crs.ellipsoidAcronym().isEmpty() ? QgsSqliteUtils::quotedString( crs.ellipsoidAcronym() ) : QStringLiteral( "''" ) )
                       + ",parameters=" + ( !crs.toProj().isEmpty() ? QgsSqliteUtils::quotedString( crs.toProj() ) : QStringLiteral( "''" ) )
                       + ",is_geo=0" // <--shamelessly hard coded for now
-                      + ",wkt=" + ( nativeFormat == QgsCoordinateReferenceSystem::FormatWkt ? QgsSqliteUtils::quotedString( crs.toWkt( QgsCoordinateReferenceSystem::WKT_PREFERRED, false ) ) : QStringLiteral( "''" ) )
+                      + ",wkt=" + ( nativeFormat == Qgis::CrsDefinitionFormat::Wkt ? QgsSqliteUtils::quotedString( crs.toWkt( QgsCoordinateReferenceSystem::WKT_PREFERRED, false ) ) : QStringLiteral( "''" ) )
                       + " where srs_id=" + QgsSqliteUtils::quotedString( QString::number( id ) )
                       ;
 
   sqlite3_database_unique_ptr database;
   //check the db is available
-  int myResult = database.open( QgsApplication::qgisUserDatabaseFilePath() );
+  const int myResult = database.open( QgsApplication::qgisUserDatabaseFilePath() );
   if ( myResult != SQLITE_OK )
   {
     QgsDebugMsg( QStringLiteral( "Can't open or create database %1: %2" )
@@ -245,7 +245,7 @@ bool QgsCoordinateReferenceSystemRegistry::removeUserCrs( long id )
 {
   sqlite3_database_unique_ptr database;
 
-  QString sql = "delete from tbl_srs where srs_id=" + QgsSqliteUtils::quotedString( QString::number( id ) );
+  const QString sql = "delete from tbl_srs where srs_id=" + QgsSqliteUtils::quotedString( QString::number( id ) );
   QgsDebugMsgLevel( sql, 4 );
   //check the db is available
   int result = database.open( QgsApplication::qgisUserDatabaseFilePath() );
@@ -314,7 +314,7 @@ bool QgsCoordinateReferenceSystemRegistry::insertProjection( const QString &proj
   }
 
   // Set up the query to retrieve the projection information needed to populate the PROJECTION list
-  QString srsSql = "select acronym,name,notes,parameters from tbl_projection where acronym=" + QgsSqliteUtils::quotedString( projectionAcronym );
+  const QString srsSql = "select acronym,name,notes,parameters from tbl_projection where acronym=" + QgsSqliteUtils::quotedString( projectionAcronym );
 
   sqlite3_statement_unique_ptr srsPreparedStatement = srsDatabase.prepare( srsSql, srsResult );
   if ( srsResult == SQLITE_OK )
@@ -351,7 +351,7 @@ QMap<QString, QgsProjOperation> QgsCoordinateReferenceSystemRegistry::projOperat
   static std::once_flag initialized;
   std::call_once( initialized, [ = ]
   {
-    QgsScopedRuntimeProfile profile( QObject::tr( "Initialize PROJ operations" ) );
+    const QgsScopedRuntimeProfile profile( QObject::tr( "Initialize PROJ operations" ) );
 
     const PJ_OPERATIONS *operation = proj_list_operations();
     while ( operation && operation->id )

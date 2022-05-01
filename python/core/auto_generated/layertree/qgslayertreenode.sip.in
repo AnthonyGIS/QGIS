@@ -86,6 +86,12 @@ Custom properties that have already been used within QGIS:
 
     ~QgsLayerTreeNode();
 
+    SIP_PYOBJECT __repr__();
+%MethodCode
+    QString str = QStringLiteral( "<QgsLayerTreeNode: %1>" ).arg( sipCpp->name() );
+    sipRes = PyUnicode_FromString( str.toUtf8().constData() );
+%End
+
     NodeType nodeType() const;
 %Docstring
 Find out about type of the node. It is usually shorter to use convenience functions from :py:class:`QgsLayerTree` namespace for that
@@ -307,7 +313,7 @@ Read common XML elements.
 Write common XML elements.
 %End
 
-    void insertChildrenPrivate( int index, QList<QgsLayerTreeNode *> nodes );
+    void insertChildrenPrivate( int index, const QList<QgsLayerTreeNode *> &nodes );
 %Docstring
 Low-level insertion of children to the node. The children must not have any parent yet!
 %End

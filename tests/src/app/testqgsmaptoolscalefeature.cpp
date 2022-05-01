@@ -92,10 +92,10 @@ void TestQgsMapToolScaleFeature::initTestCase()
   QgsProject::instance()->addMapLayers( QList<QgsMapLayer *>() << mLayerBase );
 
   mLayerBase->startEditing();
-  QString wkt1 = QStringLiteral( "Polygon ((-2 -2, -2 -1, -1 -1, -1 -2, -2 -2))" );
+  const QString wkt1 = QStringLiteral( "Polygon ((-2 -2, -2 -1, -1 -1, -1 -2, -2 -2))" );
   QgsFeature f1;
   f1.setGeometry( QgsGeometry::fromWkt( wkt1 ) );
-  QString wkt2 = QStringLiteral( "Polygon ((1.1 0.8, 1.1 5, 2.1 5, 2.1 0.8, 1.1 0.8))" );
+  const QString wkt2 = QStringLiteral( "Polygon ((1.1 0.8, 1.1 5, 2.1 5, 2.1 0.8, 1.1 0.8))" );
   QgsFeature f2;
   f2.setGeometry( QgsGeometry::fromWkt( wkt2 ) );
 
@@ -107,9 +107,9 @@ void TestQgsMapToolScaleFeature::initTestCase()
   QCOMPARE( mLayerBase->getFeature( 2 ).geometry().asWkt( 1 ), wkt2 );
 
   QgsSnappingConfig cfg = mCanvas->snappingUtils()->config();
-  cfg.setMode( QgsSnappingConfig::AllLayers );
+  cfg.setMode( Qgis::SnappingMode::AllLayers );
   cfg.setTolerance( 1 );
-  cfg.setTypeFlag( static_cast<QgsSnappingConfig::SnappingTypeFlag>( QgsSnappingConfig::VertexFlag | QgsSnappingConfig::SegmentFlag ) );
+  cfg.setTypeFlag( static_cast<Qgis::SnappingTypes>( Qgis::SnappingType::Vertex | Qgis::SnappingType::Segment ) );
   cfg.setEnabled( true );
   mCanvas->snappingUtils()->setConfig( cfg );
 

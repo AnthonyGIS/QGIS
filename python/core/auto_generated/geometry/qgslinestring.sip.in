@@ -585,7 +585,7 @@ segment in the line.
     virtual bool isEmpty() const /HoldGIL/;
 
     int indexOf( const QgsPoint &point ) const final;
-    virtual bool isValid( QString &error /Out/, int flags = 0 ) const;
+    virtual bool isValid( QString &error /Out/, Qgis::GeometryValidityFlags flags = Qgis::GeometryValidityFlags() ) const;
 
     virtual QgsLineString *snappedToGrid( double hSpacing, double vSpacing, double dSpacing = 0, double mSpacing = 0 ) const /Factory/;
 
@@ -666,7 +666,7 @@ of the curve.
     virtual void draw( QPainter &p ) const;
 
 
-    virtual void transform( const QgsCoordinateTransform &ct, QgsCoordinateTransform::TransformDirection d = QgsCoordinateTransform::ForwardTransform, bool transformZ = false )  throw( QgsCsException );
+    virtual void transform( const QgsCoordinateTransform &ct, Qgis::TransformDirection d = Qgis::TransformDirection::Forward, bool transformZ = false )  throw( QgsCsException );
 
     virtual void transform( const QTransform &t, double zTranslate = 0.0, double zScale = 1.0, double mTranslate = 0.0, double mScale = 1.0 );
 
@@ -692,7 +692,7 @@ of the curve.
 
     virtual double closestSegment( const QgsPoint &pt, QgsPoint &segmentPt /Out/, QgsVertexId &vertexAfter /Out/, int *leftOf /Out/ = 0, double epsilon = 4 * DBL_EPSILON ) const;
 
-    virtual bool pointAt( int node, QgsPoint &point, QgsVertexId::VertexType &type ) const;
+    virtual bool pointAt( int node, QgsPoint &point, Qgis::VertexType &type ) const;
 
 
     virtual QgsPoint centroid() const;

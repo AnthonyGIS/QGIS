@@ -20,7 +20,6 @@
 #include <QRegularExpression>
 #include <QList>
 #include <QDomDocument>
-#include <QFont> // for enum values
 
 #ifndef QGSSTRINGUTILS_H
 #define QGSSTRINGUTILS_H
@@ -72,7 +71,7 @@ class CORE_EXPORT QgsStringReplacement
      */
     QString process( const QString &input ) const;
 
-    bool operator==( const QgsStringReplacement &other )
+    bool operator==( const QgsStringReplacement &other ) const
     {
       return mMatch == other.mMatch
              && mReplacement == other.mReplacement
@@ -185,17 +184,6 @@ class CORE_EXPORT QgsStringUtils
 {
   public:
 
-    //! Capitalization options
-    enum Capitalization
-    {
-      MixedCase = QFont::MixedCase, //!< Mixed case, ie no change
-      AllUppercase = QFont::AllUppercase, //!< Convert all characters to uppercase
-      AllLowercase = QFont::AllLowercase,  //!< Convert all characters to lowercase
-      ForceFirstLetterToCapital = QFont::Capitalize, //!< Convert just the first letter of each word to uppercase, leave the rest untouched
-      TitleCase = QFont::Capitalize + 1000, //!< Simple title case conversion - does not fully grammatically parse the text and uses simple rules only. Note that this method does not convert any characters to lowercase, it only uppercases required letters. Callers must ensure that input strings are already lowercased.
-      UpperCamelCase = QFont::Capitalize + 1001, //!< Convert the string to upper camel case. Note that this method does not unaccent characters.
-    };
-
     /**
      * Converts a string by applying capitalization rules to the string.
      * \param string input string
@@ -203,7 +191,7 @@ class CORE_EXPORT QgsStringUtils
      * \returns capitalized string
      * \since QGIS 3.0
      */
-    static QString capitalize( const QString &string, Capitalization capitalization );
+    static QString capitalize( const QString &string, Qgis::Capitalization capitalization );
 
     /**
      * Makes a raw string safe for inclusion as a HTML/XML string literal.
@@ -276,6 +264,14 @@ class CORE_EXPORT QgsStringUtils
      * \since QGIS 3.0
      */
     static QString insertLinks( const QString &string, bool *foundLinks = nullptr );
+
+    /**
+     * Returns whether the string is a URL (http,https,ftp,file)
+     * \param string the string to check
+     * \returns whether the string is an URL
+     * \since QGIS 3.22
+     */
+    static bool isUrl( const QString &string );
 
     /**
      * Automatically wraps a \a string by inserting new line characters at appropriate locations in the string.

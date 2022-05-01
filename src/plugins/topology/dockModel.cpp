@@ -60,19 +60,19 @@ QVariant DockModel::data( const QModelIndex &index, int role ) const
   if ( !index.isValid() || ( role != Qt::TextAlignmentRole && role != Qt::DisplayRole && role != Qt::EditRole ) )
     return QVariant();
 
-  int row = index.row();
+  const int row = index.row();
 //  if(!row)
 //    {
 //      return QVariant();
 //    }
-  int column = index.column();
+  const int column = index.column();
 
   if ( role == Qt::TextAlignmentRole )
   {
     if ( column )
-      return QVariant( Qt::AlignRight );
+      return static_cast<Qt::Alignment::Int>( Qt::AlignRight );
     else
-      return QVariant( Qt::AlignLeft );
+      return static_cast<Qt::Alignment::Int>( Qt::AlignLeft );
   }
 
   QVariant val;

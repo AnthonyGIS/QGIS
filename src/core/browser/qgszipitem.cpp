@@ -57,19 +57,35 @@ void QgsZipItem::init()
   mIconName = QStringLiteral( "/mIconZip.svg" );
   mVsiPrefix = vsiPrefix( mFilePath );
 
+  setCapabilities( capabilities2() | Qgis::BrowserItemCapability::ItemRepresentsFile );
+
   static std::once_flag initialized;
   std::call_once( initialized, [ = ]
   {
-    sProviderNames << QStringLiteral( "OGR" ) << QStringLiteral( "GDAL" );
+    sProviderNames << QStringLiteral( "files" );
   } );
+}
+
+bool QgsZipItem::hasDragEnabled() const
+{
+  return true;
+}
+
+QgsMimeDataUtils::UriList QgsZipItem::mimeUris() const
+{
+  QgsMimeDataUtils::Uri u;
+  u.layerType = QStringLiteral( "collection" );
+  u.uri = path();
+  u.filePath = path();
+  return { u };
 }
 
 QVector<QgsDataItem *> QgsZipItem::createChildren()
 {
   QVector<QgsDataItem *> children;
   QString tmpPath;
-  QgsSettings settings;
-  QString scanZipSetting = settings.value( QStringLiteral( "qgis/scanZipInBrowser2" ), "basic" ).toString();
+  const QgsSettings settings;
+  const QString scanZipSetting = settings.value( QStringLiteral( "qgis/scanZipInBrowser2" ), "basic" ).toString();
 
   mZipFileList.clear();
 
@@ -90,7 +106,7 @@ QVector<QgsDataItem *> QgsZipItem::createChildren()
   const auto constMZipFileList = mZipFileList;
   for ( const QString &fileName : constMZipFileList )
   {
-    QFileInfo info( fileName );
+    const QFileInfo info( fileName );
     tmpPath = mVsiPrefix + mFilePath + '/' + fileName;
     QgsDebugMsgLevel( "tmpPath = " + tmpPath, 3 );
 
@@ -138,10 +154,10 @@ QgsDataItem *QgsZipItem::itemFromPath( QgsDataItem *parent, const QString &path,
 
 QgsDataItem *QgsZipItem::itemFromPath( QgsDataItem *parent, const QString &filePath, const QString &name, const QString &path )
 {
-  QgsSettings settings;
-  QString scanZipSetting = settings.value( QStringLiteral( "qgis/scanZipInBrowser2" ), "basic" ).toString();
+  const QgsSettings settings;
+  const QString scanZipSetting = settings.value( QStringLiteral( "qgis/scanZipInBrowser2" ), "basic" ).toString();
   QStringList zipFileList;
-  QString vsiPrefix = QgsZipItem::vsiPrefix( filePath );
+  const QString vsiPrefix = QgsZipItem::vsiPrefix( filePath );
   QgsZipItem *zipItem = nullptr;
   bool populated = false;
 
@@ -199,8 +215,8 @@ QStringList QgsZipItem::getZipFileList()
     return mZipFileList;
 
   QString tmpPath;
-  QgsSettings settings;
-  QString scanZipSetting = settings.value( QStringLiteral( "qgis/scanZipInBrowser2" ), "basic" ).toString();
+  const QgsSettings settings;
+  const QString scanZipSetting = settings.value( QStringLiteral( "qgis/scanZipInBrowser2" ), "basic" ).toString();
 
   QgsDebugMsgLevel( QStringLiteral( "mFilePath = %1 name= %2 scanZipSetting= %3 vsiPrefix= %4" ).arg( mFilePath, name(), scanZipSetting, mVsiPrefix ), 3 );
 

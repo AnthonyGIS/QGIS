@@ -22,6 +22,7 @@
 #include "qgslogger.h"
 #include "qgsspatialindex.h"
 #include "qgscoordinatereferencesystem.h"
+#include "qgsvariantutils.h"
 
 #include <QUrl>
 #include <QUrlQuery>
@@ -37,7 +38,7 @@ QgsMemoryProvider::QgsMemoryProvider( const QString &uri, const ProviderOptions 
 {
   // Initialize the geometry with the uri to support old style uri's
   // (ie, just 'point', 'line', 'polygon')
-  QUrl url = QUrl::fromEncoded( uri.toUtf8() );
+  const QUrl url = QUrl::fromEncoded( uri.toUtf8() );
   const QUrlQuery query( url );
   QString geometry;
   if ( query.hasQueryItem( QStringLiteral( "geometry" ) ) )
@@ -60,7 +61,7 @@ QgsMemoryProvider::QgsMemoryProvider( const QString &uri, const ProviderOptions 
 
   if ( query.hasQueryItem( QStringLiteral( "crs" ) ) )
   {
-    QString crsDef = query.queryItemValue( QStringLiteral( "crs" ) );
+    const QString crsDef = query.queryItemValue( QStringLiteral( "crs" ) );
     mCrs.createFromString( crsDef );
   }
   else
@@ -73,46 +74,46 @@ QgsMemoryProvider::QgsMemoryProvider( const QString &uri, const ProviderOptions 
   mNextFeatureId = 1;
 
   setNativeTypes( QList< NativeType >()
-                  << QgsVectorDataProvider::NativeType( tr( "Whole number (integer)" ), QStringLiteral( "integer" ), QVariant::Int, 0, 10 )
+                  << QgsVectorDataProvider::NativeType( tr( "Whole Number (integer)" ), QStringLiteral( "integer" ), QVariant::Int, 0, 10 )
                   // Decimal number from OGR/Shapefile/dbf may come with length up to 32 and
                   // precision up to length-2 = 30 (default, if width is not specified in dbf is length = 24 precision = 15)
                   // We know that double (QVariant::Double) has only 15-16 significant numbers,
                   // but setting that correct limits would disable the use of memory provider with
                   // data from Shapefiles. In any case, the data are handled as doubles.
                   // So the limits set here are not correct but enable use of data from Shapefiles.
-                  << QgsVectorDataProvider::NativeType( tr( "Decimal number (real)" ), QStringLiteral( "double" ), QVariant::Double, 0, 32, 0, 30 )
+                  << QgsVectorDataProvider::NativeType( tr( "Decimal Number (real)" ), QStringLiteral( "double" ), QVariant::Double, 0, 32, 0, 30 )
                   << QgsVectorDataProvider::NativeType( tr( "Text (string)" ), QStringLiteral( "string" ), QVariant::String, 0, 255 )
 
                   // date type
-                  << QgsVectorDataProvider::NativeType( tr( "Date" ), QStringLiteral( "date" ), QVariant::Date, -1, -1, -1, -1 )
-                  << QgsVectorDataProvider::NativeType( tr( "Time" ), QStringLiteral( "time" ), QVariant::Time, -1, -1, -1, -1 )
-                  << QgsVectorDataProvider::NativeType( tr( "Date & Time" ), QStringLiteral( "datetime" ), QVariant::DateTime, -1, -1, -1, -1 )
+                  << QgsVectorDataProvider::NativeType( QgsVariantUtils::typeToDisplayString( QVariant::Date ), QStringLiteral( "date" ), QVariant::Date, -1, -1, -1, -1 )
+                  << QgsVectorDataProvider::NativeType( QgsVariantUtils::typeToDisplayString( QVariant::Time ), QStringLiteral( "time" ), QVariant::Time, -1, -1, -1, -1 )
+                  << QgsVectorDataProvider::NativeType( QgsVariantUtils::typeToDisplayString( QVariant::DateTime ), QStringLiteral( "datetime" ), QVariant::DateTime, -1, -1, -1, -1 )
 
                   // integer types
-                  << QgsVectorDataProvider::NativeType( tr( "Whole number (smallint - 16bit)" ), QStringLiteral( "int2" ), QVariant::Int, -1, -1, 0, 0 )
-                  << QgsVectorDataProvider::NativeType( tr( "Whole number (integer - 32bit)" ), QStringLiteral( "int4" ), QVariant::Int, -1, -1, 0, 0 )
-                  << QgsVectorDataProvider::NativeType( tr( "Whole number (integer - 64bit)" ), QStringLiteral( "int8" ), QVariant::LongLong, -1, -1, 0, 0 )
-                  << QgsVectorDataProvider::NativeType( tr( "Decimal number (numeric)" ), QStringLiteral( "numeric" ), QVariant::Double, 1, 20, 0, 20 )
-                  << QgsVectorDataProvider::NativeType( tr( "Decimal number (decimal)" ), QStringLiteral( "decimal" ), QVariant::Double, 1, 20, 0, 20 )
+                  << QgsVectorDataProvider::NativeType( tr( "Whole Number (smallint - 16bit)" ), QStringLiteral( "int2" ), QVariant::Int, -1, -1, 0, 0 )
+                  << QgsVectorDataProvider::NativeType( tr( "Whole Number (integer - 32bit)" ), QStringLiteral( "int4" ), QVariant::Int, -1, -1, 0, 0 )
+                  << QgsVectorDataProvider::NativeType( tr( "Whole Number (integer - 64bit)" ), QStringLiteral( "int8" ), QVariant::LongLong, -1, -1, 0, 0 )
+                  << QgsVectorDataProvider::NativeType( tr( "Decimal Number (numeric)" ), QStringLiteral( "numeric" ), QVariant::Double, 1, 20, 0, 20 )
+                  << QgsVectorDataProvider::NativeType( tr( "Decimal Number (decimal)" ), QStringLiteral( "decimal" ), QVariant::Double, 1, 20, 0, 20 )
 
                   // floating point
-                  << QgsVectorDataProvider::NativeType( tr( "Decimal number (real)" ), QStringLiteral( "real" ), QVariant::Double, -1, -1, -1, -1 )
-                  << QgsVectorDataProvider::NativeType( tr( "Decimal number (double)" ), QStringLiteral( "double precision" ), QVariant::Double, -1, -1, -1, -1 )
+                  << QgsVectorDataProvider::NativeType( tr( "Decimal Number (real)" ), QStringLiteral( "real" ), QVariant::Double, -1, -1, -1, -1 )
+                  << QgsVectorDataProvider::NativeType( tr( "Decimal Number (double)" ), QStringLiteral( "double precision" ), QVariant::Double, -1, -1, -1, -1 )
 
                   // string types
                   << QgsVectorDataProvider::NativeType( tr( "Text, unlimited length (text)" ), QStringLiteral( "text" ), QVariant::String, -1, -1, -1, -1 )
 
                   // boolean
-                  << QgsVectorDataProvider::NativeType( tr( "Boolean" ), QStringLiteral( "boolean" ), QVariant::Bool )
+                  << QgsVectorDataProvider::NativeType( QgsVariantUtils::typeToDisplayString( QVariant::Bool ), QStringLiteral( "boolean" ), QVariant::Bool )
 
                   // blob
-                  << QgsVectorDataProvider::NativeType( tr( "Binary object (BLOB)" ), QStringLiteral( "binary" ), QVariant::ByteArray )
+                  << QgsVectorDataProvider::NativeType( QgsVariantUtils::typeToDisplayString( QVariant::ByteArray ), QStringLiteral( "binary" ), QVariant::ByteArray )
 
                   // list types
-                  << QgsVectorDataProvider::NativeType( tr( "String list" ), QStringLiteral( "stringlist" ), QVariant::StringList, 0, 0, 0, 0, QVariant::String )
-                  << QgsVectorDataProvider::NativeType( tr( "Integer list" ), QStringLiteral( "integerlist" ), QVariant::List, 0, 0, 0, 0, QVariant::Int )
-                  << QgsVectorDataProvider::NativeType( tr( "Decimal (real) list" ), QStringLiteral( "doublelist" ), QVariant::List, 0, 0, 0, 0, QVariant::Double )
-                  << QgsVectorDataProvider::NativeType( tr( "Integer (64bit) list" ), QStringLiteral( "integer64list" ), QVariant::List, 0, 0, 0, 0, QVariant::LongLong )
+                  << QgsVectorDataProvider::NativeType( QgsVariantUtils::typeToDisplayString( QVariant::StringList ), QStringLiteral( "stringlist" ), QVariant::StringList, 0, 0, 0, 0, QVariant::String )
+                  << QgsVectorDataProvider::NativeType( QgsVariantUtils::typeToDisplayString( QVariant::List, QVariant::Int ), QStringLiteral( "integerlist" ), QVariant::List, 0, 0, 0, 0, QVariant::Int )
+                  << QgsVectorDataProvider::NativeType( QgsVariantUtils::typeToDisplayString( QVariant::List, QVariant::Double ), QStringLiteral( "doublelist" ), QVariant::List, 0, 0, 0, 0, QVariant::Double )
+                  << QgsVectorDataProvider::NativeType( QgsVariantUtils::typeToDisplayString( QVariant::List, QVariant::LongLong ), QStringLiteral( "integer64list" ), QVariant::List, 0, 0, 0, 0, QVariant::LongLong )
 
                 );
 
@@ -126,11 +127,11 @@ QgsMemoryProvider::QgsMemoryProvider( const QString &uri, const ProviderOptions 
         "\\))?(\\[\\])?"             // array
         "$",
         QRegularExpression::CaseInsensitiveOption );
-    QStringList fields = query.allQueryItemValues( QStringLiteral( "field" ) );
+    const QStringList fields = query.allQueryItemValues( QStringLiteral( "field" ) );
     for ( int i = 0; i < fields.size(); i++ )
     {
       QString name = QUrl::fromPercentEncoding( fields.at( i ).toUtf8() );
-      QRegularExpressionMatch regularExpressionMatch = reFieldDef.match( name );
+      const QRegularExpressionMatch regularExpressionMatch = reFieldDef.match( name );
 
       // If no match -> use string as type
       QVariant::Type type = QVariant::String;
@@ -258,13 +259,13 @@ QString QgsMemoryProvider::dataSourceUri( bool expandAuthConfig ) const
 
   QUrl uri( QStringLiteral( "memory" ) );
   QUrlQuery query;
-  QString geometry = QgsWkbTypes::displayString( mWkbType );
+  const QString geometry = QgsWkbTypes::displayString( mWkbType );
   query.addQueryItem( QStringLiteral( "geometry" ), geometry );
 
   if ( mCrs.isValid() )
   {
     QString crsDef;
-    QString authid = mCrs.authid();
+    const QString authid = mCrs.authid();
     if ( authid.startsWith( QLatin1String( "EPSG:" ) ) )
     {
       crsDef = authid;
@@ -421,9 +422,9 @@ bool QgsMemoryProvider::addFeatures( QgsFeatureList &flist, Flags flags )
 {
   bool result = true;
   // whether or not to update the layer extent on the fly as we add features
-  bool updateExtent = mFeatures.isEmpty() || !mExtent.isEmpty();
+  const bool updateExtent = mFeatures.isEmpty() || !mExtent.isEmpty();
 
-  int fieldCount = mFields.count();
+  const int fieldCount = mFields.count();
 
   // For rollback
   const auto oldExtent { mExtent };
@@ -541,7 +542,7 @@ bool QgsMemoryProvider::deleteFeatures( const QgsFeatureIds &id )
 {
   for ( QgsFeatureIds::const_iterator it = id.begin(); it != id.end(); ++it )
   {
-    QgsFeatureMap::iterator fit = mFeatures.find( *it );
+    const QgsFeatureMap::iterator fit = mFeatures.find( *it );
 
     // check whether such feature exists
     if ( fit == mFeatures.end() )
@@ -614,7 +615,7 @@ bool QgsMemoryProvider::renameAttributes( const QgsFieldNameMap &renamedAttribut
   bool result = true;
   for ( ; renameIt != renamedAttributes.constEnd(); ++renameIt )
   {
-    int fieldIndex = renameIt.key();
+    const int fieldIndex = renameIt.key();
     if ( fieldIndex < 0 || fieldIndex >= mFields.count() )
     {
       result = false;
@@ -640,7 +641,7 @@ bool QgsMemoryProvider::deleteAttributes( const QgsAttributeIds &attributes )
   // delete attributes one-by-one with decreasing index
   for ( QList<int>::const_iterator it = attrIdx.constBegin(); it != attrIdx.constEnd(); ++it )
   {
-    int idx = *it;
+    const int idx = *it;
     mFields.remove( idx );
 
     for ( QgsFeatureMap::iterator fit = mFeatures.begin(); fit != mFeatures.end(); ++fit )
@@ -664,7 +665,7 @@ bool QgsMemoryProvider::changeAttributeValues( const QgsChangedAttributesMap &at
   QString errorMessage;
   for ( QgsChangedAttributesMap::const_iterator it = attr_map.begin(); it != attr_map.end(); ++it )
   {
-    QgsFeatureMap::iterator fit = mFeatures.find( it.key() );
+    const QgsFeatureMap::iterator fit = mFeatures.find( it.key() );
     if ( fit == mFeatures.end() )
       continue;
 
@@ -712,7 +713,7 @@ bool QgsMemoryProvider::changeGeometryValues( const QgsGeometryMap &geometry_map
 {
   for ( QgsGeometryMap::const_iterator it = geometry_map.begin(); it != geometry_map.end(); ++it )
   {
-    QgsFeatureMap::iterator fit = mFeatures.find( it.key() );
+    const QgsFeatureMap::iterator fit = mFeatures.find( it.key() );
     if ( fit == mFeatures.end() )
       continue;
 
@@ -743,7 +744,7 @@ bool QgsMemoryProvider::setSubsetString( const QString &theSQL, bool updateFeatu
 
   if ( !theSQL.isEmpty() )
   {
-    QgsExpression tempExpression( theSQL );
+    const QgsExpression tempExpression( theSQL );
     if ( tempExpression.hasParserError() )
       return false;
   }

@@ -22,7 +22,7 @@
 #include <QTime>
 #include <QDateTime>
 
-using namespace odbc;
+using namespace NS_ODBC;
 
 namespace
 {
@@ -339,14 +339,32 @@ const char16_t *QgsHanaUtils::toUtf16( const QString &sql )
   return reinterpret_cast<const char16_t *>( sql.utf16() );
 }
 
+bool QgsHanaUtils::isGeometryTypeSupported( QgsWkbTypes::Type wkbType )
+{
+  switch ( QgsWkbTypes::flatType( wkbType ) )
+  {
+    case QgsWkbTypes::Point:
+    case QgsWkbTypes::LineString:
+    case QgsWkbTypes::Polygon:
+    case QgsWkbTypes::MultiPoint:
+    case QgsWkbTypes::MultiLineString:
+    case QgsWkbTypes::MultiPolygon:
+    case QgsWkbTypes::CircularString:
+    case QgsWkbTypes::GeometryCollection:
+      return true;
+    default:
+      return false;
+  }
+}
+
 QgsWkbTypes::Type QgsHanaUtils::toWkbType( const String &type, const Int &hasZ, const Int &hasM )
 {
   if ( type.isNull() )
     return QgsWkbTypes::Unknown;
 
-  bool hasZValue = hasZ.isNull() ? false : *hasZ == 1;
-  bool hasMValue = hasM.isNull() ? false : *hasM == 1;
-  QString hanaType( type->c_str() );
+  const bool hasZValue = hasZ.isNull() ? false : *hasZ == 1;
+  const bool hasMValue = hasM.isNull() ? false : *hasM == 1;
+  const QString hanaType( type->c_str() );
 
   if ( hanaType == QLatin1String( "ST_POINT" ) )
     return QgsWkbTypes::zmType( QgsWkbTypes::Point, hasZValue, hasMValue );
@@ -375,9 +393,9 @@ QVersionNumber QgsHanaUtils::toHANAVersion( const QString &dbVersion )
   if ( strs.length() < 3 )
     return QVersionNumber( 0 );
 
-  int maj = strs[0].toInt();
-  int min = strs[1].toInt();
-  int rev = strs[2].toInt();
+  const int maj = strs[0].toInt();
+  const int min = strs[1].toInt();
+  const int rev = strs[2].toInt();
   return QVersionNumber( maj, min, rev );
 }
 
@@ -484,7 +502,7 @@ int QgsHanaUtils::countFieldsWithFirstLetterInUppercase( const QgsFields &fields
   int count = 0;
   for ( int i = 0, n = fields.size(); i < n; ++i )
   {
-    QString name = fields.at( i ).name();
+    const QString name = fields.at( i ).name();
     if ( name.isEmpty() )
       continue;
     if ( name.at( 0 ).isUpper() )
@@ -500,7 +518,7 @@ QString QgsHanaUtils::formatErrorMessage( const char *message, bool withPrefix )
 
   QString ret( message );
   const QString mark = QStringLiteral( "[HDBODBC] " );
-  int pos = ret.indexOf( mark );
+  const int pos = ret.indexOf( mark );
   if ( pos != -1 )
     ret = ret.remove( 0, pos + mark.length() );
   if ( withPrefix && ret.indexOf( QLatin1String( "HANA" ) ) == -1 )

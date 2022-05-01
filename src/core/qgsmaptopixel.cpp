@@ -31,7 +31,8 @@ QgsMapToPixel::QgsMapToPixel( double mapUnitsPerPixel,
                               int width,
                               int height,
                               double rotation )
-  : mMapUnitsPerPixel( mapUnitsPerPixel )
+  : mValid( true )
+  , mMapUnitsPerPixel( mapUnitsPerPixel )
   , mWidth( width )
   , mHeight( height )
   , mRotation( rotation )
@@ -45,7 +46,8 @@ QgsMapToPixel::QgsMapToPixel( double mapUnitsPerPixel,
 }
 
 QgsMapToPixel::QgsMapToPixel( double mapUnitsPerPixel )
-  : mMapUnitsPerPixel( mapUnitsPerPixel )
+  : mValid( true )
+  , mMapUnitsPerPixel( mapUnitsPerPixel )
   , mWidth( 0 )
   , mHeight( 0 )
   , mXCenter( 0 )
@@ -56,8 +58,8 @@ QgsMapToPixel::QgsMapToPixel( double mapUnitsPerPixel )
 
 QgsMapToPixel QgsMapToPixel::fromScale( double scale, QgsUnitTypes::DistanceUnit mapUnits, double dpi )
 {
-  double metersPerPixel = 25.4 / dpi / 1000.0;
-  double mapUnitsPerPixel = metersPerPixel * QgsUnitTypes::fromUnitToUnitFactor( QgsUnitTypes::DistanceMeters, mapUnits );
+  const double metersPerPixel = 25.4 / dpi / 1000.0;
+  const double mapUnitsPerPixel = metersPerPixel * QgsUnitTypes::fromUnitToUnitFactor( QgsUnitTypes::DistanceMeters, mapUnits );
   return QgsMapToPixel( mapUnitsPerPixel * scale );
 }
 
@@ -68,7 +70,7 @@ QgsMapToPixel::QgsMapToPixel()
 
 bool QgsMapToPixel::updateMatrix()
 {
-  QTransform newMatrix = transform();
+  const QTransform newMatrix = transform();
 
   // https://github.com/qgis/QGIS/issues/20856
   if ( !newMatrix.isInvertible() )
@@ -80,7 +82,9 @@ bool QgsMapToPixel::updateMatrix()
 
 void QgsMapToPixel::setMapUnitsPerPixel( double mapUnitsPerPixel )
 {
-  double oldUnits = mMapUnitsPerPixel;
+  mValid = true;
+
+  const double oldUnits = mMapUnitsPerPixel;
   mMapUnitsPerPixel = mapUnitsPerPixel;
   if ( !updateMatrix() )
   {
@@ -90,10 +94,12 @@ void QgsMapToPixel::setMapUnitsPerPixel( double mapUnitsPerPixel )
 
 void QgsMapToPixel::setMapRotation( double degrees, double cx, double cy )
 {
-  double oldRotation = mRotation;
-  double oldXCenter = mXCenter;
-  double oldYCenter = mYCenter;
-  double oldWidth = mWidth;
+  mValid = true;
+
+  const double oldRotation = mRotation;
+  const double oldXCenter = mXCenter;
+  const double oldYCenter = mYCenter;
+  const double oldWidth = mWidth;
 
   mRotation = degrees;
   mXCenter = cx;
@@ -121,14 +127,16 @@ void QgsMapToPixel::setParameters( double mapUnitsPerPixel,
                                    double rotation,
                                    bool *ok )
 {
-  double oldMUPP = mMapUnitsPerPixel;
-  double oldXCenter = mXCenter;
-  double oldYCenter = mYCenter;
-  double oldWidth = mWidth;
-  double oldHeight = mHeight;
-  double oldRotation = mRotation;
-  double oldXMin = mXMin;
-  double oldYMin = mYMin;
+  mValid = true;
+
+  const double oldMUPP = mMapUnitsPerPixel;
+  const double oldXCenter = mXCenter;
+  const double oldYCenter = mYCenter;
+  const double oldWidth = mWidth;
+  const double oldHeight = mHeight;
+  const double oldRotation = mRotation;
+  const double oldXMin = mXMin;
+  const double oldYMin = mYMin;
 
   mMapUnitsPerPixel = mapUnitsPerPixel;
   mXCenter = xc;
@@ -164,6 +172,7 @@ void QgsMapToPixel::setParameters( double mapUnitsPerPixel,
                                    int height,
                                    double rotation )
 {
+  mValid = true;
   bool ok;
   setParameters( mapUnitsPerPixel, xc, yc, width, height, rotation, &ok );
 }
@@ -185,7 +194,7 @@ QTransform QgsMapToPixel::transform() const
   //       center happens first, then scaling, then rotation
   //       and finally translation to output viewport center
 
-  double rotation = mapRotation();
+  const double rotation = mapRotation();
   if ( qgsDoubleNear( rotation, 0.0 ) )
   {
     //no rotation, return a simplified matrix
@@ -194,8 +203,8 @@ QTransform QgsMapToPixel::transform() const
   }
   else
   {
-    double cy = mapHeight() / 2.0;
-    double cx = mapWidth() / 2.0;
+    const double cy = mapHeight() / 2.0;
+    const double cx = mapWidth() / 2.0;
     return QTransform::fromTranslate( cx, cy )
            .rotate( rotation )
            .scale( 1 / mMapUnitsPerPixel, -1 / mMapUnitsPerPixel )

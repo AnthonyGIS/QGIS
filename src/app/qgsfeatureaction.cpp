@@ -99,7 +99,6 @@ QgsAttributeDialog *QgsFeatureAction::newDialog( bool cloneFeature )
         connect( pb, &QAbstractButton::clicked, a, &QgsFeatureAction::execute );
     }
   }
-
   return dialog;
 }
 
@@ -108,7 +107,7 @@ bool QgsFeatureAction::viewFeatureForm( QgsHighlight *h )
   if ( !mLayer || !mFeature )
     return false;
 
-  QString name( QStringLiteral( "featureactiondlg:%1:%2" ).arg( mLayer->id() ).arg( mFeature->id() ) );
+  const QString name( QStringLiteral( "featureactiondlg:%1:%2" ).arg( mLayer->id() ).arg( mFeature->id() ) );
 
   QgsAttributeDialog *dialog = QgisApp::instance()->findChild<QgsAttributeDialog *>( name );
   if ( dialog )
@@ -140,13 +139,13 @@ bool QgsFeatureAction::editFeature( bool showModal )
     if ( !mFeature->isValid() )
       dialog->setMode( QgsAttributeEditorContext::AddFeatureMode );
 
-    int rv = dialog->exec();
+    const int rv = dialog->exec();
     mFeature->setAttributes( dialog->feature()->attributes() );
     return rv;
   }
   else
   {
-    QString name( QStringLiteral( "featureactiondlg:%1:%2" ).arg( mLayer->id() ).arg( mFeature->id() ) );
+    const QString name( QStringLiteral( "featureactiondlg:%1:%2" ).arg( mLayer->id() ).arg( mFeature->id() ) );
 
     QgsAttributeDialog *dialog = QgisApp::instance()->findChild<QgsAttributeDialog *>( name );
     if ( dialog )
@@ -168,7 +167,7 @@ bool QgsFeatureAction::editFeature( bool showModal )
   return true;
 }
 
-bool QgsFeatureAction::addFeature( const QgsAttributeMap &defaultAttributes, bool showModal, QgsExpressionContextScope *scope SIP_TRANSFER )
+bool QgsFeatureAction::addFeature( const QgsAttributeMap &defaultAttributes, bool showModal, QgsExpressionContextScope *scope SIP_TRANSFER, bool hideParent )
 {
   if ( !mLayer || !mLayer->isEditable() )
     return false;
@@ -176,7 +175,7 @@ bool QgsFeatureAction::addFeature( const QgsAttributeMap &defaultAttributes, boo
   const bool reuseAllLastValues = QgsSettingsRegistryCore::settingsDigitizingReuseLastValues.value();
   QgsDebugMsgLevel( QStringLiteral( "reuseAllLastValues: %1" ).arg( reuseAllLastValues ), 2 );
 
-  QgsFields fields = mLayer->fields();
+  const QgsFields fields = mLayer->fields();
   QgsAttributeMap initialAttributeValues;
 
   for ( int idx = 0; idx < fields.count(); ++idx )
@@ -200,8 +199,8 @@ bool QgsFeatureAction::addFeature( const QgsAttributeMap &defaultAttributes, boo
   if ( scope )
     context.appendScope( scope );
 
-  QgsFeature newFeature = QgsVectorLayerUtils::createFeature( mLayer, mFeature->geometry(), initialAttributeValues,
-                          &context );
+  const QgsFeature newFeature = QgsVectorLayerUtils::createFeature( mLayer, mFeature->geometry(), initialAttributeValues,
+                                &context );
   *mFeature = newFeature;
 
   //show the dialog to enter attribute values
@@ -254,7 +253,6 @@ bool QgsFeatureAction::addFeature( const QgsAttributeMap &defaultAttributes, boo
   }
   else
   {
-
     QgsAttributeDialog *dialog = newDialog( false );
     // delete the dialog when it is closed
     dialog->setAttribute( Qt::WA_DeleteOnClose );
@@ -270,6 +268,12 @@ bool QgsFeatureAction::addFeature( const QgsAttributeMap &defaultAttributes, boo
       setParent( dialog ); // keep dialog until the dialog is closed and destructed
       connect( dialog, &QgsAttributeDialog::finished, this, &QgsFeatureAction::addFeatureFinished );
       dialog->show();
+
+      if ( hideParent )
+      {
+        connect( this, &QgsFeatureAction::addFeatureFinished, this, &QgsFeatureAction::unhideParentWidget );
+        hideParentWidget();
+      }
       mFeature = nullptr;
       return true;
     }
@@ -299,18 +303,40 @@ void QgsFeatureAction::onFeatureSaved( const QgsFeature &feature )
 
   mFeatureSaved = true;
 
-  QgsSettings settings;
+  const QgsSettings settings;
 
-  QgsFields fields = mLayer->fields();
+  const QgsFields fields = mLayer->fields();
   for ( int idx = 0; idx < fields.count(); ++idx )
   {
-    QgsAttributes newValues = feature.attributes();
+    const QgsAttributes newValues = feature.attributes();
     QgsAttributeMap origValues = ( *sLastUsedValues() )[ mLayer ];
     if ( origValues[idx] != newValues.at( idx ) )
     {
       QgsDebugMsg( QStringLiteral( "saving %1 for %2" ).arg( ( *sLastUsedValues() )[ mLayer ][idx].toString() ).arg( idx ) );
       ( *sLastUsedValues() )[ mLayer ][idx] = newValues.at( idx );
     }
+  }
+}
+
+void QgsFeatureAction::hideParentWidget()
+{
+  QWidget *dialog = parentWidget();
+  if ( dialog )
+  {
+    QWidget *triggerWidget = dialog->parentWidget();
+    if ( triggerWidget && triggerWidget->window()->objectName() != QStringLiteral( "QgisApp" ) )
+      triggerWidget->window()->setVisible( false );
+  }
+}
+
+void QgsFeatureAction::unhideParentWidget()
+{
+  QWidget *dialog = parentWidget();
+  if ( dialog )
+  {
+    QWidget *triggerWidget = dialog->parentWidget();
+    if ( triggerWidget )
+      triggerWidget->window()->setVisible( true );
   }
 }
 

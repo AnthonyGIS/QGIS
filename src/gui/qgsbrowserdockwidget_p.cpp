@@ -75,7 +75,7 @@ QgsBrowserPropertiesWrapLabel::QgsBrowserPropertiesWrapLabel( const QString &tex
 
 void QgsBrowserPropertiesWrapLabel::adjustHeight( QSizeF size )
 {
-  int height = static_cast<int>( size.height() ) + 2 * frameWidth();
+  const int height = static_cast<int>( size.height() ) + 2 * frameWidth();
   setMinimumHeight( height );
   setMaximumHeight( height );
 }
@@ -103,11 +103,14 @@ QgsBrowserPropertiesWidget *QgsBrowserPropertiesWidget::createWidget( QgsDataIte
     propertiesWidget = new QgsBrowserDirectoryProperties( parent );
     propertiesWidget->setItem( item );
   }
-  else if ( item->type() == Qgis::BrowserItemType::Layer || item->type() == Qgis::BrowserItemType::Custom )
+  else if ( item->type() == Qgis::BrowserItemType::Layer
+            || item->type() == Qgis::BrowserItemType::Custom
+            || item->type() == Qgis::BrowserItemType::Fields
+            || item->type() == Qgis::BrowserItemType::Field )
   {
     // try new infrastructure of creation of layer widgets
     QWidget *paramWidget = nullptr;
-    const QList< QgsDataItemGuiProvider * > providers = QgsGui::instance()->dataItemGuiProviderRegistry()->providers();
+    const QList< QgsDataItemGuiProvider * > providers = QgsGui::dataItemGuiProviderRegistry()->providers();
     for ( QgsDataItemGuiProvider *provider : providers )
     {
       paramWidget = provider->createParamWidget( item, context );
@@ -174,7 +177,7 @@ void QgsBrowserLayerProperties::setItem( QgsDataItem *item )
 
   mNoticeLabel->clear();
 
-  QgsMapLayerType type = layerItem->mapLayerType();
+  const QgsMapLayerType type = layerItem->mapLayerType();
   QString layerMetadata = tr( "Error" );
 
   mLayer.reset();
@@ -182,12 +185,12 @@ void QgsBrowserLayerProperties::setItem( QgsDataItem *item )
   // find root item
   // we need to create a temporary layer to get metadata
   // we could use a provider but the metadata is not as complete and "pretty"  and this is easier
-  QgsDebugMsg( QStringLiteral( "creating temporary layer using path %1" ).arg( layerItem->path() ) );
+  QgsDebugMsgLevel( QStringLiteral( "creating temporary layer using path %1" ).arg( layerItem->path() ), 2 );
   switch ( type )
   {
     case QgsMapLayerType::RasterLayer:
     {
-      QgsDebugMsg( QStringLiteral( "creating raster layer" ) );
+      QgsDebugMsgLevel( QStringLiteral( "creating raster layer" ), 2 );
       // should copy code from addLayer() to split uri ?
       QgsRasterLayer::LayerOptions options;
       options.skipCrsValidation = true;
@@ -197,7 +200,7 @@ void QgsBrowserLayerProperties::setItem( QgsDataItem *item )
 
     case QgsMapLayerType::MeshLayer:
     {
-      QgsDebugMsg( QStringLiteral( "creating mesh layer" ) );
+      QgsDebugMsgLevel( QStringLiteral( "creating mesh layer" ), 2 );
       QgsMeshLayer::LayerOptions options { QgsProject::instance()->transformContext() };
       options.skipCrsValidation = true;
       mLayer = std::make_unique < QgsMeshLayer >( layerItem->uri(), layerItem->name(), layerItem->providerKey(), options );
@@ -206,7 +209,7 @@ void QgsBrowserLayerProperties::setItem( QgsDataItem *item )
 
     case QgsMapLayerType::VectorLayer:
     {
-      QgsDebugMsg( QStringLiteral( "creating vector layer" ) );
+      QgsDebugMsgLevel( QStringLiteral( "creating vector layer" ), 2 );
       QgsVectorLayer::LayerOptions options { QgsProject::instance()->transformContext() };
       options.skipCrsValidation = true;
       mLayer = std::make_unique < QgsVectorLayer>( layerItem->uri(), layerItem->name(), layerItem->providerKey(), options );
@@ -231,6 +234,7 @@ void QgsBrowserLayerProperties::setItem( QgsDataItem *item )
 
     case QgsMapLayerType::PluginLayer:
     case QgsMapLayerType::AnnotationLayer:
+    case QgsMapLayerType::GroupLayer:
     {
       // TODO: support display of properties for plugin layers
       return;
@@ -261,7 +265,7 @@ void QgsBrowserLayerProperties::setItem( QgsDataItem *item )
     }
   }
 
-  QString myStyle = QgsApplication::reportStyleSheet();
+  const QString myStyle = QgsApplication::reportStyleSheet();
   mMetadataTextBrowser->document()->setDefaultStyleSheet( myStyle );
   mMetadataTextBrowser->setHtml( layerMetadata );
 
@@ -278,9 +282,9 @@ void QgsBrowserLayerProperties::setCondensedMode( bool )
 
 void QgsBrowserLayerProperties::urlClicked( const QUrl &url )
 {
-  QFileInfo file( url.toLocalFile() );
+  const QFileInfo file( url.toLocalFile() );
   if ( file.exists() && !file.isDir() )
-    QgsGui::instance()->nativePlatformInterface()->openFileExplorerAndSelectFile( url.toLocalFile() );
+    QgsGui::nativePlatformInterface()->openFileExplorerAndSelectFile( url.toLocalFile() );
   else
     QDesktopServices::openUrl( url );
 }
@@ -344,7 +348,7 @@ QgsBrowserPropertiesDialog::QgsBrowserPropertiesDialog( const QString &settingsS
   , mSettingsSection( settingsSection )
 {
   setupUi( this );
-  QgsGui::instance()->enableAutoGeometryRestore( this );
+  QgsGui::enableAutoGeometryRestore( this );
 }
 
 void QgsBrowserPropertiesDialog::setItem( QgsDataItem *item, const QgsDataItemGuiContext &context )

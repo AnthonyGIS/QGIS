@@ -38,6 +38,8 @@ class QTextStream;
 
 class QgsMssqlFeatureIterator;
 class QgsMssqlSharedData;
+class QgsMssqlTransaction;
+class QgsMssqlDatabase;
 
 #include "qgsdatasourceuri.h"
 #include "qgsgeometry.h"
@@ -159,6 +161,13 @@ class QgsMssqlProvider final: public QgsVectorDataProvider
 
     QgsCoordinateReferenceSystem crs() const override;
 
+    void setTransaction( QgsTransaction *transaction ) override;
+    QgsTransaction *transaction() const override;
+
+    std::shared_ptr<QgsMssqlDatabase> connection() const;
+
+    void handlePostCloneOperations( QgsVectorDataProvider *source ) override;
+
   protected:
     //! Loads fields from input file to member attributeFields
     QVariant::Type DecodeSqlType( const QString &sqlTypeName );
@@ -166,6 +175,8 @@ class QgsMssqlProvider final: public QgsVectorDataProvider
     void loadMetadata();
 
   private:
+
+    bool execLogged( QSqlQuery &qry, const QString &sql, const QString &queryOrigin = QString() ) const;
 
     //! Fields
     QgsFields mAttributeFields;
@@ -209,15 +220,6 @@ class QgsMssqlProvider final: public QgsVectorDataProvider
 
     mutable QgsWkbTypes::Type mWkbType = QgsWkbTypes::Unknown;
 
-    // The database object
-    mutable QSqlDatabase mDatabase;
-
-    // The current sql query
-    QSqlQuery mQuery;
-
-    // The current sql statement
-    QString mStatement;
-
     // current layer name
     QString mSchemaName;
     QString mTableName;
@@ -238,6 +240,11 @@ class QgsMssqlProvider final: public QgsVectorDataProvider
     QString mSqlWhereClause;
 
     bool mDisableInvalidGeometryHandling = false;
+
+    // this makes sure that we keep the DB connection open while the provider is alive
+    std::shared_ptr<QgsMssqlDatabase> mConn;
+
+    QgsMssqlTransaction *mTransaction = nullptr;
 
     // Sets the error messages
     void setLastError( const QString &error );
@@ -291,9 +298,10 @@ class QgsMssqlProviderMetadata final: public QgsProviderMetadata
 {
   public:
     QgsMssqlProviderMetadata();
-    QString getStyleById( const QString &uri, QString styleId, QString &errCause ) override;
+    QString getStyleById( const QString &uri, const QString &styleId, QString &errCause ) override;
     int listStyles( const QString &uri, QStringList &ids, QStringList &names, QStringList &descriptions, QString &errCause ) override;
     QString loadStyle( const QString &uri, QString &errCause ) override;
+    bool styleExists( const QString &uri, const QString &styleId, QString &errorCause ) override;
     bool saveStyle( const QString &uri, const QString &qmlStyle, const QString &sldStyle,
                     const QString &styleName, const QString &styleDescription,
                     const QString &uiFileContent, bool useAsDefault, QString &errCause ) override;
@@ -309,6 +317,7 @@ class QgsMssqlProviderMetadata final: public QgsProviderMetadata
       const QMap<QString, QVariant> *options ) override;
     QgsMssqlProvider *createProvider( const QString &uri, const QgsDataProvider::ProviderOptions &options, QgsDataProvider::ReadFlags flags = QgsDataProvider::ReadFlags() ) override;
     virtual QList< QgsDataItemProvider * > dataItemProviders() const override;
+    QgsTransaction *createTransaction( const QString &connString ) override;
 
     // Connections API
     QMap<QString, QgsAbstractProviderConnection *> connections( bool cached = true ) override;
@@ -320,6 +329,10 @@ class QgsMssqlProviderMetadata final: public QgsProviderMetadata
     // Data source URI API
     QVariantMap decodeUri( const QString &uri ) const override;
     QString encodeUri( const QVariantMap &parts ) const override;
+
+  private:
+
+    bool execLogged( QSqlQuery &qry, const QString &sql, const QString &uri, const QString &queryOrigin = QString() ) const;
 
 };
 

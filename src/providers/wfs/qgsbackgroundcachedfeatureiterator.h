@@ -20,6 +20,7 @@
 #include "qgsnetworkaccessmanager.h"
 #include "qgsspatialindex.h"
 #include "qgsvectordataprovider.h"
+#include "qgscoordinatetransform.h"
 
 class QDataStream;
 class QFile;
@@ -377,6 +378,8 @@ class QgsBackgroundCachedFeatureIterator final: public QObject,
 
     QgsCoordinateTransform mTransform;
     QgsRectangle mFilterRect;
+    QgsGeometry mDistanceWithinGeom;
+    std::unique_ptr< QgsGeometryEngine > mDistanceWithinEngine;
 
     //! typically to save a FilterFid/FilterFids request that will not be captured by mRequest
     QgsFeatureRequest mAdditionalRequest;

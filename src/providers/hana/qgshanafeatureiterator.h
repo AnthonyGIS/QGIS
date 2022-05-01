@@ -22,6 +22,7 @@
 #include "qgshanaprimarykeys.h"
 #include "qgshanaprovider.h"
 #include "qgshanaresultset.h"
+#include "qgscoordinatetransform.h"
 
 #include "odbc/Forwards.h"
 
@@ -87,6 +88,8 @@ class QgsHanaFeatureIterator : public QgsAbstractFeatureIteratorFromSource<QgsHa
     QString mSqlQuery;
     QVariantList mSqlQueryParams;
     QgsRectangle mFilterRect;
+    QgsGeometry mDistanceWithinGeom;
+    std::unique_ptr< QgsGeometryEngine > mDistanceWithinEngine;
     QgsAttributeList mAttributesToFetch;
     QgsCoordinateTransform mTransform;
     bool mHasAttributes = false;

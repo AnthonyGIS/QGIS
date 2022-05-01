@@ -26,7 +26,7 @@
 /**
  * \ingroup core
  * \class QgsSettingsRegistry
- * QgsSettingsRegistry is used for settings introspection and collects a
+ * \brief QgsSettingsRegistry is used for settings introspection and collects a
  * list of child QgsSettingsRegistry and a list of child QgsSettingsRegistry
  *
  * \since QGIS 3.20
@@ -75,13 +75,21 @@ class CORE_EXPORT QgsSettingsRegistry
   protected:
 
     /**
-     * Add \a settingsEntry to the register.
+     * Adds \a settingsEntry to the registry.
      */
-    void addSettingsEntry( const QgsSettingsEntryBase *settingsEntry );
+    bool addSettingsEntry( const QgsSettingsEntryBase *settingsEntry );
+
+    /**
+     * Adds a group of setting to the registry
+     * \since QGIS 3.26
+     */
+    void addSettingsEntryGroup( const QgsSettingsEntryGroup *settingsGroup );
 
   private:
 
     QMap<QString, const QgsSettingsEntryBase *> mSettingsEntriesMap;
+
+    QMap<const QgsSettingsEntryBase *, const QgsSettingsEntryGroup *> mSettingsEntriesGroupMap;
 
     QList<const QgsSettingsRegistry *> mSettingsRegistryChildList;
 

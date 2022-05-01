@@ -32,7 +32,7 @@
 #include "qgsbrowserwidget.h"
 
 QgsDataSourceManagerDialog::QgsDataSourceManagerDialog( QgsBrowserGuiModel *browserModel, QWidget *parent, QgsMapCanvas *canvas, Qt::WindowFlags fl )
-  : QgsOptionsDialogBase( QStringLiteral( "Data Source Manager" ), parent, fl )
+  : QgsOptionsDialogBase( tr( "Data Source Manager" ), parent, fl )
   , ui( new Ui::QgsDataSourceManagerDialog )
   , mPreviousRow( -1 )
   , mMapCanvas( canvas )
@@ -78,7 +78,7 @@ QgsDataSourceManagerDialog::QgsDataSourceManagerDialog( QgsBrowserGuiModel *brow
     addProviderDialog( dlg, provider->providerKey(), provider->text(), provider->icon( ), provider->toolTip( ) );
   }
 
-  restoreOptionsBaseUi( QStringLiteral( "Data Source Manager" ) );
+  restoreOptionsBaseUi( tr( "Data Source Manager" ) );
 }
 
 QgsDataSourceManagerDialog::~QgsDataSourceManagerDialog()
@@ -88,7 +88,7 @@ QgsDataSourceManagerDialog::~QgsDataSourceManagerDialog()
 
 void QgsDataSourceManagerDialog::openPage( const QString &pageName )
 {
-  int pageIdx = mPageNames.indexOf( pageName );
+  const int pageIdx = mPageNames.indexOf( pageName );
   if ( pageIdx != -1 )
   {
     QTimer::singleShot( 0, this, [ = ] { setCurrentPage( pageIdx ); } );
@@ -110,7 +110,7 @@ void QgsDataSourceManagerDialog::setCurrentPage( int index )
 
 void QgsDataSourceManagerDialog::setPreviousPage()
 {
-  int prevPage = mPreviousRow != -1 ? mPreviousRow : 0;
+  const int prevPage = mPreviousRow != -1 ? mPreviousRow : 0;
   setCurrentPage( prevPage );
 }
 
@@ -122,7 +122,7 @@ void QgsDataSourceManagerDialog::refresh()
 
 void QgsDataSourceManagerDialog::reset()
 {
-  int pageCount = ui->mOptionsStackedWidget->count();
+  const int pageCount = ui->mOptionsStackedWidget->count();
   for ( int i = 0; i < pageCount; ++i )
   {
     QWidget *widget = ui->mOptionsStackedWidget->widget( i );
@@ -181,7 +181,7 @@ void QgsDataSourceManagerDialog::makeConnections( QgsAbstractDataSourceWidget *d
   // Vector
   connect( dlg, &QgsAbstractDataSourceWidget::addVectorLayer, this, [ = ]( const QString & vectorLayerPath, const QString & baseName, const QString & specifiedProvider )
   {
-    QString key = specifiedProvider.isEmpty() ? providerKey : specifiedProvider;
+    const QString key = specifiedProvider.isEmpty() ? providerKey : specifiedProvider;
     this->vectorLayerAdded( vectorLayerPath, baseName, key );
   }
          );

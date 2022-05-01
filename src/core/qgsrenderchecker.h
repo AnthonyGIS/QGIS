@@ -65,7 +65,7 @@ class CORE_EXPORT QgsRenderChecker
     /**
      * Returns the HTML report describing the results of the test run.
      */
-    QString report() { return mReport; }
+    QString report() const { return mReport; }
 
     /**
      * Returns the percent of pixels which matched the control image.
@@ -91,7 +91,7 @@ class CORE_EXPORT QgsRenderChecker
      *
      * \note this only records time for actual render part.
      */
-    int elapsedTime() { return mElapsedTime; }
+    int elapsedTime() const { return mElapsedTime; }
     void setElapsedTimeTarget( int target ) { mElapsedTimeTarget = target; }
 
     /**
@@ -263,7 +263,7 @@ class CORE_EXPORT QgsRenderChecker
 inline bool compareWkt( const QString &a, const QString &b, double tolerance = 0.000001 )
 {
   QgsDebugMsg( QStringLiteral( "a:%1 b:%2 tol:%3" ).arg( a, b ).arg( tolerance ) );
-  QRegularExpression re( "-?\\d+(?:\\.\\d+)?(?:[eE]\\d+)?" );
+  const QRegularExpression re( "-?\\d+(?:\\.\\d+)?(?:[eE]\\d+)?" );
 
   QString a0( a ), b0( b );
   a0.replace( re, QStringLiteral( "#" ) );

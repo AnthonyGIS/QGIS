@@ -188,7 +188,7 @@ void TestQgsValueRelationWidgetWrapper::testDrillDown()
   QCOMPARE( w_municipality.mComboBox->count(), 1 );
 
   // check that valueChanged signal is correctly triggered
-  QSignalSpy spy( &w_municipality, &QgsEditorWidgetWrapper::valuesChanged );
+  const QSignalSpy spy( &w_municipality, &QgsEditorWidgetWrapper::valuesChanged );
 
   w_municipality.setFeature( f3 );
   QCOMPARE( spy.count(), 1 );
@@ -209,8 +209,12 @@ void TestQgsValueRelationWidgetWrapper::testDrillDown()
   // Move the point to 1.5 0.5
   f3.setGeometry( QgsGeometry::fromWkt( QStringLiteral( "POINT( 1.5 0.5)" ) ) );
   w_municipality.setFeature( f3 );
-  QCOMPARE( w_municipality.mComboBox->count(), 1 );
+  // this shouldn't force change the existing value, but rather show it as a "invalid" value surrounded by (...)
+  QCOMPARE( w_municipality.value().toInt(), 1 );
+  QCOMPARE( w_municipality.mComboBox->count(), 2 );
   QCOMPARE( w_municipality.mComboBox->itemText( 0 ), QStringLiteral( "Dreamland By The Clouds" ) );
+  QCOMPARE( w_municipality.mComboBox->itemText( 1 ), QStringLiteral( "(1)" ) );
+  QCOMPARE( w_municipality.mComboBox->currentIndex(), 1 );
 
   // Enlarge the buffer
   cfg_municipality[ QStringLiteral( "FilterExpression" ) ] = QStringLiteral( "contains(buffer(@current_geometry, 3 ), $geometry)" );
@@ -219,6 +223,8 @@ void TestQgsValueRelationWidgetWrapper::testDrillDown()
   QCOMPARE( w_municipality.mComboBox->count(), 2 );
   QCOMPARE( w_municipality.mComboBox->itemText( 0 ), QStringLiteral( "Dreamland By The Clouds" ) );
   QCOMPARE( w_municipality.mComboBox->itemText( 1 ), QStringLiteral( "Some Place By The River" ) );
+  QCOMPARE( w_municipality.value().toInt(), 1 );
+  QCOMPARE( w_municipality.mComboBox->currentIndex(), 1 );
 
   // Check with allow null
   cfg_municipality[QStringLiteral( "AllowNull" )] = true;
@@ -515,11 +521,11 @@ void TestQgsValueRelationWidgetWrapper::testWithJsonInPostgres()
 void TestQgsValueRelationWidgetWrapper::testWithJsonInGPKG()
 {
   // create ogr gpkg layers
-  QString myFileName( TEST_DATA_DIR ); //defined in CmakeLists.txt
-  QString myTempDirName = tempDir.path();
+  const QString myFileName( TEST_DATA_DIR ); //defined in CmakeLists.txt
+  const QString myTempDirName = tempDir.path();
   QFile::copy( myFileName + "/provider/test_json.gpkg", myTempDirName + "/test_json.gpkg" );
-  QString myTempFileName = myTempDirName + "/test_json.gpkg";
-  QFileInfo myMapFileInfo( myTempFileName );
+  const QString myTempFileName = myTempDirName + "/test_json.gpkg";
+  const QFileInfo myMapFileInfo( myTempFileName );
   QgsVectorLayer *vl_json = new QgsVectorLayer( myMapFileInfo.filePath() + "|layername=foo", "test", QStringLiteral( "ogr" ) );
   QgsVectorLayer *vl_authors = new QgsVectorLayer( myMapFileInfo.filePath() + "|layername=author", "test", QStringLiteral( "ogr" ) );
   QVERIFY( vl_json->isValid() );
@@ -632,9 +638,9 @@ void TestQgsValueRelationWidgetWrapper::testWithJsonInGPKG()
   QVariantList expected_vl;
   expected_vl << "1" << "3" << "5";
 
-  QgsFeature f = vl_json->getFeature( 1 );
-  QVariant attribute = f.attribute( QStringLiteral( "json_content" ) );
-  QList<QVariant> value = attribute.toList();
+  const QgsFeature f = vl_json->getFeature( 1 );
+  const QVariant attribute = f.attribute( QStringLiteral( "json_content" ) );
+  const QList<QVariant> value = attribute.toList();
   QCOMPARE( value, expected_vl );
 }
 
@@ -642,11 +648,11 @@ void TestQgsValueRelationWidgetWrapper::testWithJsonInGPKG()
 void TestQgsValueRelationWidgetWrapper::testWithTextInGPKG()
 {
   // create ogr gpkg layers
-  QString myFileName( TEST_DATA_DIR ); //defined in CmakeLists.txt
-  QString myTempDirName = tempDir.path();
+  const QString myFileName( TEST_DATA_DIR ); //defined in CmakeLists.txt
+  const QString myTempDirName = tempDir.path();
   QFile::copy( myFileName + "/provider/test_json.gpkg", myTempDirName + "/test_json.gpkg" );
-  QString myTempFileName = myTempDirName + "/test_json.gpkg";
-  QFileInfo myMapFileInfo( myTempFileName );
+  const QString myTempFileName = myTempDirName + "/test_json.gpkg";
+  const QFileInfo myMapFileInfo( myTempFileName );
   QgsVectorLayer *vl_text = new QgsVectorLayer( myMapFileInfo.filePath() + "|layername=foo", "test", QStringLiteral( "ogr" ) );
   QgsVectorLayer *vl_authors = new QgsVectorLayer( myMapFileInfo.filePath() + "|layername=author", "test", QStringLiteral( "ogr" ) );
   QVERIFY( vl_text->isValid() );
@@ -757,11 +763,11 @@ void TestQgsValueRelationWidgetWrapper::testWithTextInGPKG()
   // check if stored correctly
 
   vl_text->commitChanges();
-  QString expected_string QStringLiteral( "{1,3,5}" );
+  const QString expected_string QStringLiteral( "{1,3,5}" );
 
-  QgsFeature f = vl_text->getFeature( 1 );
-  QVariant attribute = f.attribute( QStringLiteral( "PRFEDEA" ) );
-  QString value = attribute.toString();
+  const QgsFeature f = vl_text->getFeature( 1 );
+  const QVariant attribute = f.attribute( QStringLiteral( "PRFEDEA" ) );
+  const QString value = attribute.toString();
   QCOMPARE( value, expected_string );
 
   w_favoriteauthors.setFeature( vl_text->getFeature( 1 ) );
@@ -814,11 +820,11 @@ void TestQgsValueRelationWidgetWrapper::testWithTextInGPKG()
 void TestQgsValueRelationWidgetWrapper::testWithTextInGPKGTextFk()
 {
   // create ogr gpkg layers
-  QString myFileName( TEST_DATA_DIR ); //defined in CmakeLists.txt
-  QString myTempDirName = tempDir.path();
+  const QString myFileName( TEST_DATA_DIR ); //defined in CmakeLists.txt
+  const QString myTempDirName = tempDir.path();
   QFile::copy( myFileName + "/provider/test_json.gpkg", myTempDirName + "/test_json.gpkg" );
-  QString myTempFileName = myTempDirName + "/test_json.gpkg";
-  QFileInfo myMapFileInfo( myTempFileName );
+  const QString myTempFileName = myTempDirName + "/test_json.gpkg";
+  const QFileInfo myMapFileInfo( myTempFileName );
   QgsVectorLayer *vl_text = new QgsVectorLayer( myMapFileInfo.filePath() + "|layername=foo", "test", QStringLiteral( "ogr" ) );
   QgsVectorLayer *vl_authors = new QgsVectorLayer( myMapFileInfo.filePath() + "|layername=author", "test", QStringLiteral( "ogr" ) );
   QVERIFY( vl_text->isValid() );
@@ -1042,11 +1048,11 @@ void TestQgsValueRelationWidgetWrapper::testWithTextInGPKGTextFk()
 void TestQgsValueRelationWidgetWrapper::testWithTextInGPKGWeirdTextFk()
 {
   // create ogr gpkg layer for foo (vl_text)
-  QString myFileName( TEST_DATA_DIR ); //defined in CmakeLists.txt
-  QString myTempDirName = tempDir.path();
+  const QString myFileName( TEST_DATA_DIR ); //defined in CmakeLists.txt
+  const QString myTempDirName = tempDir.path();
   QString myTempFileName = myTempDirName + "/test_json.gpkg";
   QFile::copy( myFileName + "/provider/test_json.gpkg", myTempFileName );
-  QFileInfo myMapFileInfoFoo( myTempFileName );
+  const QFileInfo myMapFileInfoFoo( myTempFileName );
   QgsVectorLayer *vl_text = new QgsVectorLayer( myMapFileInfoFoo.filePath() + "|layername=foo", "test", QStringLiteral( "ogr" ) );
   QVERIFY( vl_text->isValid() );
 
@@ -1054,7 +1060,7 @@ void TestQgsValueRelationWidgetWrapper::testWithTextInGPKGWeirdTextFk()
   myTempFileName = myTempDirName + QStringLiteral( "/valuerelation_widget_wrapper_test.spatialite.sqlite" );
   QFile::copy( myFileName + QStringLiteral( "/valuerelation_widget_wrapper_test.spatialite.sqlite" ),
                myTempFileName );
-  QFileInfo myMapFileInfoAuthor( myTempFileName );
+  const QFileInfo myMapFileInfoAuthor( myTempFileName );
   QgsVectorLayer *vl_authors = new QgsVectorLayer( QStringLiteral( R"(dbname='%1' table="%2")" )
       .arg( myMapFileInfoAuthor.filePath() ).arg( QLatin1String( "authors" ) ),
       QStringLiteral( "test" ),
@@ -1180,11 +1186,11 @@ void TestQgsValueRelationWidgetWrapper::testWithTextInGPKGWeirdTextFk()
 
   // check if stored correctly
   vl_text->commitChanges();
-  QString expected_string = QStringLiteral( "{\"2helm,comma\",\"3johnson\\\"quote\",\"5adams'singlequote\",\"6follett{}\",\"7garc%1a][\"}" ).arg( QChar( 0x00EC ) );
+  const QString expected_string = QStringLiteral( "{\"2helm,comma\",\"3johnson\\\"quote\",\"5adams'singlequote\",\"6follett{}\",\"7garc%1a][\"}" ).arg( QChar( 0x00EC ) );
 
-  QgsFeature f = vl_text->getFeature( 1 );
-  QVariant attribute = f.attribute( QStringLiteral( "PRFEDEA" ) );
-  QString value = attribute.toString();
+  const QgsFeature f = vl_text->getFeature( 1 );
+  const QVariant attribute = f.attribute( QStringLiteral( "PRFEDEA" ) );
+  const QString value = attribute.toString();
   QCOMPARE( value, expected_string );
 
   //reread completely
@@ -1223,12 +1229,12 @@ void TestQgsValueRelationWidgetWrapper::testWithJsonInSpatialite()
 {
   const auto fk_field { QStringLiteral( "json_content" ) };
   // create ogr gpkg layers
-  QString myFileName( TEST_DATA_DIR ); //defined in CmakeLists.txt
-  QString myTempDirName = tempDir.path();
-  QString myTempFileName = myTempDirName + QStringLiteral( "/valuerelation_widget_wrapper_test.spatialite.sqlite" );
+  const QString myFileName( TEST_DATA_DIR ); //defined in CmakeLists.txt
+  const QString myTempDirName = tempDir.path();
+  const QString myTempFileName = myTempDirName + QStringLiteral( "/valuerelation_widget_wrapper_test.spatialite.sqlite" );
   QFile::copy( myFileName + QStringLiteral( "/valuerelation_widget_wrapper_test.spatialite.sqlite" ),
                myTempFileName );
-  QFileInfo myMapFileInfo( myTempFileName );
+  const QFileInfo myMapFileInfo( myTempFileName );
   QgsVectorLayer *vl_json = new QgsVectorLayer( QStringLiteral( R"(dbname='%1' table="%2")" )
       .arg( myMapFileInfo.filePath() ).arg( QLatin1String( "json" ) ),
       QStringLiteral( "test" ),
@@ -1318,9 +1324,9 @@ void TestQgsValueRelationWidgetWrapper::testWithJsonInSpatialite()
   vl_json->commitChanges();
   QVariantList expected_vl;
   expected_vl << "1" << "2" << "3" << "5";
-  QgsFeature f = vl_json->getFeature( 1 );
-  QVariant attribute = f.attribute( fk_field );
-  QList<QVariant> value = attribute.toList();
+  const QgsFeature f = vl_json->getFeature( 1 );
+  const QVariant attribute = f.attribute( fk_field );
+  const QList<QVariant> value = attribute.toList();
   QCOMPARE( value, expected_vl );
 
   // FEATURE 2
@@ -1337,7 +1343,11 @@ void TestQgsValueRelationWidgetWrapper::testWithJsonInSpatialite()
 
   // FEATURE 4
   w_favoriteauthors.setFeature( vl_json->getFeature( 4 ) );
-  //check if first feature checked correctly (NULL)
+  // Because allowNull is false we have a NULL variant here
+  QCOMPARE( w_favoriteauthors.value(), QVariant( QVariant::Type::List ) );
+  cfg_favoriteauthors[ QStringLiteral( "AllowNull" ) ] = true;
+  w_favoriteauthors.setConfig( cfg_favoriteauthors );
+  //check if first feature checked correctly (empty list)
   QCOMPARE( w_favoriteauthors.value(), QVariant( QVariantList() ) );
   QCOMPARE( w_favoriteauthors.mTableWidget->item( 0, 0 )->checkState(), Qt::Unchecked );
   QCOMPARE( w_favoriteauthors.mTableWidget->item( 1, 0 )->checkState(), Qt::Unchecked );
@@ -1346,10 +1356,17 @@ void TestQgsValueRelationWidgetWrapper::testWithJsonInSpatialite()
   QCOMPARE( w_favoriteauthors.mTableWidget->item( 4, 0 )->checkState(), Qt::Unchecked );
   QCOMPARE( w_favoriteauthors.mTableWidget->item( 5, 0 )->checkState(), Qt::Unchecked );
   QCOMPARE( w_favoriteauthors.mTableWidget->item( 6, 0 )->checkState(), Qt::Unchecked );
+  cfg_favoriteauthors[ QStringLiteral( "AllowNull" ) ] = false;
+  w_favoriteauthors.setConfig( cfg_favoriteauthors );
 
   // FEATURE 5
   w_favoriteauthors.setFeature( vl_json->getFeature( 5 ) );
-  //check if first feature checked correctly (blank)
+  // Because allowNull is false we have a NULL variant here
+  QCOMPARE( w_favoriteauthors.value(), QVariant( QVariant::Type::List ) );
+
+  cfg_favoriteauthors[ QStringLiteral( "AllowNull" ) ] = true;
+  w_favoriteauthors.setConfig( cfg_favoriteauthors );
+  //check if first feature checked correctly (empty list)
   QCOMPARE( w_favoriteauthors.value(), QVariant( QVariantList( ) ) );
   QCOMPARE( w_favoriteauthors.mTableWidget->item( 0, 0 )->checkState(), Qt::Unchecked );
   QCOMPARE( w_favoriteauthors.mTableWidget->item( 1, 0 )->checkState(), Qt::Unchecked );
@@ -1365,12 +1382,12 @@ void TestQgsValueRelationWidgetWrapper::testWithJsonInSpatialiteTextFk()
 {
   const auto fk_field { QStringLiteral( "json_content_text" ) };
   // create ogr gpkg layers
-  QString myFileName( TEST_DATA_DIR ); //defined in CmakeLists.txt
-  QString myTempDirName = tempDir.path();
-  QString myTempFileName = myTempDirName + QStringLiteral( "/valuerelation_widget_wrapper_test.spatialite.sqlite" );
+  const QString myFileName( TEST_DATA_DIR ); //defined in CmakeLists.txt
+  const QString myTempDirName = tempDir.path();
+  const QString myTempFileName = myTempDirName + QStringLiteral( "/valuerelation_widget_wrapper_test.spatialite.sqlite" );
   QFile::copy( myFileName + QStringLiteral( "/valuerelation_widget_wrapper_test.spatialite.sqlite" ),
                myTempFileName );
-  QFileInfo myMapFileInfo( myTempFileName );
+  const QFileInfo myMapFileInfo( myTempFileName );
   QgsVectorLayer *vl_json = new QgsVectorLayer( QStringLiteral( R"(dbname='%1' table="%2")" )
       .arg( myMapFileInfo.filePath() ).arg( QLatin1String( "json" ) ),
       QStringLiteral( "test" ),
@@ -1473,9 +1490,9 @@ void TestQgsValueRelationWidgetWrapper::testWithJsonInSpatialiteTextFk()
   vl_json->changeAttributeValue( 1, fk_field_idx, w_favoriteauthors.value() );
   // check if stored correctly
   vl_json->commitChanges();
-  QgsFeature f = vl_json->getFeature( 1 );
-  QVariant attribute = f.attribute( fk_field );
-  QVariantList value = attribute.toList();
+  const QgsFeature f = vl_json->getFeature( 1 );
+  const QVariant attribute = f.attribute( fk_field );
+  const QVariantList value = attribute.toList();
 
   QCOMPARE( value, QVariantList( { "1gamma", "2helm,comma", "3johnson\"quote", "5adams'singlequote" } ) );
 
@@ -1495,6 +1512,11 @@ void TestQgsValueRelationWidgetWrapper::testWithJsonInSpatialiteTextFk()
   // FEATURE 4
   w_favoriteauthors.setFeature( vl_json->getFeature( 4 ) );
 
+  // Because allowNull is false we have a NULL variant here
+  QCOMPARE( w_favoriteauthors.value(), QVariant( QVariant::Type::List ) );
+  cfg_favoriteauthors[ QStringLiteral( "AllowNull" ) ] = true;
+  w_favoriteauthors.setConfig( cfg_favoriteauthors );
+
   //check if first feature checked correctly (NULL)
   QCOMPARE( w_favoriteauthors.value(), QVariant( QVariantList( ) ) );
 
@@ -1505,11 +1527,18 @@ void TestQgsValueRelationWidgetWrapper::testWithJsonInSpatialiteTextFk()
   QCOMPARE( w_favoriteauthors.mTableWidget->item( 4, 0 )->checkState(), Qt::Unchecked );
   QCOMPARE( w_favoriteauthors.mTableWidget->item( 5, 0 )->checkState(), Qt::Unchecked );
   QCOMPARE( w_favoriteauthors.mTableWidget->item( 6, 0 )->checkState(), Qt::Unchecked );
+  cfg_favoriteauthors[ QStringLiteral( "AllowNull" ) ] = false;
+  w_favoriteauthors.setConfig( cfg_favoriteauthors );
 
   // FEATURE 5
   w_favoriteauthors.setFeature( vl_json->getFeature( 5 ) );
 
-  //check if first feature checked correctly (blank)
+  // Because allowNull is false we have a NULL variant here
+  QCOMPARE( w_favoriteauthors.value(), QVariant( QVariant::Type::List ) );
+  cfg_favoriteauthors[ QStringLiteral( "AllowNull" ) ] = true;
+  w_favoriteauthors.setConfig( cfg_favoriteauthors );
+
+  //check if first feature checked correctly (empty list)
   QCOMPARE( w_favoriteauthors.value(), QVariant( QVariantList() ) );
 
   QCOMPARE( w_favoriteauthors.mTableWidget->item( 0, 0 )->checkState(), Qt::Unchecked );
@@ -1620,18 +1649,21 @@ void TestQgsValueRelationWidgetWrapper::testRegressionGH42003()
   w_municipality.setEnabled( true );
 
   w_municipality.setFeature( QgsFeature( vl2.fields() ) );
-  QCoreApplication::processEvents();
+  while ( w_municipality.mComboBox->currentIndex() != 0 )
+    QCoreApplication::processEvents();
 
   // Check first is selected (fid 2 because of OrderByValue)
   QCOMPARE( w_municipality.mComboBox->currentIndex(), 0 );
   QCOMPARE( w_municipality.mComboBox->count(), 2 );
   QCOMPARE( w_municipality.mComboBox->itemText( 0 ), QStringLiteral( "Dreamland By The Clouds" ) );
-  QCOMPARE( w_municipality.value().toString(), QStringLiteral( "2" ) );
+  QCOMPARE( w_municipality.mComboBox->itemText( 1 ), QStringLiteral( "Some Place By The River" ) );
+  QCOMPARE( w_municipality.value().toInt(), 2 );
 
   // Simulate what happens in the attribute form initialization
   w_municipality.setFeature( QgsFeature( vl2.fields() ) );
   w_municipality.setFeature( vl2.getFeature( 1 ) );
-  QCoreApplication::processEvents();
+  while ( w_municipality.mComboBox->currentIndex() != 1 )
+    QCoreApplication::processEvents();
 
   // Check fid 1 is selected
   QCOMPARE( w_municipality.mComboBox->currentIndex(), 1 );

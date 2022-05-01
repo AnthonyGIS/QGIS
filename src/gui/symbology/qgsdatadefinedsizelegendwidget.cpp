@@ -66,6 +66,7 @@ QgsDataDefinedSizeLegendWidget::QgsDataDefinedSizeLegendWidget( const QgsDataDef
 
     symbol = ddsLegend->symbol() ? ddsLegend->symbol()->clone() : nullptr;  // may be null (undefined)
   }
+  groupBoxOptions->setEnabled( radSeparated->isChecked() );
 
   if ( overrideSymbol )
   {
@@ -81,7 +82,7 @@ QgsDataDefinedSizeLegendWidget::QgsDataDefinedSizeLegendWidget( const QgsDataDef
 
   btnChangeSymbol->setEnabled( !mOverrideSymbol );
 
-  QIcon icon = QgsSymbolLayerUtils::symbolPreviewIcon( mSourceSymbol.get(), btnChangeSymbol->iconSize() );
+  const QIcon icon = QgsSymbolLayerUtils::symbolPreviewIcon( mSourceSymbol.get(), btnChangeSymbol->iconSize() );
   btnChangeSymbol->setIcon( icon );
 
   editTitle->setText( ddsLegend ? ddsLegend->title() : QString() );
@@ -129,6 +130,7 @@ QgsDataDefinedSizeLegendWidget::QgsDataDefinedSizeLegendWidget( const QgsDataDef
   connect( editTitle, &QLineEdit::textChanged, this, &QgsPanelWidget::widgetChanged );
   connect( mLineSymbolButton, &QgsSymbolButton::changed, this, &QgsPanelWidget::widgetChanged );
   connect( this, &QgsPanelWidget::widgetChanged, this, &QgsDataDefinedSizeLegendWidget::updatePreview );
+  connect( radCollapsed, &QRadioButton::toggled, this, [ = ]( bool toggled ) {groupBoxOptions->setEnabled( toggled );} );
   updatePreview();
 }
 
@@ -196,12 +198,12 @@ void QgsDataDefinedSizeLegendWidget::changeSymbol()
     ec << QgsExpressionContextUtils::mapSettingsScope( mMapCanvas->mapSettings() );
   context.setExpressionContext( &ec );
 
-  QString crsAuthId = mMapCanvas ? mMapCanvas->mapSettings().destinationCrs().authid() : QString();
-  QgsVectorLayer::LayerOptions options { QgsProject::instance()->transformContext() };
-  std::unique_ptr<QgsVectorLayer> layer = std::make_unique<QgsVectorLayer>( QStringLiteral( "Point?crs=%1" ).arg( crsAuthId ),
-                                          QStringLiteral( "tmp" ),
-                                          QStringLiteral( "memory" ),
-                                          options ) ;
+  const QString crsAuthId = mMapCanvas ? mMapCanvas->mapSettings().destinationCrs().authid() : QString();
+  const QgsVectorLayer::LayerOptions options { QgsProject::instance()->transformContext() };
+  const std::unique_ptr<QgsVectorLayer> layer = std::make_unique<QgsVectorLayer>( QStringLiteral( "Point?crs=%1" ).arg( crsAuthId ),
+      QStringLiteral( "tmp" ),
+      QStringLiteral( "memory" ),
+      options ) ;
 
   QgsSymbolSelectorDialog d( newSymbol.get(), QgsStyle::defaultStyle(), layer.get(), this );
   d.setContext( context );
@@ -210,7 +212,7 @@ void QgsDataDefinedSizeLegendWidget::changeSymbol()
     return;
 
   mSourceSymbol = std::move( newSymbol );
-  QIcon icon = QgsSymbolLayerUtils::symbolPreviewIcon( mSourceSymbol.get(), btnChangeSymbol->iconSize() );
+  const QIcon icon = QgsSymbolLayerUtils::symbolPreviewIcon( mSourceSymbol.get(), btnChangeSymbol->iconSize() );
   btnChangeSymbol->setIcon( icon );
 
   emit widgetChanged();
@@ -219,8 +221,8 @@ void QgsDataDefinedSizeLegendWidget::changeSymbol()
 void QgsDataDefinedSizeLegendWidget::addSizeClass()
 {
   bool ok;
-  double v = QInputDialog::getDouble( this, tr( "Add Size Class" ), tr( "Enter value for a new class" ),
-                                      0, -2147483647, 2147483647, 6, &ok );
+  const double v = QInputDialog::getDouble( this, tr( "Add Size Class" ), tr( "Enter value for a new class" ),
+                   0, -2147483647, 2147483647, 6, &ok );
   if ( !ok )
     return;
 
@@ -234,7 +236,7 @@ void QgsDataDefinedSizeLegendWidget::addSizeClass()
 
 void QgsDataDefinedSizeLegendWidget::removeSizeClass()
 {
-  QModelIndex idx = viewSizeClasses->currentIndex();
+  const QModelIndex idx = viewSizeClasses->currentIndex();
   if ( !idx.isValid() )
     return;
 

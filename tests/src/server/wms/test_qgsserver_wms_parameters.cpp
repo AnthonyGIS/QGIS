@@ -56,7 +56,7 @@ void TestQgsServerWmsParameters::external_layers()
   query.addQueryItem( "external_layer_2:opacities", "100" );
   query.addQueryItem( "OPACITIES", "255,200,125" );
 
-  QgsWms::QgsWmsParameters parameters( query );
+  const QgsWms::QgsWmsParameters parameters( query );
 
   QList<QgsWms::QgsWmsParametersLayer> layers_params = parameters.layersParameters();
   QCOMPARE( layers_params.size(), 3 );
@@ -83,14 +83,19 @@ void TestQgsServerWmsParameters::percent_encoding()
   // '+' in its encoded ('%2B') form is transformed in '+' sign and
   // forwarded to parameters subclasses
   QUrlQuery query;
-  query.addQueryItem( "MYPARAM", QString( "my%1value" ).arg( QLatin1String( "%2B" ) ) );
+  query.addQueryItem( "MYPARAM", QString( "a%2Cb%2Cc%2C%C3%A4%C3%B6s+%2B+%25%26%23" ) );
 
   QgsServerParameters params;
   params.load( query );
-  QCOMPARE( params.value( "MYPARAM" ), QString( "my+value" ) );
+  QCOMPARE( params.value( "MYPARAM" ), QString( "a,b,c,äös + %&#" ) );
 
-  QgsWms::QgsWmsParameters wmsParams( params );
-  QCOMPARE( wmsParams.value( "MYPARAM" ), QString( "my+value" ) );
+  const QgsWms::QgsWmsParameters wmsParams( params );
+  QCOMPARE( wmsParams.value( "MYPARAM" ), QString( "a,b,c,äös + %&#" ) );
+
+  // back to urlQuery
+  QgsServerParameters params2;
+  params2.load( params.urlQuery() );
+  QCOMPARE( params2.value( "MYPARAM" ), QString( "a,b,c,äös + %&#" ) );
 }
 
 void TestQgsServerWmsParameters::version_negotiation()

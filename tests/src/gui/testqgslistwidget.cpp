@@ -46,7 +46,7 @@ class TestQgsListWidget : public QObject
       // delete new features in db from postgres test
       QgsVectorLayer *vl_array_int = new QgsVectorLayer( QStringLiteral( "%1 sslmode=disable key=\"pk\" table=\"qgis_test\".\"array_tbl\" sql=" ).arg( dbConn ), QStringLiteral( "json" ), QStringLiteral( "postgres" ) );
       vl_array_int->startEditing( );
-      QgsFeatureIds delete_ids = QSet<QgsFeatureId>() << Q_INT64_C( 997 ) << Q_INT64_C( 998 ) << Q_INT64_C( 999 );
+      const QgsFeatureIds delete_ids = QSet<QgsFeatureId>() << Q_INT64_C( 997 ) << Q_INT64_C( 998 ) << Q_INT64_C( 999 );
       vl_array_int->deleteFeatures( delete_ids );
       vl_array_int->commitChanges( false );
       QgsVectorLayer *vl_array_str = new QgsVectorLayer( QStringLiteral( "%1 sslmode=disable key=\"pk\" table=\"qgis_test\".\"string_array\" sql=" ).arg( dbConn ), QStringLiteral( "json" ), QStringLiteral( "postgres" ) );
@@ -62,7 +62,7 @@ class TestQgsListWidget : public QObject
       QgsVectorLayer vl( QStringLiteral( "Point?field=fld:string[]" ), QStringLiteral( "test" ), QStringLiteral( "memory" ) );
       QgsEditorWidgetWrapper *wrapper = factory.create( &vl, 0, nullptr, nullptr );
       QVERIFY( wrapper );
-      QSignalSpy spy( wrapper, SIGNAL( valueChanged( const QVariant & ) ) );
+      const QSignalSpy spy( wrapper, SIGNAL( valueChanged( const QVariant & ) ) );
 
       QgsListWidget *widget = qobject_cast< QgsListWidget * >( wrapper->widget() );
       QVERIFY( widget );
@@ -83,7 +83,7 @@ class TestQgsListWidget : public QObject
 
       QStringList expected = initial;
       expected[0] = QStringLiteral( "hello" );
-      QVariant eventValue = spy.at( 0 ).at( 0 ).value<QVariant>();
+      const QVariant eventValue = spy.at( 0 ).at( 0 ).value<QVariant>();
       QCOMPARE( int( eventValue.type() ), int( QVariant::StringList ) );
       QCOMPARE( eventValue.toStringList(), expected );
       QCOMPARE( wrapper->value().toStringList(), expected );
@@ -145,6 +145,8 @@ class TestQgsListWidget : public QObject
     {
       //create pg layers
       QgsVectorLayer *vl_array_int = new QgsVectorLayer( QStringLiteral( "%1 sslmode=disable key=\"pk\" table=\"qgis_test\".\"array_tbl\" sql=" ).arg( dbConn ), QStringLiteral( "json" ), QStringLiteral( "postgres" ) );
+
+      connect( vl_array_int, &QgsVectorLayer::raiseError, this, []( const QString & msg ) { qWarning() << msg; } );
       QVERIFY( vl_array_int->isValid( ) );
 
       QgsListWidgetWrapper w_array_int( vl_array_int, vl_array_int->fields().indexOf( QLatin1String( "location" ) ), nullptr, nullptr );
@@ -161,10 +163,8 @@ class TestQgsListWidget : public QObject
       new_rec_997.setAttribute( 0, QVariant( 997 ) );
       vl_array_int->addFeature( new_rec_997, QgsFeatureSink::RollBackOnErrors );
       vl_array_int->commitChanges( false );
-      bool success = vl_array_int->changeAttributeValue( 997, 1, w_array_int.value(), QVariant(), false );
-      QVERIFY( success );
-      success = vl_array_int->commitChanges( false );
-      QVERIFY( success );
+      QVERIFY( vl_array_int->changeAttributeValue( 997, 1, w_array_int.value(), QVariant(), false ) );
+      QVERIFY( vl_array_int->commitChanges( false ) );
 
       w_array_int.setFeature( vl_array_int->getFeature( 997 ) );
       QCOMPARE( widget->list( ), QList<QVariant>( ) << 100 );
@@ -208,10 +208,8 @@ class TestQgsListWidget : public QObject
       new_rec_997_str.setAttribute( 0, QVariant( 997 ) );
       vl_array_str->addFeature( new_rec_997_str, QgsFeatureSink::RollBackOnErrors );
       vl_array_str->commitChanges( false );
-      success = vl_array_str->changeAttributeValue( 997, 1, w_array_str.value(), QVariant(), false );
-      QVERIFY( success );
-      success = vl_array_str->commitChanges( false );
-      QVERIFY( success );
+      QVERIFY( vl_array_str->changeAttributeValue( 997, 1, w_array_str.value(), QVariant(), false ) );
+      QVERIFY( vl_array_str->commitChanges( false ) );
 
       w_array_str.setFeature( vl_array_str->getFeature( 997 ) );
       QCOMPARE( widget->list( ), QList<QVariant>( ) << QStringLiteral( "10\"0" ) );

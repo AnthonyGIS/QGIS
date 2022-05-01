@@ -67,7 +67,8 @@ void QgsSingleSymbol3DRendererWidget::setLayer( QgsVectorLayer *layer )
   }
   else
   {
-    std::unique_ptr<QgsAbstract3DSymbol> sym( QgsApplication::symbol3DRegistry()->defaultSymbolForGeometryType( layer->geometryType() ) );
+    const std::unique_ptr<QgsAbstract3DSymbol> sym( QgsApplication::symbol3DRegistry()->defaultSymbolForGeometryType( layer->geometryType() ) );
+    sym->setDefaultPropertiesFromLayer( layer );
     widgetSymbol->setSymbol( sym.get(), layer );
   }
 }
@@ -160,7 +161,7 @@ void QgsVectorLayer3DRendererWidget::setDockMode( bool dockMode )
 
 void QgsVectorLayer3DRendererWidget::apply()
 {
-  int idx = widgetRendererStack->currentIndex();
+  const int idx = widgetRendererStack->currentIndex();
   switch ( idx )
   {
     case 0:

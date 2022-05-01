@@ -30,7 +30,7 @@
 #include <qgssymbol.h>
 #include <qgssinglesymbolrenderer.h>
 #include <qgsfillsymbollayer.h>
-#include <qgscolorramp.h>
+#include "qgscolorrampimpl.h"
 //qgis test includes
 #include "qgsrenderchecker.h"
 #include "qgsfillsymbol.h"
@@ -90,14 +90,14 @@ void TestQgsGradients::initTestCase()
   QgsApplication::showSettings();
 
   //create some objects that will be used in all tests...
-  QString myDataDir( TEST_DATA_DIR ); //defined in CmakeLists.txt
+  const QString myDataDir( TEST_DATA_DIR ); //defined in CmakeLists.txt
   mTestDataDir = myDataDir + '/';
 
   //
   //create a poly layer that will be used in all tests...
   //
-  QString myPolysFileName = mTestDataDir + "polys.shp";
-  QFileInfo myPolyFileInfo( myPolysFileName );
+  const QString myPolysFileName = mTestDataDir + "polys.shp";
+  const QFileInfo myPolyFileInfo( myPolysFileName );
   mpPolysLayer = new QgsVectorLayer( myPolyFileInfo.filePath(),
                                      myPolyFileInfo.completeBaseName(), QStringLiteral( "ogr" ) );
 
@@ -122,7 +122,7 @@ void TestQgsGradients::initTestCase()
 }
 void TestQgsGradients::cleanupTestCase()
 {
-  QString myReportFile = QDir::tempPath() + "/qgistest.html";
+  const QString myReportFile = QDir::tempPath() + "/qgistest.html";
   QFile myFile( myReportFile );
   if ( myFile.open( QIODevice::WriteOnly | QIODevice::Append ) )
   {
@@ -141,10 +141,10 @@ void TestQgsGradients::gradientSymbol()
   mReport += QLatin1String( "<h2>Gradient symbol renderer test</h2>\n" );
   mGradientFill->setColor( QColor( "red" ) );
   mGradientFill->setColor2( QColor( "blue" ) );
-  mGradientFill->setGradientType( QgsGradientFillSymbolLayer::Linear );
-  mGradientFill->setGradientColorType( QgsGradientFillSymbolLayer::SimpleTwoColor );
-  mGradientFill->setCoordinateMode( QgsGradientFillSymbolLayer::Feature );
-  mGradientFill->setGradientSpread( QgsGradientFillSymbolLayer::Pad );
+  mGradientFill->setGradientType( Qgis::GradientType::Linear );
+  mGradientFill->setGradientColorType( Qgis::GradientColorSource::SimpleTwoColor );
+  mGradientFill->setCoordinateMode( Qgis::SymbolCoordinateReference::Feature );
+  mGradientFill->setGradientSpread( Qgis::GradientSpread::Pad );
   mGradientFill->setReferencePoint1( QPointF( 0, 0 ) );
   mGradientFill->setReferencePoint2( QPointF( 1, 1 ) );
   QVERIFY( imageCheck( "gradient" ) );
@@ -168,35 +168,35 @@ void TestQgsGradients::gradientSymbolRamp()
   gradientRamp->setStops( stops );
 
   mGradientFill->setColorRamp( gradientRamp );
-  mGradientFill->setGradientColorType( QgsGradientFillSymbolLayer::ColorRamp );
+  mGradientFill->setGradientColorType( Qgis::GradientColorSource::ColorRamp );
   QVERIFY( imageCheck( "gradient_ramp" ) );
-  mGradientFill->setGradientColorType( QgsGradientFillSymbolLayer::SimpleTwoColor );
+  mGradientFill->setGradientColorType( Qgis::GradientColorSource::SimpleTwoColor );
 }
 
 void TestQgsGradients::gradientSymbolRadial()
 {
   mReport += QLatin1String( "<h2>Gradient symbol renderer radial test</h2>\n" );
-  mGradientFill->setGradientType( QgsGradientFillSymbolLayer::Radial );
+  mGradientFill->setGradientType( Qgis::GradientType::Radial );
   QVERIFY( imageCheck( "gradient_radial" ) );
-  mGradientFill->setGradientType( QgsGradientFillSymbolLayer::Linear );
+  mGradientFill->setGradientType( Qgis::GradientType::Linear );
 }
 
 void TestQgsGradients::gradientSymbolConical()
 {
   mReport += QLatin1String( "<h2>Gradient symbol renderer conical test</h2>\n" );
-  mGradientFill->setGradientType( QgsGradientFillSymbolLayer::Conical );
+  mGradientFill->setGradientType( Qgis::GradientType::Conical );
   mGradientFill->setReferencePoint1( QPointF( 0.5, 0.5 ) );
   QVERIFY( imageCheck( "gradient_conical" ) );
   mGradientFill->setReferencePoint1( QPointF( 0, 0 ) );
-  mGradientFill->setGradientType( QgsGradientFillSymbolLayer::Linear );
+  mGradientFill->setGradientType( Qgis::GradientType::Linear );
 }
 
 void TestQgsGradients::gradientSymbolViewport()
 {
   mReport += QLatin1String( "<h2>Gradient symbol renderer viewport test</h2>\n" );
-  mGradientFill->setCoordinateMode( QgsGradientFillSymbolLayer::Viewport );
+  mGradientFill->setCoordinateMode( Qgis::SymbolCoordinateReference::Viewport );
   QVERIFY( imageCheck( "gradient_viewport" ) );
-  mGradientFill->setCoordinateMode( QgsGradientFillSymbolLayer::Feature );
+  mGradientFill->setCoordinateMode( Qgis::SymbolCoordinateReference::Feature );
 }
 
 void TestQgsGradients::gradientSymbolReferencePoints()
@@ -224,9 +224,9 @@ void TestQgsGradients::gradientSymbolReflectSpread()
 {
   mReport += QLatin1String( "<h2>Gradient symbol renderer reflect spread test</h2>\n" );
   mGradientFill->setReferencePoint2( QPointF( 0.5, 0.5 ) );
-  mGradientFill->setGradientSpread( QgsGradientFillSymbolLayer::Reflect );
+  mGradientFill->setGradientSpread( Qgis::GradientSpread::Reflect );
   QVERIFY( imageCheck( "gradient_reflect" ) );
-  mGradientFill->setGradientSpread( QgsGradientFillSymbolLayer::Pad );
+  mGradientFill->setGradientSpread( Qgis::GradientSpread::Pad );
   mGradientFill->setReferencePoint2( QPointF( 1, 1 ) );
 }
 
@@ -234,9 +234,9 @@ void TestQgsGradients::gradientSymbolRepeatSpread()
 {
   mReport += QLatin1String( "<h2>Gradient symbol renderer repeat spread test</h2>\n" );
   mGradientFill->setReferencePoint2( QPointF( 0.5, 0.5 ) );
-  mGradientFill->setGradientSpread( QgsGradientFillSymbolLayer::Repeat );
+  mGradientFill->setGradientSpread( Qgis::GradientSpread::Repeat );
   QVERIFY( imageCheck( "gradient_repeat" ) );
-  mGradientFill->setGradientSpread( QgsGradientFillSymbolLayer::Pad );
+  mGradientFill->setGradientSpread( Qgis::GradientSpread::Pad );
   mGradientFill->setReferencePoint2( QPointF( 1, 1 ) );
 }
 
@@ -254,7 +254,7 @@ void TestQgsGradients::opacityWithDataDefinedColor()
   mGradientFill->setDataDefinedProperty( QgsSymbolLayer::PropertySecondaryColor, QgsProperty::fromExpression( QStringLiteral( "if(importance > 2, 'blue', 'magenta')" ) ) );
   mFillSymbol->setOpacity( 0.5 );
 
-  bool result = imageCheck( QStringLiteral( "gradient_opacityddcolor" ) );
+  const bool result = imageCheck( QStringLiteral( "gradient_opacityddcolor" ) );
   QVERIFY( result );
 }
 
@@ -265,7 +265,7 @@ void TestQgsGradients::dataDefinedOpacity()
   mFillSymbol->setOpacity( 1.0 );
   mFillSymbol->setDataDefinedProperty( QgsSymbol::PropertyOpacity, QgsProperty::fromExpression( QStringLiteral( "if(\"Value\" >10, 25, 50)" ) ) );
 
-  bool result = imageCheck( QStringLiteral( "gradient_ddopacity" ) );
+  const bool result = imageCheck( QStringLiteral( "gradient_ddopacity" ) );
   QVERIFY( result );
 }
 
@@ -288,9 +288,9 @@ bool TestQgsGradients::setQml( const QString &type )
   //load a qml style and apply to our layer
   //the style will correspond to the renderer
   //type we are testing
-  QString myFileName = mTestDataDir + "polys_" + type + "_symbol.qml";
+  const QString myFileName = mTestDataDir + "polys_" + type + "_symbol.qml";
   bool myStyleFlag = false;
-  QString error = mpPolysLayer->loadNamedStyle( myFileName, myStyleFlag );
+  const QString error = mpPolysLayer->loadNamedStyle( myFileName, myStyleFlag );
   if ( !myStyleFlag )
   {
     qDebug( "%s", error.toLocal8Bit().constData() );
@@ -307,7 +307,7 @@ bool TestQgsGradients::imageCheck( const QString &testType )
   myChecker.setControlPathPrefix( QStringLiteral( "symbol_gradient" ) );
   myChecker.setControlName( "expected_" + testType );
   myChecker.setMapSettings( mMapSettings );
-  bool myResultFlag = myChecker.runTest( testType );
+  const bool myResultFlag = myChecker.runTest( testType );
   mReport += myChecker.report();
   return myResultFlag;
 }

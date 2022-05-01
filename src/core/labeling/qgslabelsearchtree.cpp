@@ -21,7 +21,7 @@ QgsLabelSearchTree::~QgsLabelSearchTree() = default;
 
 void QgsLabelSearchTree::label( const QgsPointXY &point, QList<QgsLabelPosition *> &posList ) const
 {
-  QgsPointXY p( point );
+  const QgsPointXY p( point );
 
   QList<QgsLabelPosition *> searchResults;
   mSpatialIndex.intersects( QgsRectangle( p.x() - 0.1, p.y() - 0.1, p.x() + 0.1, p.y() + 0.1 ), [&searchResults]( const QgsLabelPosition * pos ) -> bool
@@ -73,7 +73,7 @@ void QgsLabelSearchTree::labelsInRect( const QgsRectangle &r, QList<QgsLabelPosi
   }
 }
 
-bool QgsLabelSearchTree::insertLabel( pal::LabelPosition *labelPos, QgsFeatureId featureId, const QString &layerName, const QString &labeltext, const QFont &labelfont, bool diagram, bool pinned, const QString &providerId, bool isUnplaced )
+bool QgsLabelSearchTree::insertLabel( pal::LabelPosition *labelPos, QgsFeatureId featureId, const QString &layerName, const QString &labeltext, const QFont &labelfont, bool diagram, bool pinned, const QString &providerId, bool isUnplaced, long long linkedId )
 {
   if ( !labelPos )
   {
@@ -89,7 +89,7 @@ bool QgsLabelSearchTree::insertLabel( pal::LabelPosition *labelPos, QgsFeatureId
   for ( int i = 0; i < 4; ++i )
   {
     // we have to transform the bounding box to convert pre-rotated label positions back to real world locations
-    QPointF res = mTransform.map( QPointF( labelPos->getX( i ), labelPos->getY( i ) ) );
+    const QPointF res = mTransform.map( QPointF( labelPos->getX( i ), labelPos->getY( i ) ) );
     cornerPoints.push_back( QgsPointXY( res ) );
     xMin = std::min( xMin, res.x() );
     xMax = std::max( xMax, res.x() );
@@ -97,16 +97,30 @@ bool QgsLabelSearchTree::insertLabel( pal::LabelPosition *labelPos, QgsFeatureId
     yMax = std::max( yMax, res.y() );
   }
 
+  pal::LabelPosition *next = labelPos->nextPart();
+  long long uniqueLinkedId = 0;
+  if ( linkedId != 0 )
+    uniqueLinkedId = linkedId;
+  else if ( next )
+    uniqueLinkedId = mNextFeatureId++;
+
   const QgsRectangle bounds( xMin, yMin, xMax, yMax );
-  QgsGeometry labelGeometry( QgsGeometry::fromPolygonXY( QVector<QgsPolylineXY>() << cornerPoints ) );
+  const QgsGeometry labelGeometry( QgsGeometry::fromPolygonXY( QVector<QgsPolylineXY>() << cornerPoints ) );
   std::unique_ptr< QgsLabelPosition > newEntry = std::make_unique< QgsLabelPosition >( featureId, labelPos->getAlpha() + mMapSettings.rotation(), cornerPoints, bounds,
       labelPos->getWidth(), labelPos->getHeight(), layerName, labeltext, labelfont, labelPos->getUpsideDown(), diagram, pinned, providerId, labelGeometry, isUnplaced );
+  newEntry->groupedLabelId = uniqueLinkedId;
   mSpatialIndex.insert( newEntry.get(), bounds );
+
+  if ( uniqueLinkedId != 0 )
+  {
+    mLinkedLabelHash[ uniqueLinkedId ].append( newEntry.get() );
+  }
+
   mOwnedPositions.emplace_back( std::move( newEntry ) );
 
-  if ( pal::LabelPosition *next = labelPos->nextPart() )
+  if ( next )
   {
-    return insertLabel( next, featureId, layerName, labeltext, labelfont, diagram, pinned, providerId, isUnplaced );
+    return insertLabel( next, featureId, layerName, labeltext, labelfont, diagram, pinned, providerId, isUnplaced, uniqueLinkedId );
   }
   return true;
 }
@@ -139,6 +153,11 @@ QList<const QgsCalloutPosition *> QgsLabelSearchTree::calloutsInRectangle( const
   searchResults.erase( std::unique( searchResults.begin(), searchResults.end() ), searchResults.end() );
 
   return searchResults;
+}
+
+QList<QgsLabelPosition *> QgsLabelSearchTree::groupedLabelPositions( long long groupId ) const
+{
+  return mLinkedLabelHash.value( groupId );
 }
 
 void QgsLabelSearchTree::setMapSettings( const QgsMapSettings &settings )

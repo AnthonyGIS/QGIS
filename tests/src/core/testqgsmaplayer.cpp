@@ -27,8 +27,9 @@
 #include <qgsapplication.h>
 #include <qgsproviderregistry.h>
 #include "qgsvectorlayerref.h"
-#include "qgsmaplayerlistutils.h"
+#include "qgsmaplayerlistutils_p.h"
 #include "qgsmaplayerproxymodel.h"
+#include "qgsxmlutils.h"
 
 /**
  * \ingroup UnitTests
@@ -67,6 +68,8 @@ class TestQgsMapLayer : public QObject
 
     void customEnumFlagProperties();
 
+    void readCustomProperties();
+
   private:
     QgsVectorLayer *mpLayer = nullptr;
 };
@@ -89,7 +92,7 @@ void TestQgsMapLayer::init()
   //create a map layer that will be used in all tests...
   QString myFileName( TEST_DATA_DIR ); //defined in CmakeLists.txt
   myFileName = myFileName + "/points.shp";
-  QFileInfo myMapFileInfo( myFileName );
+  const QFileInfo myMapFileInfo( myFileName );
   mpLayer = new QgsVectorLayer( myMapFileInfo.filePath(),
                                 myMapFileInfo.completeBaseName(), QStringLiteral( "ogr" ) );
   QgsProject::instance()->addMapLayer( mpLayer );
@@ -120,7 +123,7 @@ void TestQgsMapLayer::formatName()
 
 void TestQgsMapLayer::setBlendMode()
 {
-  QSignalSpy spy( mpLayer, &QgsMapLayer::blendModeChanged );
+  const QSignalSpy spy( mpLayer, &QgsMapLayer::blendModeChanged );
 
   mpLayer->setBlendMode( QPainter::CompositionMode_Screen );
   // check the signal has been correctly emitted
@@ -189,7 +192,7 @@ void TestQgsMapLayer::isInScaleRange2()
 void TestQgsMapLayer::layerRef()
 {
   // construct from layer
-  QgsVectorLayerRef ref( mpLayer );
+  const QgsVectorLayerRef ref( mpLayer );
   QCOMPARE( ref.get(), mpLayer );
   QCOMPARE( ref.layer.data(), mpLayer );
   QCOMPARE( ref.layerId, mpLayer->id() );
@@ -271,7 +274,7 @@ void TestQgsMapLayer::layerRefListUtils()
   QCOMPARE( refs.at( 0 ).get(), vlA );
   QCOMPARE( refs.at( 1 ).get(), vlB );
 
-  QList<QgsMapLayer *> raw = _qgis_listRefToRaw( refs );
+  const QList<QgsMapLayer *> raw = _qgis_listRefToRaw( refs );
   QCOMPARE( raw, QList< QgsMapLayer *>() << vlA << vlB );
 
   //remove layers
@@ -350,8 +353,8 @@ void TestQgsMapLayer::layerRefResolveWeakly()
 void TestQgsMapLayer::styleCategories()
 {
   // control that AllStyleCategories is actually complete
-  QgsMapLayer::StyleCategories allStyleCategories = QgsMapLayer::AllStyleCategories;
-  for ( QgsMapLayer::StyleCategory category : qgsEnumMap<QgsMapLayer::StyleCategory>().keys() )
+  const QgsMapLayer::StyleCategories allStyleCategories = QgsMapLayer::AllStyleCategories;
+  for ( const QgsMapLayer::StyleCategory category : qgsEnumMap<QgsMapLayer::StyleCategory>().keys() )
   {
     if ( category == QgsMapLayer::AllStyleCategories )
       continue;
@@ -365,8 +368,8 @@ void TestQgsMapLayer::notify()
   QgsVectorLayer *vl = new QgsVectorLayer( QStringLiteral( "Point" ), QStringLiteral( "name" ), QStringLiteral( "memory" ) );
   QVERIFY( vl->dataProvider() );
 
-  QSignalSpy spyRepaint( vl, &QgsMapLayer::repaintRequested );
-  QSignalSpy spyDataChanged( vl, &QgsMapLayer::dataChanged );
+  const QSignalSpy spyRepaint( vl, &QgsMapLayer::repaintRequested );
+  const QSignalSpy spyDataChanged( vl, &QgsMapLayer::dataChanged );
 
   vl->setRefreshOnNotifyEnabled( true );
   emit vl->dataProvider()->notify( "test" );
@@ -401,47 +404,80 @@ void TestQgsMapLayer::customEnumFlagProperties()
   QVERIFY( static_cast<int>( QgsUnitTypes::LayoutMeters ) != -1 );
 
   // standard method returns invalid property
-  int v1 = ml->customProperty( QStringLiteral( "my_property_for_units" ), QgsUnitTypes::LayoutMeters ).toInt();
+  const int v1 = ml->customProperty( QStringLiteral( "my_property_for_units" ), QgsUnitTypes::LayoutMeters ).toInt();
   QCOMPARE( v1, -1 );
 
   // enum method returns default property if current property is incorrect
-  QgsUnitTypes::LayoutUnit v2 = ml->customEnumProperty( QStringLiteral( "my_property_for_units" ), QgsUnitTypes::LayoutMeters );
+  const QgsUnitTypes::LayoutUnit v2 = ml->customEnumProperty( QStringLiteral( "my_property_for_units" ), QgsUnitTypes::LayoutMeters );
   QCOMPARE( v2, QgsUnitTypes::LayoutMeters );
-  QgsUnitTypes::LayoutUnit v2s = ml->customEnumProperty( QStringLiteral( "my_property_for_units_as_string" ), QgsUnitTypes::LayoutMeters );
+  const QgsUnitTypes::LayoutUnit v2s = ml->customEnumProperty( QStringLiteral( "my_property_for_units_as_string" ), QgsUnitTypes::LayoutMeters );
   QCOMPARE( v2s, QgsUnitTypes::LayoutMeters );
 
   // test a different property than default
   ml->setCustomEnumProperty( QStringLiteral( "my_property_for_units" ), QgsUnitTypes::LayoutCentimeters );
-  QgsUnitTypes::LayoutUnit v3 = ml->customEnumProperty( QStringLiteral( "my_property_for_units" ), QgsUnitTypes::LayoutMeters );
+  const QgsUnitTypes::LayoutUnit v3 = ml->customEnumProperty( QStringLiteral( "my_property_for_units" ), QgsUnitTypes::LayoutMeters );
   QCOMPARE( v3, QgsUnitTypes::LayoutCentimeters );
   ml->setCustomEnumProperty( QStringLiteral( "my_property_for_units" ), QgsUnitTypes::LayoutCentimeters );
   // auto conversion of old ml (int to str)
   QCOMPARE( ml->customProperty( "my_property_for_units" ).toString(), QStringLiteral( "LayoutCentimeters" ) );
-  QgsUnitTypes::LayoutUnit v3s = ml->customEnumProperty( QStringLiteral( "my_property_for_units" ), QgsUnitTypes::LayoutMeters );
+  const QgsUnitTypes::LayoutUnit v3s = ml->customEnumProperty( QStringLiteral( "my_property_for_units" ), QgsUnitTypes::LayoutMeters );
   QCOMPARE( v3s, QgsUnitTypes::LayoutCentimeters );
-  QString v3ss = ml->customProperty( QStringLiteral( "my_property_for_units" ), QStringLiteral( "myDummyValue" ) ).toString();
+  const QString v3ss = ml->customProperty( QStringLiteral( "my_property_for_units" ), QStringLiteral( "myDummyValue" ) ).toString();
   QCOMPARE( v3ss, QStringLiteral( "LayoutCentimeters" ) );
 
   // Flags
-  QgsMapLayerProxyModel::Filters pointAndLine = QgsMapLayerProxyModel::Filters( QgsMapLayerProxyModel::PointLayer | QgsMapLayerProxyModel::LineLayer );
-  QgsMapLayerProxyModel::Filters pointAndPolygon = QgsMapLayerProxyModel::Filters( QgsMapLayerProxyModel::PointLayer | QgsMapLayerProxyModel::PolygonLayer );
+  const QgsMapLayerProxyModel::Filters pointAndLine = QgsMapLayerProxyModel::Filters( QgsMapLayerProxyModel::PointLayer | QgsMapLayerProxyModel::LineLayer );
+  const QgsMapLayerProxyModel::Filters pointAndPolygon = QgsMapLayerProxyModel::Filters( QgsMapLayerProxyModel::PointLayer | QgsMapLayerProxyModel::PolygonLayer );
   ml->setCustomProperty( QStringLiteral( "my_property_for_a_flag" ), 1e8 ); // invalid
-  QgsMapLayerProxyModel::Filters v4 = ml->customFlagProperty( QStringLiteral( "my_property_for_a_flag" ), pointAndLine );
+  const QgsMapLayerProxyModel::Filters v4 = ml->customFlagProperty( QStringLiteral( "my_property_for_a_flag" ), pointAndLine );
   QCOMPARE( v4, pointAndLine );
 
   ml->setCustomProperty( QStringLiteral( "my_property_for_a_flag" ), static_cast<int>( pointAndPolygon ) );
-  QgsMapLayerProxyModel::Filters v5 = ml->customFlagProperty( QStringLiteral( "my_property_for_a_flag" ), pointAndLine );
+  const QgsMapLayerProxyModel::Filters v5 = ml->customFlagProperty( QStringLiteral( "my_property_for_a_flag" ), pointAndLine );
   QCOMPARE( v5, pointAndPolygon );
   // auto conversion of old property (int to str)
   QCOMPARE( ml->customProperty( "my_property_for_a_flag" ).toString(), QStringLiteral( "PointLayer|PolygonLayer" ) );
 
   ml->setCustomFlagProperty( QStringLiteral( "my_property_for_a_flag_as_string" ), pointAndPolygon );
-  QgsMapLayerProxyModel::Filters v5s = ml->customFlagProperty( QStringLiteral( "my_property_for_a_flag_as_string" ), pointAndLine );
+  const QgsMapLayerProxyModel::Filters v5s = ml->customFlagProperty( QStringLiteral( "my_property_for_a_flag_as_string" ), pointAndLine );
   QCOMPARE( v5s, pointAndPolygon );
-  QString v5ss = ml->customProperty( QStringLiteral( "my_property_for_a_flag_as_string" ), QStringLiteral( "myDummyString" ) ).toString();
+  const QString v5ss = ml->customProperty( QStringLiteral( "my_property_for_a_flag_as_string" ), QStringLiteral( "myDummyString" ) ).toString();
   QCOMPARE( v5ss, QStringLiteral( "PointLayer|PolygonLayer" ) );
 }
 
+void TestQgsMapLayer::readCustomProperties()
+{
+  std::unique_ptr<QgsVectorLayer> ml = std::make_unique<QgsVectorLayer>( QStringLiteral( "Point" ), QStringLiteral( "name" ), QStringLiteral( "memory" ) );
+
+  // assign to inexisting property
+  ml->setCustomProperty( QStringLiteral( "my_property_one" ), 42 );
+  ml->setCustomProperty( QStringLiteral( "my_property_two" ), QStringLiteral( "test2" ) );
+  ml->setCustomProperty( QStringLiteral( "my_property_three" ), QStringLiteral( "test3" ) );
+
+  QMap<QString, QVariant> map;
+  map[ "my_property_one" ] = 51;
+  map[ "my_property_two" ] = QStringLiteral( "test2 different" );
+  map[ "my_property_three" ] = QStringLiteral( "test3" );
+
+  QDomDocument doc( QStringLiteral( "qgis" ) );
+  QDomElement rootNode = doc.createElement( QStringLiteral( "qgis" ) );
+  QDomElement propsElement = doc.createElement( QStringLiteral( "customproperties" ) );
+  propsElement.appendChild( QgsXmlUtils::writeVariant( map, doc ) );
+  rootNode.appendChild( propsElement );
+
+  const QSignalSpy spy( ml.get(), &QgsMapLayer::customPropertyChanged );
+  ml->readCustomProperties( rootNode, "group" );
+
+  const QgsObjectCustomProperties &props = ml->customProperties();
+  QCOMPARE( props.value( QStringLiteral( "my_property_one" ) ), 51 );
+  QCOMPARE( props.value( QStringLiteral( "my_property_two" ) ), QStringLiteral( "test2 different" ) );
+  QCOMPARE( props.value( QStringLiteral( "my_property_three" ) ), QStringLiteral( "test3" ) );
+
+  QCOMPARE( spy.count(), 2 );
+  QCOMPARE( spy.at( 0 ).at( 0 ), "my_property_one" );
+  QCOMPARE( spy.at( 1 ).at( 0 ), "my_property_two" );
+
+}
 
 QGSTEST_MAIN( TestQgsMapLayer )
 #include "testqgsmaplayer.moc"

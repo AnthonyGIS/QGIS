@@ -57,14 +57,14 @@ void QgsPdalEptGenerationTask::cleanTemp()
   QDir tmpDir( mOutputDir + QStringLiteral( "/temp" ) );
   if ( tmpDir.exists() )
   {
-    QgsMessageLog::logMessage( tr( "Removing temporary files in %1" ).arg( tmpDir.dirName() ), QObject::tr( "Point clouds" ), Qgis::MessageLevel::Info );
+    QgsDebugMsgLevel( QStringLiteral( "Removing temporary files in %1" ).arg( tmpDir.dirName() ), 2 );
     tmpDir.removeRecursively();
   }
 }
 
 bool QgsPdalEptGenerationTask::runUntwine()
 {
-  QFileInfo executable( mUntwineExecutableBinary );
+  const QFileInfo executable( mUntwineExecutableBinary );
   if ( !executable.isExecutable() )
   {
     QgsMessageLog::logMessage( tr( "Untwine executable not found %1" ).arg( mUntwineExecutableBinary ), QObject::tr( "Point clouds" ), Qgis::MessageLevel::Critical );
@@ -72,7 +72,7 @@ bool QgsPdalEptGenerationTask::runUntwine()
   }
   else
   {
-    QgsMessageLog::logMessage( tr( "Using executable %1" ).arg( mUntwineExecutableBinary ), QObject::tr( "Point clouds" ), Qgis::MessageLevel::Info );
+    QgsDebugMsgLevel( QStringLiteral( "Using executable %1" ).arg( mUntwineExecutableBinary ), 2 );
   }
 
   untwine::QgisUntwine untwineProcess( mUntwineExecutableBinary.toStdString() );
@@ -82,19 +82,22 @@ bool QgsPdalEptGenerationTask::runUntwine()
   // we can use them to set automatically set valid range for the data without having to scan the points again.
   options.push_back( { "stats", std::string() } );
 
-  std::vector<std::string> files = {mFile.toStdString()};
+  const std::vector<std::string> files = {mFile.toStdString()};
   untwineProcess.start( files, mOutputDir.toStdString(), options );
-  int lastPercent = 0;
+  const int lastPercent = 0;
   while ( true )
   {
     QThread::msleep( 100 );
-    int percent = untwineProcess.progressPercent();
+    const int percent = untwineProcess.progressPercent();
     if ( lastPercent != percent )
     {
-      QString message = QString::fromStdString( untwineProcess.progressMessage() );
+#ifdef QGISDEBUG
+      const QString message = QString::fromStdString( untwineProcess.progressMessage() );
       if ( !message.isEmpty() )
-        QgsMessageLog::logMessage( message, QObject::tr( "Point clouds" ), Qgis::MessageLevel::Info );
-
+      {
+        QgsDebugMsgLevel( message, 2 );
+      }
+#endif
       setProgress( percent );
     }
 
@@ -107,6 +110,15 @@ bool QgsPdalEptGenerationTask::runUntwine()
     if ( !untwineProcess.running() )
     {
       setProgress( 100 );
+
+      if ( !untwineProcess.errorMessage().empty() )
+      {
+        // TODO: propagate the error message to GUI
+        mErrorMessage = QStringLiteral( "Untwine error: %1" ).arg( QString::fromStdString( untwineProcess.errorMessage() ) );
+        QgsDebugMsg( mErrorMessage );
+        return false;
+      }
+
       return true;
     }
   }
@@ -143,7 +155,7 @@ QString QgsPdalEptGenerationTask::outputDir() const
 
 bool QgsPdalEptGenerationTask::prepareOutputDir()
 {
-  QFileInfo fi( mOutputDir + "/ept.json" );
+  const QFileInfo fi( mOutputDir + "/ept.json" );
   if ( fi.exists() )
   {
     QgsMessageLog::logMessage( tr( "File %1 is already indexed" ).arg( mFile ), QObject::tr( "Point clouds" ), Qgis::MessageLevel::Info );
@@ -166,18 +178,14 @@ bool QgsPdalEptGenerationTask::prepareOutputDir()
           return false;
         }
       }
-    }
-    else
-    {
-      bool success = QDir().mkdir( mOutputDir );
-      if ( success )
-      {
-        QgsMessageLog::logMessage( tr( "Created output directory %1" ).arg( mOutputDir ), QObject::tr( "Point clouds" ), Qgis::MessageLevel::Info );
-      }
       else
       {
-        QgsMessageLog::logMessage( tr( "Unable to create output directory %1" ).arg( mOutputDir ), QObject::tr( "Point clouds" ), Qgis::MessageLevel::Critical );
-        return false;
+        // untwine expects that the output directory does not exist at all
+        if ( !QDir().rmdir( mOutputDir ) )
+        {
+          QgsMessageLog::logMessage( tr( "Failed to remove empty directory %1" ).arg( mOutputDir ), QObject::tr( "Point clouds" ), Qgis::MessageLevel::Critical );
+          return false;
+        }
       }
     }
   }

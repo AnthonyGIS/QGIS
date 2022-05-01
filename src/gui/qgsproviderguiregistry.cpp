@@ -33,9 +33,23 @@
 #include "qgseptproviderguimetadata.h"
 #endif
 
+#ifdef HAVE_COPC
+#include "qgscopcproviderguimetadata.h"
+#endif
+
 #ifdef HAVE_STATIC_PROVIDERS
 #include "qgswmsprovidergui.h"
+#include "qgswcsprovidergui.h"
+#include "qgsdelimitedtextprovidergui.h"
+#include "qgsarcgisrestprovidergui.h"
+#ifdef HAVE_SPATIALITE
+#include "qgsspatialiteprovidergui.h"
+#include "qgswfsprovidergui.h"
+#include "qgsvirtuallayerprovidergui.h"
+#endif
+#ifdef HAVE_POSTGRESQL
 #include "qgspostgresprovidergui.h"
+#endif
 #endif
 
 /**
@@ -50,7 +64,7 @@ static
 QgsProviderGuiMetadata *findMetadata_( QgsProviderGuiRegistry::GuiProviders const &metaData,
                                        QString const &providerKey )
 {
-  QgsProviderGuiRegistry::GuiProviders::const_iterator i = metaData.find( providerKey );
+  const QgsProviderGuiRegistry::GuiProviders::const_iterator i = metaData.find( providerKey );
   if ( i != metaData.end() )
   {
     return i->second;
@@ -82,6 +96,11 @@ void QgsProviderGuiRegistry::loadStaticProviders( )
   mProviders[ ept->key() ] = ept;
 #endif
 
+#ifdef HAVE_COPC
+  QgsProviderGuiMetadata *copc = new QgsCopcProviderGuiMetadata();
+  mProviders[ ept->key() ] = copc;
+#endif
+
   // only show point cloud option if we have at least one point cloud provider available!
   if ( !QgsProviderRegistry::instance()->filePointCloudFilters().isEmpty() )
   {
@@ -92,9 +111,24 @@ void QgsProviderGuiRegistry::loadStaticProviders( )
 #ifdef HAVE_STATIC_PROVIDERS
   QgsProviderGuiMetadata *wms = new QgsWmsProviderGuiMetadata();
   mProviders[ wms->key() ] = wms;
-
+  QgsProviderGuiMetadata *wcs = new QgsWcsProviderGuiMetadata();
+  mProviders[ wcs->key() ] = wcs;
+  QgsProviderGuiMetadata *delimitedtext = new QgsDelimitedTextProviderGuiMetadata();
+  mProviders[ delimitedtext->key() ] = delimitedtext;
+  QgsProviderGuiMetadata *arc = new QgsArcGisRestProviderGuiMetadata();
+  mProviders[ arc->key() ] = arc;
+#ifdef HAVE_SPATIALITE
+  QgsProviderGuiMetadata *spatialite = new QgsSpatiaLiteProviderGuiMetadata();
+  mProviders[ spatialite->key() ] = spatialite;
+  QgsProviderGuiMetadata *wfs = new QgsWfsProviderGuiMetadata();
+  mProviders[ wfs->key() ] = wfs;
+  QgsProviderGuiMetadata *virtuallayer = new QgsVirtualLayerProviderGuiMetadata();
+  mProviders[ virtuallayer->key() ] = virtuallayer;
+#endif
+#ifdef HAVE_POSTGRESQL
   QgsProviderGuiMetadata *postgres = new QgsPostgresProviderGuiMetadata();
   mProviders[ postgres->key() ] = postgres;
+#endif
 #endif
 }
 
@@ -127,7 +161,7 @@ void QgsProviderGuiRegistry::loadDynamicProviders( const QString &pluginPath )
   }
 
   // provider file regex pattern, only files matching the pattern are loaded if the variable is defined
-  QString filePattern = getenv( "QGIS_PROVIDER_FILE" );
+  const QString filePattern = getenv( "QGIS_PROVIDER_FILE" );
   QRegularExpression fileRegexp;
   if ( !filePattern.isEmpty() )
   {

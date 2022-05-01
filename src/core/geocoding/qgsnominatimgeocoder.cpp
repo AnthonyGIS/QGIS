@@ -18,6 +18,7 @@
 #include "qgsgeocodercontext.h"
 #include "qgslogger.h"
 #include "qgsnetworkaccessmanager.h"
+#include "qgscoordinatetransform.h"
 #include <QDateTime>
 #include <QUrl>
 #include <QUrlQuery>
@@ -75,7 +76,7 @@ QList<QgsGeocoderResult> QgsNominatimGeocoder::geocodeString( const QString &str
   if ( !context.areaOfInterest().isEmpty() )
   {
     QgsGeometry g = context.areaOfInterest();
-    QgsCoordinateTransform ct( context.areaOfInterestCrs(), QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:4326" ) ), context.transformContext() );
+    const QgsCoordinateTransform ct( context.areaOfInterestCrs(), QgsCoordinateReferenceSystem( QStringLiteral( "EPSG:4326" ) ), context.transformContext() );
     try
     {
       g.transform( ct );
@@ -89,8 +90,8 @@ QList<QgsGeocoderResult> QgsNominatimGeocoder::geocodeString( const QString &str
 
   const QUrl url = requestUrl( string, bounds );
 
-  QMutexLocker locker( &sMutex );
-  auto it = sCachedResults()->constFind( url );
+  const QMutexLocker locker( &sMutex );
+  const auto it = sCachedResults()->constFind( url );
   if ( it != sCachedResults()->constEnd() )
   {
     return *it;
@@ -118,7 +119,7 @@ QList<QgsGeocoderResult> QgsNominatimGeocoder::geocodeString( const QString &str
 
   // Parse data
   QJsonParseError err;
-  QJsonDocument doc = QJsonDocument::fromJson( newReq.reply().content(), &err );
+  const QJsonDocument doc = QJsonDocument::fromJson( newReq.reply().content(), &err );
   if ( doc.isNull() )
   {
     return QList<QgsGeocoderResult>() << QgsGeocoderResult::errorResult( err.errorString() );
@@ -216,7 +217,7 @@ QgsGeocoderResult QgsNominatimGeocoder::jsonToResult( const QVariantMap &json ) 
 
   if ( json.contains( QStringLiteral( "boundingbox" ) ) )
   {
-    QVariantList boundingBox = json.value( QStringLiteral( "boundingbox" ) ).toList();
+    const QVariantList boundingBox = json.value( QStringLiteral( "boundingbox" ) ).toList();
     if ( boundingBox.size() == 4 )
       res.setViewport( QgsRectangle( boundingBox.at( 2 ).toDouble(),
                                      boundingBox.at( 0 ).toDouble(),

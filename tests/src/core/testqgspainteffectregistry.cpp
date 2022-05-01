@@ -86,7 +86,7 @@ void TestQgsPaintEffectRegistry::metadata()
   QCOMPARE( metadata.visibleName(), QString( "display name" ) );
 
   //test creating effect from metadata
-  QVariantMap map;
+  const QVariantMap map;
   QgsPaintEffect *effect = metadata.createPaintEffect( map );
   QVERIFY( effect );
   DummyPaintEffect *dummyEffect = dynamic_cast<DummyPaintEffect *>( effect );
@@ -112,7 +112,7 @@ void TestQgsPaintEffectRegistry::addEffect()
 {
   //create an empty registry
   QgsPaintEffectRegistry *registry = QgsApplication::paintEffectRegistry();
-  int previousCount = registry->effects().length();
+  const int previousCount = registry->effects().length();
 
   registry->addEffectType( new QgsPaintEffectMetadata( QStringLiteral( "Dummy" ), QStringLiteral( "Dummy effect" ), DummyPaintEffect::create ) );
   QCOMPARE( registry->effects().length(), previousCount + 1 );
@@ -130,7 +130,7 @@ void TestQgsPaintEffectRegistry::addEffect()
 void TestQgsPaintEffectRegistry::fetchEffects()
 {
   QgsPaintEffectRegistry *registry = QgsApplication::paintEffectRegistry();
-  QStringList effects = registry->effects();
+  const QStringList effects = registry->effects();
 
   QVERIFY( effects.contains( "Dummy" ) );
 
@@ -160,7 +160,7 @@ void TestQgsPaintEffectRegistry::createEffect()
 void TestQgsPaintEffectRegistry::defaultStack()
 {
   QgsPaintEffectRegistry *registry = QgsApplication::paintEffectRegistry();
-  QgsEffectStack *effect = static_cast<QgsEffectStack *>( registry->defaultStack() );
+  QgsEffectStack *effect = static_cast<QgsEffectStack *>( QgsPaintEffectRegistry::defaultStack() );
   QVERIFY( registry->isDefaultStack( effect ) );
   effect->effect( 1 )->setEnabled( true );
   QVERIFY( !registry->isDefaultStack( effect ) );
@@ -175,7 +175,7 @@ void TestQgsPaintEffectRegistry::defaultStack()
   QVERIFY( !registry->isDefaultStack( effect2 ) );
   delete effect2;
 
-  effect = static_cast<QgsEffectStack *>( registry->defaultStack() );
+  effect = static_cast<QgsEffectStack *>( QgsPaintEffectRegistry::defaultStack() );
   static_cast< QgsDrawSourceEffect * >( effect->effect( 2 ) )->setOpacity( 0.5 );
   QVERIFY( !registry->isDefaultStack( effect ) );
   static_cast< QgsDrawSourceEffect * >( effect->effect( 2 ) )->setOpacity( 1.0 );

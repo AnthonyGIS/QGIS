@@ -20,6 +20,7 @@
 
 //for CMAKE_INSTALL_PREFIX
 #include "qgsconfig.h"
+#include "qgsversion.h"
 #include "qgsserver.h"
 #include "qgsauthmanager.h"
 #include "qgscapabilitiescache.h"
@@ -39,6 +40,7 @@
 #include "qgsserverparameters.h"
 #include "qgsapplication.h"
 #include "qgsruntimeprofiler.h"
+#include "qgscoordinatetransform.h"
 
 #include <QDomDocument>
 #include <QNetworkDiskCache>
@@ -83,11 +85,11 @@ QFileInfo QgsServer::defaultAdminSLD()
 
 void QgsServer::setupNetworkAccessManager()
 {
-  QSettings settings;
+  const QSettings settings;
   QgsNetworkAccessManager *nam = QgsNetworkAccessManager::instance();
   QNetworkDiskCache *cache = new QNetworkDiskCache( nullptr );
-  qint64 cacheSize = sSettings()->cacheSize();
-  QString cacheDirectory = sSettings()->cacheDirectory();
+  const qint64 cacheSize = sSettings()->cacheSize();
+  const QString cacheDirectory = sSettings()->cacheDirectory();
   cache->setCacheDirectory( cacheDirectory );
   cache->setMaximumCacheSize( cacheSize );
   QgsMessageLog::logMessage( QStringLiteral( "cacheDirectory: %1" ).arg( cache->cacheDirectory() ), QStringLiteral( "Server" ), Qgis::MessageLevel::Info );
@@ -97,12 +99,12 @@ void QgsServer::setupNetworkAccessManager()
 
 QFileInfo QgsServer::defaultProjectFile()
 {
-  QDir currentDir;
+  const QDir currentDir;
   fprintf( FCGI_stderr, "current directory: %s\n", currentDir.absolutePath().toUtf8().constData() );
   QStringList nameFilterList;
   nameFilterList << QStringLiteral( "*.qgs" )
                  << QStringLiteral( "*.qgz" );
-  QFileInfoList projectFiles = currentDir.entryInfoList( nameFilterList, QDir::Files, QDir::Name );
+  const QFileInfoList projectFiles = currentDir.entryInfoList( nameFilterList, QDir::Files, QDir::Name );
   for ( int x = 0; x < projectFiles.size(); x++ )
   {
     QgsMessageLog::logMessage( projectFiles.at( x ).absoluteFilePath(), QStringLiteral( "Server" ), Qgis::MessageLevel::Info );
@@ -131,7 +133,7 @@ void QgsServer::printRequestParameters( const QMap< QString, QString> &parameter
 QString QgsServer::configPath( const QString &defaultConfigPath, const QString &configPath )
 {
   QString cfPath( defaultConfigPath );
-  QString projectFile = sSettings()->projectFile();
+  const QString projectFile = sSettings()->projectFile();
   if ( !projectFile.isEmpty() )
   {
     cfPath = projectFile;
@@ -306,6 +308,8 @@ bool QgsServer::init()
   // Configure locale
   initLocale();
 
+  QgsMessageLog::logMessage( QStringLiteral( "QGIS Server Starting : %1 (%2)" ).arg( _QGIS_VERSION, QGSVERSION ), "Server", Qgis::MessageLevel::Info );
+
   // log settings currently used
   sSettings()->logSummary();
 
@@ -330,7 +334,7 @@ bool QgsServer::init()
   QgsApplication::authManager()->init( QgsApplication::pluginPath(), QgsApplication::qgisAuthDatabaseFilePath() );
 
   QString defaultConfigFilePath;
-  QFileInfo projectFileInfo = defaultProjectFile(); //try to find a .qgs/.qgz file in the server directory
+  const QFileInfo projectFileInfo = defaultProjectFile(); //try to find a .qgs/.qgz file in the server directory
   if ( projectFileInfo.exists() )
   {
     defaultConfigFilePath = projectFileInfo.absoluteFilePath();
@@ -338,7 +342,7 @@ bool QgsServer::init()
   }
   else
   {
-    QFileInfo adminSLDFileInfo = defaultAdminSLD();
+    const QFileInfo adminSLDFileInfo = defaultAdminSLD();
     if ( adminSLDFileInfo.exists() )
     {
       defaultConfigFilePath = adminSLDFileInfo.absoluteFilePath();
@@ -357,9 +361,12 @@ bool QgsServer::init()
   sServerInterface = new QgsServerInterfaceImpl( sCapabilitiesCache, sServiceRegistry, sSettings() );
 
   // Load service module
-  QString modulePath = QgsApplication::libexecPath() + "server";
+  const QString modulePath = QgsApplication::libexecPath() + "server";
   // qDebug() << QStringLiteral( "Initializing server modules from: %1" ).arg( modulePath );
   sServiceRegistry->init( modulePath,  sServerInterface );
+
+  // Initialize config cache
+  QgsConfigCache::initialize( sSettings );
 
   sInitialized = true;
   QgsMessageLog::logMessage( QStringLiteral( "Server initialized" ), QStringLiteral( "Server" ), Qgis::MessageLevel::Info );
@@ -386,7 +393,7 @@ void QgsServer::handleRequest( QgsServerRequest &request, QgsServerResponse &res
   const Qgis::MessageLevel logLevel = QgsServerLogger::instance()->logLevel();
   {
 
-    QgsScopedRuntimeProfile profiler { QStringLiteral( "handleRequest" ), QStringLiteral( "server" ) };
+    const QgsScopedRuntimeProfile profiler { QStringLiteral( "handleRequest" ), QStringLiteral( "server" ) };
 
     qApp->processEvents();
 
@@ -419,7 +426,7 @@ void QgsServer::handleRequest( QgsServerRequest &request, QgsServerResponse &res
     // setConfigFilePath() interface method
     if ( ! project )
     {
-      QString configFilePath = configPath( *sConfigFilePath, request.serverParameters().map() );
+      const QString configFilePath = configPath( *sConfigFilePath, request.serverParameters().map() );
       sServerInterface->setConfigFilePath( configFilePath );
     }
     else
@@ -449,13 +456,14 @@ void QgsServer::handleRequest( QgsServerRequest &request, QgsServerResponse &res
         printRequestParameters( params.toMap(), logLevel );
 
         // Setup project (config file path)
-        if ( ! project )
+        if ( !project )
         {
-          QString configFilePath = configPath( *sConfigFilePath, params.map() );
+          const QString configFilePath = configPath( *sConfigFilePath, params.map() );
 
           // load the project if needed and not empty
           if ( ! configFilePath.isEmpty() )
           {
+            // Note that  QgsConfigCache::project( ... ) call QgsProject::setInstance(...)
             project = mConfigCache->project( configFilePath, sServerInterface->serverSettings() );
           }
         }
@@ -479,14 +487,14 @@ void QgsServer::handleRequest( QgsServerRequest &request, QgsServerResponse &res
         // Dispatcher: if SERVICE is set, we assume a OWS service, if not, let's try an API
         // TODO: QGIS 4 fix the OWS services and treat them as APIs
         QgsServerApi *api = nullptr;
+
         if ( params.service().isEmpty() && ( api = sServiceRegistry->apiForRequest( request ) ) )
         {
-          QgsServerApiContext context { api->rootPath(), &request, &responseDecorator, project, sServerInterface };
+          const QgsServerApiContext context { api->rootPath(), &request, &responseDecorator, project, sServerInterface };
           api->executeRequest( context );
         }
         else
         {
-
           // Project is mandatory for OWS at this point
           if ( ! project )
           {

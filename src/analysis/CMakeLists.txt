@@ -13,8 +13,10 @@ set(QGIS_ANALYSIS_SRCS
   ${BISON_QgsRasterCalcParser_OUTPUTS}
 
   georeferencing/qgsgcpgeometrytransformer.cpp
+  georeferencing/qgsgcppoint.cpp
   georeferencing/qgsgcptransformer.cpp
   georeferencing/qgsleastsquares.cpp
+  georeferencing/qgsvectorwarper.cpp
 
   interpolation/qgsgridfilewriter.cpp
   interpolation/qgsidwinterpolator.cpp
@@ -39,6 +41,7 @@ set(QGIS_ANALYSIS_SRCS
   processing/qgsalgorithmaffinetransform.cpp
   processing/qgsalgorithmaggregate.cpp
   processing/qgsalgorithmangletonearest.cpp
+  processing/qgsalgorithmannotations.cpp
   processing/qgsalgorithmapplylayerstyle.cpp
   processing/qgsalgorithmarraytranslatedfeatures.cpp
   processing/qgsalgorithmaspect.cpp
@@ -66,6 +69,7 @@ set(QGIS_ANALYSIS_SRCS
   processing/qgsalgorithmdetectdatasetchanges.cpp
   processing/qgsalgorithmdifference.cpp
   processing/qgsalgorithmdissolve.cpp
+  processing/qgsalgorithmdistancewithin.cpp
   processing/qgsalgorithmdrape.cpp
   processing/qgsalgorithmdropfields.cpp
   processing/qgsalgorithmdropgeometry.cpp
@@ -78,6 +82,7 @@ set(QGIS_ANALYSIS_SRCS
   processing/qgsalgorithmexplodehstore.cpp
   processing/qgsalgorithmexportlayersinformation.cpp
   processing/qgsalgorithmexportmesh.cpp
+  processing/qgsalgorithmexporttopostgresql.cpp
   processing/qgsalgorithmexporttospreadsheet.cpp
   processing/qgsalgorithmextendlines.cpp
   processing/qgsalgorithmextentfromlayer.cpp
@@ -87,6 +92,7 @@ set(QGIS_ANALYSIS_SRCS
   processing/qgsalgorithmextractbyexpression.cpp
   processing/qgsalgorithmextractbyextent.cpp
   processing/qgsalgorithmextractbylocation.cpp
+  processing/qgsalgorithmextractlabels.cpp
   processing/qgsalgorithmextractlayoutmapextent.cpp
   processing/qgsalgorithmextractzmvalues.cpp
   processing/qgsalgorithmextractvertices.cpp
@@ -171,6 +177,7 @@ set(QGIS_ANALYSIS_SRCS
   processing/qgsalgorithmrescaleraster.cpp
   processing/qgsalgorithmreverselinedirection.cpp
   processing/qgsalgorithmrotate.cpp
+  processing/qgsalgorithmroundness.cpp
   processing/qgsalgorithmroundrastervalues.cpp
   processing/qgsalgorithmruggedness.cpp
   processing/qgsalgorithmsavefeatures.cpp
@@ -183,6 +190,7 @@ set(QGIS_ANALYSIS_SRCS
   processing/qgsalgorithmsetmvalue.cpp
   processing/qgsalgorithmsetvariable.cpp
   processing/qgsalgorithmsetzvalue.cpp
+  processing/qgsalgorithmshortestline.cpp
   processing/qgsalgorithmshortestpathlayertopoint.cpp
   processing/qgsalgorithmshortestpathpointtolayer.cpp
   processing/qgsalgorithmshortestpathpointtopoint.cpp
@@ -299,7 +307,9 @@ set(QGIS_ANALYSIS_HDRS
   qgsanalysis.h
 
   georeferencing/qgsgcpgeometrytransformer.h
+  georeferencing/qgsgcppoint.h
   georeferencing/qgsgcptransformer.h
+  georeferencing/qgsvectorwarper.h
 
   interpolation/Bezier3D.h
   interpolation/CloughTocherInterpolator.h

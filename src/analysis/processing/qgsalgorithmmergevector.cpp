@@ -164,6 +164,7 @@ QVariantMap QgsMergeVectorAlgorithm::processAlgorithm( const QVariantMap &parame
             destField.setType( QVariant::String );
             destField.setSubType( QVariant::Invalid );
             destField.setLength( 0 );
+            destField.setPrecision( 0 );
           }
           break;
         }
@@ -192,10 +193,10 @@ QVariantMap QgsMergeVectorAlgorithm::processAlgorithm( const QVariantMap &parame
   if ( !sink )
     throw QgsProcessingException( invalidSinkError( parameters, QStringLiteral( "OUTPUT" ) ) );
 
-  bool hasZ = QgsWkbTypes::hasZ( outputType );
-  bool hasM = QgsWkbTypes::hasM( outputType );
-  bool isMulti = QgsWkbTypes::isMultiType( outputType );
-  double step = totalFeatureCount > 0 ? 100.0 / totalFeatureCount : 1;
+  const bool hasZ = QgsWkbTypes::hasZ( outputType );
+  const bool hasM = QgsWkbTypes::hasM( outputType );
+  const bool isMulti = QgsWkbTypes::isMultiType( outputType );
+  const double step = totalFeatureCount > 0 ? 100.0 / totalFeatureCount : 1;
   i = 0;
   int layerNumber = 0;
   for ( QgsMapLayer *layer : layers )
@@ -257,7 +258,7 @@ QVariantMap QgsMergeVectorAlgorithm::processAlgorithm( const QVariantMap &parame
         }
 
         QVariant destAttribute;
-        int sourceIndex = vl->fields().lookupField( destField.name() );
+        const int sourceIndex = vl->fields().lookupField( destField.name() );
         if ( sourceIndex >= 0 )
         {
           destAttribute = f.attributes().at( sourceIndex );

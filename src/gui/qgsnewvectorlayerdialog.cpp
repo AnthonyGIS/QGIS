@@ -28,6 +28,8 @@
 #include "qgsogrprovider.h"
 #include "qgsgui.h"
 #include "qgsiconutils.h"
+#include "qgsfileutils.h"
+#include "qgsvariantutils.h"
 
 #include <QPushButton>
 #include <QComboBox>
@@ -38,7 +40,7 @@ QgsNewVectorLayerDialog::QgsNewVectorLayerDialog( QWidget *parent, Qt::WindowFla
   : QDialog( parent, fl )
 {
   setupUi( this );
-  QgsGui::instance()->enableAutoGeometryRestore( this );
+  QgsGui::enableAutoGeometryRestore( this );
 
   connect( mAddAttributeButton, &QToolButton::clicked, this, &QgsNewVectorLayerDialog::mAddAttributeButton_clicked );
   connect( mRemoveAttributeButton, &QToolButton::clicked, this, &QgsNewVectorLayerDialog::mRemoveAttributeButton_clicked );
@@ -49,10 +51,10 @@ QgsNewVectorLayerDialog::QgsNewVectorLayerDialog( QWidget *parent, Qt::WindowFla
   mAddAttributeButton->setIcon( QgsApplication::getThemeIcon( QStringLiteral( "/mActionNewAttribute.svg" ) ) );
   mRemoveAttributeButton->setIcon( QgsApplication::getThemeIcon( QStringLiteral( "/mActionDeleteAttribute.svg" ) ) );
 
-  mTypeBox->addItem( QgsApplication::getThemeIcon( QStringLiteral( "/mIconFieldText.svg" ) ), tr( "Text Data" ), "String" );
-  mTypeBox->addItem( QgsApplication::getThemeIcon( QStringLiteral( "/mIconFieldInteger.svg" ) ), tr( "Whole Number" ), "Integer" );
-  mTypeBox->addItem( QgsApplication::getThemeIcon( QStringLiteral( "/mIconFieldFloat.svg" ) ), tr( "Decimal Number" ), "Real" );
-  mTypeBox->addItem( QgsApplication::getThemeIcon( QStringLiteral( "/mIconFieldDate.svg" ) ), tr( "Date" ), "Date" );
+  mTypeBox->addItem( QgsFields::iconForFieldType( QVariant::String ), QgsVariantUtils::typeToDisplayString( QVariant::String ), "String" );
+  mTypeBox->addItem( QgsFields::iconForFieldType( QVariant::Int ), QgsVariantUtils::typeToDisplayString( QVariant::Int ), "Integer" );
+  mTypeBox->addItem( QgsFields::iconForFieldType( QVariant::Double ), QgsVariantUtils::typeToDisplayString( QVariant::Double ), "Real" );
+  mTypeBox->addItem( QgsFields::iconForFieldType( QVariant::Date ), QgsVariantUtils::typeToDisplayString( QVariant::Date ), "Date" );
 
   mWidth->setValidator( new QIntValidator( 1, 255, this ) );
   mPrecision->setValidator( new QIntValidator( 0, 15, this ) );
@@ -94,7 +96,7 @@ QgsNewVectorLayerDialog::QgsNewVectorLayerDialog( QWidget *parent, Qt::WindowFla
   mFileEncoding->addItems( QgsVectorDataProvider::availableEncodings() );
 
   // Use default encoding if none supplied
-  QString enc = QgsSettings().value( QStringLiteral( "/UI/encoding" ), "System" ).toString();
+  const QString enc = QgsSettings().value( QStringLiteral( "/UI/encoding" ), "System" ).toString();
 
   // The specified decoding is added if not existing already, and then set current.
   // This should select it.
@@ -109,21 +111,9 @@ QgsNewVectorLayerDialog::QgsNewVectorLayerDialog( QWidget *parent, Qt::WindowFla
   mAttributeView->addTopLevelItem( new QTreeWidgetItem( QStringList() << QStringLiteral( "id" ) << QStringLiteral( "Integer" ) << QStringLiteral( "10" ) << QString() ) );
   connect( mNameEdit, &QLineEdit::textChanged, this, &QgsNewVectorLayerDialog::nameChanged );
   connect( mAttributeView, &QTreeWidget::itemSelectionChanged, this, &QgsNewVectorLayerDialog::selectionChanged );
-  connect( mGeometryTypeBox, static_cast<void( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, [ = ]( int index )
+  connect( mGeometryTypeBox, static_cast<void( QComboBox::* )( int )>( &QComboBox::currentIndexChanged ), this, [ = ]( int )
   {
-    QString fileName = mFileName->filePath();
-    if ( !fileName.isEmpty() )
-    {
-      if ( index == 0 )
-      {
-        fileName = fileName.replace( fileName.lastIndexOf( QLatin1String( ".shp" ), -1, Qt::CaseInsensitive ), 4, QLatin1String( ".dbf" ) );
-      }
-      else
-      {
-        fileName = fileName.replace( fileName.lastIndexOf( QLatin1String( ".dbf" ), -1, Qt::CaseInsensitive ), 4, QLatin1String( ".shp" ) );
-      }
-      mFileName->setFilePath( fileName );
-    }
+    updateExtension();
     checkOk();
   } );
 
@@ -134,12 +124,12 @@ QgsNewVectorLayerDialog::QgsNewVectorLayerDialog( QWidget *parent, Qt::WindowFla
   mFileName->setFilter( QgsVectorFileWriter::filterForDriver( mFileFormatComboBox->currentData( Qt::UserRole ).toString() ) );
   mFileName->setConfirmOverwrite( false );
   mFileName->setDialogTitle( tr( "Save Layer As" ) );
-  QgsSettings settings;
+  const QgsSettings settings;
   mFileName->setDefaultRoot( settings.value( QStringLiteral( "UI/lastVectorFileFilterDir" ), QDir::homePath() ).toString() );
   connect( mFileName, &QgsFileWidget::fileChanged, this, [ = ]
   {
     QgsSettings settings;
-    QFileInfo tmplFileInfo( mFileName->filePath() );
+    const QFileInfo tmplFileInfo( mFileName->filePath() );
     settings.setValue( QStringLiteral( "UI/lastVectorFileFilterDir" ), tmplFileInfo.absolutePath() );
     checkOk();
   } );
@@ -216,11 +206,11 @@ void QgsNewVectorLayerDialog::setCrs( const QgsCoordinateReferenceSystem &crs )
 
 void QgsNewVectorLayerDialog::mAddAttributeButton_clicked()
 {
-  QString myName = mNameEdit->text();
-  QString myWidth = mWidth->text();
-  QString myPrecision = mPrecision->isEnabled() ? mPrecision->text() : QString();
+  const QString myName = mNameEdit->text();
+  const QString myWidth = mWidth->text();
+  const QString myPrecision = mPrecision->isEnabled() ? mPrecision->text() : QString();
   //use userrole to avoid translated type string
-  QString myType = mTypeBox->currentData( Qt::UserRole ).toString();
+  const QString myType = mTypeBox->currentData( Qt::UserRole ).toString();
   mAttributeView->addTopLevelItem( new QTreeWidgetItem( QStringList() << myName << myType << myWidth << myPrecision ) );
   checkOk();
   mNameEdit->clear();
@@ -238,7 +228,7 @@ void QgsNewVectorLayerDialog::attributes( QList< QPair<QString, QString> > &at )
   while ( *it )
   {
     QTreeWidgetItem *item = *it;
-    QString type = QStringLiteral( "%1;%2;%3" ).arg( item->text( 1 ), item->text( 2 ), item->text( 3 ) );
+    const QString type = QStringLiteral( "%1;%2;%3" ).arg( item->text( 1 ), item->text( 2 ), item->text( 3 ) );
     at.push_back( qMakePair( item->text( 0 ), type ) );
     QgsDebugMsg( QStringLiteral( "appending %1//%2" ).arg( item->text( 0 ), type ) );
     ++it;
@@ -279,7 +269,7 @@ void QgsNewVectorLayerDialog::setFilename( const QString &filename )
 
 void QgsNewVectorLayerDialog::checkOk()
 {
-  bool ok = ( !mFileName->filePath().isEmpty() && mAttributeView->topLevelItemCount() > 0 && mGeometryTypeBox->currentIndex() != -1 );
+  const bool ok = ( !mFileName->filePath().isEmpty() && mAttributeView->topLevelItemCount() > 0 && mGeometryTypeBox->currentIndex() != -1 );
   mOkButton->setEnabled( ok );
 }
 
@@ -291,6 +281,39 @@ QString QgsNewVectorLayerDialog::runAndCreateLayer( QWidget *parent, QString *pE
   if ( res.isEmpty() && error.isEmpty() )
     res = QString( "" ); // maintain gross earlier API compatibility
   return res;
+}
+
+void QgsNewVectorLayerDialog::updateExtension()
+{
+  QString fileName = filename();
+  const QString fileformat = selectedFileFormat();
+  const QgsWkbTypes::Type geometrytype = selectedType();
+  if ( fileformat == QLatin1String( "ESRI Shapefile" ) )
+  {
+    if ( geometrytype != QgsWkbTypes::NoGeometry )
+    {
+      fileName = fileName.replace( fileName.lastIndexOf( QLatin1String( ".dbf" ), -1, Qt::CaseInsensitive ), 4, QLatin1String( ".shp" ) );
+      fileName = QgsFileUtils::ensureFileNameHasExtension( fileName, { QStringLiteral( "shp" ) } );
+    }
+    else
+    {
+      fileName = fileName.replace( fileName.lastIndexOf( QLatin1String( ".shp" ), -1, Qt::CaseInsensitive ), 4, QLatin1String( ".dbf" ) );
+      fileName = QgsFileUtils::ensureFileNameHasExtension( fileName, { QStringLiteral( "dbf" ) } );
+    }
+  }
+  setFilename( fileName );
+
+}
+
+void QgsNewVectorLayerDialog::accept()
+{
+  updateExtension();
+
+  if ( QFile::exists( filename() ) && QMessageBox::warning( this, tr( "New ShapeFile Layer" ), tr( "The layer already exists. Are you sure you want to overwrite the existing file?" ),
+       QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel ) != QMessageBox::Yes )
+    return;
+
+  QDialog::accept();
 }
 
 QString QgsNewVectorLayerDialog::execAndCreateLayer( QString &errorMessage, QWidget *parent, const QString &initialPath, QString *encoding, const QgsCoordinateReferenceSystem &crs )
@@ -305,38 +328,25 @@ QString QgsNewVectorLayerDialog::execAndCreateLayer( QString &errorMessage, QWid
     return QString();
   }
 
-  if ( QFile::exists( geomDialog.filename() ) && QMessageBox::warning( parent, tr( "New ShapeFile Layer" ), tr( "The layer already exists. Are you sure you want to overwrite the existing file?" ),
-       QMessageBox::Yes | QMessageBox::Cancel, QMessageBox::Cancel ) != QMessageBox::Yes )
-    return QString();
+  const QString fileformat = geomDialog.selectedFileFormat();
+  const QgsWkbTypes::Type geometrytype = geomDialog.selectedType();
+  QString fileName = geomDialog.filename();
 
-  QgsWkbTypes::Type geometrytype = geomDialog.selectedType();
-  QString fileformat = geomDialog.selectedFileFormat();
-  QString enc = geomDialog.selectedFileEncoding();
+  const QString enc = geomDialog.selectedFileEncoding();
   QgsDebugMsg( QStringLiteral( "New file format will be: %1" ).arg( fileformat ) );
 
   QList< QPair<QString, QString> > attributes;
   geomDialog.attributes( attributes );
 
   QgsSettings settings;
-  QString fileName = geomDialog.filename();
-  if ( fileformat == QLatin1String( "ESRI Shapefile" ) && ( geometrytype != QgsWkbTypes::NoGeometry && !fileName.endsWith( QLatin1String( ".shp" ), Qt::CaseInsensitive ) ) )
-    fileName += QLatin1String( ".shp" );
-  else if ( fileformat == QLatin1String( "ESRI Shapefile" ) && ( geometrytype == QgsWkbTypes::NoGeometry && !fileName.endsWith( QLatin1String( ".dbf" ), Qt::CaseInsensitive ) ) )
-  {
-    if ( fileName.endsWith( QLatin1String( ".shp" ), Qt::CaseInsensitive ) )
-      fileName = fileName.replace( fileName.lastIndexOf( QLatin1String( ".shp" ), -1, Qt::CaseInsensitive ), 4, QLatin1String( ".dbf" ) );
-    else
-      fileName += QLatin1String( ".dbf" );
-  }
-
   settings.setValue( QStringLiteral( "UI/lastVectorFileFilterDir" ), QFileInfo( fileName ).absolutePath() );
   settings.setValue( QStringLiteral( "UI/encoding" ), enc );
 
   //try to create the new layer with OGRProvider instead of QgsVectorFileWriter
   if ( geometrytype != QgsWkbTypes::Unknown )
   {
-    QgsCoordinateReferenceSystem srs = geomDialog.crs();
-    bool success = QgsOgrProviderUtils::createEmptyDataSource( fileName, fileformat, enc, geometrytype, attributes, srs, errorMessage );
+    const QgsCoordinateReferenceSystem srs = geomDialog.crs();
+    const bool success = QgsOgrProviderUtils::createEmptyDataSource( fileName, fileformat, enc, geometrytype, attributes, srs, errorMessage );
     if ( !success )
     {
       return QString();

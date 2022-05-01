@@ -30,6 +30,7 @@
 #include "qgsrasterblock.h"
 #include "qgsrasterhistogram.h"
 #include "qgsrectangle.h"
+#include "qgsrendercontext.h"
 
 /**
  * \ingroup core
@@ -93,6 +94,22 @@ class CORE_EXPORT QgsRasterBlockFeedback : public QgsFeedback
      */
     QStringList errors() const { return mErrors; }
 
+    /**
+     * Returns the render context of the associated block reading
+     *
+     * \see setRenderContext()
+     * \since QGIS 3.24.0
+     */
+    QgsRenderContext renderContext() const;
+
+    /**
+     * Sets the render context of the associated block reading
+     *
+     * \see renderContext()
+     * \since QGIS 3.24.0
+     */
+    void setRenderContext( const QgsRenderContext &renderContext );
+
   private:
 
     /**
@@ -106,6 +123,8 @@ class CORE_EXPORT QgsRasterBlockFeedback : public QgsFeedback
 
     //! List of errors encountered while retrieving block
     QStringList mErrors;
+
+    QgsRenderContext mRenderContext;
 };
 
 
@@ -540,7 +559,7 @@ class CORE_EXPORT QgsRasterInterface
       maximum = PyFloat_AsDouble( a4 );
     }
 
-#if defined(SIP_PROTECTED_IS_PUBLIC)
+#if defined(SIP_PROTECTED_IS_PUBLIC) || (SIP_VERSION >= 0x050000 && !defined(_MSC_VER))
     sipCpp->initHistogram( *a0, a1, a2, minimum, maximum, *a5, a6, a7 );
 #else
     sipCpp->sipProtect_initHistogram( *a0, a1, a2, minimum, maximum, *a5, a6, a7 );
@@ -548,13 +567,11 @@ class CORE_EXPORT QgsRasterInterface
     % End
 #endif
 
-
-
     //! Fill in statistics defaults if not specified
     void initStatistics( QgsRasterBandStats &statistics, int bandNo,
                          int stats = QgsRasterBandStats::All,
                          const QgsRectangle &boundingBox = QgsRectangle(),
-                         int binCount = 0 );
+                         int binCount = 0 ) const;
 
   private:
 #ifdef SIP_RUN
@@ -566,5 +583,3 @@ class CORE_EXPORT QgsRasterInterface
 };
 
 #endif
-
-
