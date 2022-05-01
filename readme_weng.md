@@ -96,3 +96,12 @@ path %PATH%;D:\Pros\IDE\VS_LIBS\vcpkg\vcpkg\installed\x64-windows\bin;E:\Projs\a
 call "E:\Projs\algs\qgis\install\bin\crssync.exe"  --verbose
 @cmd
 ```
+
+
+# 编译时的其它问题：
+## 1 /bigobj 问题
+将 qgis_core 中的 VS属性页里的 "配置属性 -- C/C++" 命令行中，添加 /bigobj。
+
+
+REF：
+https://cloud.tencent.com/developer/article/1901414

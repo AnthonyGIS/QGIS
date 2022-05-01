@@ -2266,6 +2266,16 @@ target_link_libraries(qgis_core
   ${ZLIB_LIBRARIES}
   ${EXIV2_LIBRARY}
 )
+
+# to solve msvc /bigobj bug. 22.5.1
+if (MSVC)
+  target_compile_options(qgis_core
+    PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/bigobj>  # 在MSVC下错误为 Fatal Error C1128
+    # $<$<CXX_COMPILER_ID:GNU>:-Wa,-mbig-obj>  # 在GNU C++下要添加编译选项. 在GNU C++下错误提示为 too many sections…File too big.
+    )
+endif()
+
 if (NOT IOS)
   target_link_libraries(qgis_core ${QT_VERSION_BASE}::PrintSupport)
 endif()

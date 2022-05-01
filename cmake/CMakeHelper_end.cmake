@@ -33,6 +33,7 @@ if(WITH_SERVER)
   set_target_properties(wfs3 PROPERTIES FOLDER ${QGIS_SERVER_ROOT_FOLDER}/)
   set_target_properties(wmts PROPERTIES FOLDER ${QGIS_SERVER_ROOT_FOLDER}/)
   set_target_properties(qgis_server PROPERTIES FOLDER ${QGIS_SERVER_ROOT_FOLDER}/)
+  set_target_properties(qgis_mapserver PROPERTIES FOLDER ${QGIS_SERVER_ROOT_FOLDER}/)
 
   set_target_properties(qgis_mapserv.fcgi PROPERTIES FOLDER ${QGIS_SERVER_ROOT_FOLDER}/)
 endif()
