@@ -7,9 +7,8 @@
 备注：通常，当QGIS的dev版本更新很多时，需要考虑更新以上编译环境了。到底是否确切需要更新环境与否，可参考QGIS源码下的`INSTALL.md`。
 
 
-(1) 打开运行环境，点击qgis-dev.bat
-
-或
+(1) 打开运行环境，点击qgis-dev.bat  (推荐)
+或 （不推荐的方式）
 目录下进入到 `E:\Projs\algs\qgis\qgis_source2` ，Shift + 鼠标右击，打开powershell，然后输入`.\doc_weng\qgis-dev.bat`。
 
 qgis-dev.bat 的内容如下：
@@ -37,6 +36,7 @@ set INCLUDE=%INCLUDE%;%OSGEO4W_ROOT%/apps/Qt5/include;%OSGEO4W_ROOT%/include
 (2) cmake-gui
 
 (3) config,  generate
+备注: config后，注意添加 “WITH_3D, WITH_SERVER”
 
 (4) 修改 build文件夹下的cmake_install。
 

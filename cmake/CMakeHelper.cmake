@@ -13,6 +13,8 @@ set(QGIS_PYTHON_APP_ROOT_FOLDER "_python")
 set(QGIS_QGIS_TEST_ROOT_FOLDER "_qgis_test")
 set(QGIS_ABOUT_ROOT_FOLDER "about")
 set(QGIS_ZZZ_ROOT_FOLDER "zzz")
+set(QGIS_AUTH_ROOT_FOLDER "authmethod")
+set(QGIS_PROVIDER_ROOT_FOLDER "provider")
 set(QGIS_SERVER_ROOT_FOLDER "server")
 
 
